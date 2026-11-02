@@ -28,7 +28,6 @@ Fieldwork dibangun menggunakan **React 19 + Vite 6** dengan antarmuka modern yan
 
 | Role | Deskripsi & Hak Akses |
 |---|---|
-| `MASTER_SUPER_ADMIN` | Pemilik platform SaaS: kelola entitas tenant & aktivasi token |
 | `SUPERADMIN` | Direktur Utama: approval penawaran, **analisis untung rugi & keuntungan chemical** |
 | `ADMIN` | Admin operasional: penugasan SPK, pantau laporan, aturan risiko, log audit |
 | `MARKETING` | Surveyor & sales: draft penawaran, **visual performa MoM terisolasi (Pest vs Anti Rayap)** |
