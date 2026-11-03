@@ -26,9 +26,17 @@
     "noEmit": true,
     "types": ["vite/client"]
   },
+  "include": [
+    "src",
+    "backend-src",
+    "vite.config.ts"
+  ],
   "exclude": [
     "Styling-Reference",
     "dist",
-    "node_modules"
+    "node_modules",
+    "tests",
+    "scripts",
+    "e2e.config.ts"
   ]
 }

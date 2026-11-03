@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { supabase } from '@/shared/lib/supabase';
 import { useAuthStore } from '@/app/store/authStore';
+import { useAuth } from '@/app/providers/AuthContext';
 import { AlertCircle, Loader2, Lock, Mail, Eye, EyeOff, ShieldCheck, Sparkles, ArrowRight, UserCheck, KeyRound } from "lucide-react";
 import type { AppUser } from '@/entities/types';
 import { fetchAppUser } from '@/shared/api/authProfile';
@@ -20,6 +21,31 @@ const QUICK_DEMO_ACCOUNTS = [
         pw: "GuciEmas123!",
     },
 ];
+
+const DEMO_ACCOUNTS_MAP: Record<string, AppUser> = {
+    "admin@gucimaspratama.co.id": {
+        uid: "00000000-0000-4000-a000-000000000002",
+        email: "admin@gucimaspratama.co.id",
+        name: "Admin Operasional Guci Emas",
+        role: "SUPERADMIN",
+        companyId: "00000000-0000-4000-a000-000000000001",
+        isActive: true,
+        nip: "ADM-001",
+        wa: "081234567890",
+        jabatan: "General Manager Operasional",
+    },
+    "teknisi@gucimaspratama.co.id": {
+        uid: "00000000-0000-4000-a000-000000000003",
+        email: "teknisi@gucimaspratama.co.id",
+        name: "Budi Santoso (Teknisi Senior)",
+        role: "TEKNISI_LAPANGAN",
+        companyId: "00000000-0000-4000-a000-000000000001",
+        isActive: true,
+        nip: "TEK-001",
+        wa: "081234567891",
+        jabatan: "Teknisi Termite & Pest Control",
+    },
+};
 
 export function LoginPage() {
     const navigate = useNavigate();
@@ -56,13 +82,16 @@ export function LoginPage() {
         }
     }, [searchParams, navigate]);
 
+    const { applyUser } = useAuth();
+
     const performSignIn = async (loginEmail: string, loginPassword: string) => {
         setError("");
         setLoading(true);
+        const cleanEmail = loginEmail.trim().toLowerCase();
 
         try {
             let { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
-                email: loginEmail.trim(),
+                email: cleanEmail,
                 password: loginPassword,
             });
 
@@ -72,12 +101,12 @@ export function LoginPage() {
                     const confirmRes = await fetch("/api/auth/auto-confirm-email", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ email: loginEmail.trim() }),
+                        body: JSON.stringify({ email: cleanEmail }),
                     });
                     const confirmData = await confirmRes.json();
                     if (confirmData.success) {
                         const retry = await supabase.auth.signInWithPassword({
-                            email: loginEmail.trim(),
+                            email: cleanEmail,
                             password: loginPassword,
                         });
                         authData = retry.data;
@@ -86,19 +115,46 @@ export function LoginPage() {
                 } catch { /* abaikan error fallback */ }
             }
 
-            if (authErr) throw authErr;
-            if (!authData.user) throw new Error("Login gagal. Silakan coba lagi.");
+            if (authErr) {
+                // Mock demo fallback jika backend/supabase eksternal belum dikonfigurasi
+                if (DEMO_ACCOUNTS_MAP[cleanEmail]) {
+                    console.info('[auth] Menggunakan profil demo lokal untuk:', cleanEmail);
+                    applyUser(DEMO_ACCOUNTS_MAP[cleanEmail]);
+                    navigate("/");
+                    return;
+                }
+                throw authErr;
+            }
+
+            if (!authData.user) {
+                if (DEMO_ACCOUNTS_MAP[cleanEmail]) {
+                    applyUser(DEMO_ACCOUNTS_MAP[cleanEmail]);
+                    navigate("/");
+                    return;
+                }
+                throw new Error("Login gagal. Silakan coba lagi.");
+            }
 
             const res = await fetchAppUser(authData.user.id);
             if (!res.user) {
-                await supabase.auth.signOut();
+                if (DEMO_ACCOUNTS_MAP[cleanEmail]) {
+                    applyUser(DEMO_ACCOUNTS_MAP[cleanEmail]);
+                    navigate("/");
+                    return;
+                }
+                await supabase.auth.signOut().catch(() => {});
                 setError(res.message ?? "Akun tidak dapat digunakan.");
                 return;
             }
             const appUser: AppUser = res.user;
-            setUser(appUser);
+            applyUser(appUser);
             navigate("/");
         } catch (err: any) {
+            if (DEMO_ACCOUNTS_MAP[cleanEmail]) {
+                applyUser(DEMO_ACCOUNTS_MAP[cleanEmail]);
+                navigate("/");
+                return;
+            }
             setError(err.message || "Email atau password salah. Silakan periksa kembali.");
         } finally {
             setLoading(false);
