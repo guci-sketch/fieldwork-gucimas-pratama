@@ -12,6 +12,7 @@ export interface SidebarItem {
     icon: React.ReactNode;
     danger?: boolean;
     badge?: number | string;
+    keywords?: string[];
 }
 
 export interface AppLayoutProps {
@@ -30,7 +31,7 @@ export interface AppLayoutProps {
  * AppLayout FieldWork — Responsive Multi-Device (Desktop, Tablet, & Mobile):
  * - Desktop (>= 1280px): Rail 56px melebar ke 252px saat hover atau dapat dikunci terbuka.
  * - Tablet & mobile (< 1280px): Sidebar menggunakan drawer dengan tombol hamburger; tidak bergantung pada hover.
- * - Semua ukuran: transisi singkat, backdrop yang jelas, dan navigasi dapat ditutup setelah menu dipilih.
+ * - Pencarian modul terpusat di Top Header (Ctrl+K) tanpa search bar ganda di dalam sidebar.
  */
 export function AppLayout({
     sidebarItems,
@@ -122,7 +123,6 @@ export function AppLayout({
         };
     }, []);
 
-    // Edge swipe tetap tersedia untuk mobile dan tablet (< 1280px). Hamburger tetap menjadi kontrol utama.
     useEffect(() => {
         let touchStartX = 0;
         let touchStartY = 0;
@@ -201,7 +201,6 @@ export function AppLayout({
 
     return (
         <div className="flex flex-col h-screen h-dvh min-h-[100dvh] bg-[var(--bg-primary)] text-[var(--text-primary)] font-sans overflow-hidden">
-            {/* Ruang di kiri header hanya disediakan pada desktop; tablet selalu memakai drawer hamburger. */}
             <div
                 className={cn(
                     'transition-[padding] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] shrink-0',
@@ -212,7 +211,6 @@ export function AppLayout({
             </div>
 
             <div className="flex flex-1 overflow-hidden relative">
-                {/* Backdrop saat Sidebar dibuka secara Absolute/Overlay di Mobile maupun Tablet */}
                 <AnimatePresence>
                     {isSidebarOpen && (
                         <motion.div
@@ -227,7 +225,6 @@ export function AppLayout({
                     )}
                 </AnimatePresence>
 
-                {/* Expandable Sidebar Rail + Tablet/Mobile Drawer */}
                 <motion.aside
                     aria-label="Navigasi Utama"
                     onMouseEnter={handleMouseEnter}
@@ -250,7 +247,6 @@ export function AppLayout({
                             : 'shadow-none'
                     )}
                 >
-                    {/* Tombol brand untuk membuka atau menutup navigasi sidebar */}
                     <div className="h-12 px-2.5 border-b border-[var(--border-subtle)] flex items-center justify-between shrink-0">
                         <div className="flex items-center min-w-0">
                             <button
@@ -290,13 +286,12 @@ export function AppLayout({
                         )}
                     </div>
 
-                    {/* Daftar Menu dengan Posisi Ikon Terkunci */}
                     <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 px-2 space-y-2 no-scrollbar" aria-label="Daftar modul aplikasi">
                         {groupedItems.map((group, groupIdx) => (
                             <div key={group.name} className="space-y-0.5">
                                 <div className="h-5 flex items-center px-1.5 overflow-hidden">
                                     {isExpanded ? (
-                                        <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] whitespace-nowrap">
+                                        <span className="text-[10.5px] font-bold uppercase tracking-wider text-[var(--text-muted)] whitespace-nowrap">
                                             {group.name}
                                         </span>
                                     ) : groupIdx > 0 ? (
@@ -327,14 +322,23 @@ export function AppLayout({
                                             )}
                                         >
                                             {active && (
-                                                <motion.div
-                                                    layoutId="active-nav-indicator"
-                                                    transition={{ type: 'spring', stiffness: 450, damping: 32 }}
-                                                    className={cn(
-                                                        'absolute inset-0 rounded-xl pointer-events-none -z-10',
-                                                        danger ? 'bg-[var(--status-flagged-bg)]' : 'bg-[var(--accent-glow)]'
-                                                    )}
-                                                />
+                                                <>
+                                                    <motion.div
+                                                        layoutId="active-nav-indicator"
+                                                        transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+                                                        className={cn(
+                                                            'absolute inset-0 rounded-xl pointer-events-none -z-10',
+                                                            danger ? 'bg-[var(--status-flagged-bg)]' : 'bg-[var(--accent-glow)]'
+                                                        )}
+                                                    />
+                                                    <span
+                                                        aria-hidden="true"
+                                                        className={cn(
+                                                            'absolute left-0 top-2 bottom-2 w-1 rounded-r-full',
+                                                            danger ? 'bg-rose-500' : 'bg-[var(--accent)]'
+                                                        )}
+                                                    />
+                                                </>
                                             )}
 
                                             <div
@@ -368,6 +372,8 @@ export function AppLayout({
                                                                 ? danger
                                                                     ? 'bg-rose-500/20 text-[var(--status-flagged-text)]'
                                                                     : 'bg-emerald-500/20 text-[var(--accent-text)]'
+                                                                : danger
+                                                                ? 'bg-rose-500/15 text-rose-600 border border-rose-500/30'
                                                                 : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border border-[var(--border-subtle)]'
                                                         )}
                                                     >
@@ -382,7 +388,6 @@ export function AppLayout({
                         ))}
                     </nav>
 
-                    {/* Footer: tutup drawer pada mobile/tablet, atau pin sidebar pada desktop */}
                     <div className="flex h-10 px-2 border-t border-[var(--border-subtle)] items-center bg-[var(--bg-primary)] shrink-0">
                         <button
                             type="button"
@@ -412,7 +417,6 @@ export function AppLayout({
                     </div>
                 </motion.aside>
 
-                {/* Main Content Area: Responsive & Anti-Overlap */}
                 <main
                     className={cn(
                         'flex-1 min-w-0 overflow-y-auto overflow-x-hidden relative bg-[var(--bg-primary)] page-fade-in w-full pb-24 transition-[margin] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]',

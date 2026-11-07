@@ -18,7 +18,9 @@ const supabaseKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefine
 
 if (!supabaseUrl || !supabaseKey) {
     const msg =
-        'VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY belum diatur. Salin .env.example menjadi .env lalu isi nilainya.';
+        'VITE_SUPABASE_URL dan VITE_SUPABASE_ANON_KEY belum diatur. Salin .env.example menjadi .env lalu isi nilainya ' +
+        '(di Vercel: Project Settings → Environment Variables, lalu deploy ulang).';
+    if (import.meta.env.PROD) throw new Error(msg);
     console.warn('[supabase] ' + msg);
 }
 

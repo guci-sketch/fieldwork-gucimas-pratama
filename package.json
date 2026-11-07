@@ -1,9 +1,9 @@
 {
-  "name": "fieldwork-web",
+  "name": "guci-skripsi-web",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Fieldwork — Operational & Commercial Management Platform (frontend)",
+  "description": "Sistem Informasi Monitoring dan Digitalisasi Pelaporan Teknisi Lapangan Berbasis Web (Algoritma Haversine Formula) — PT Guci Emas Pratama",
   "scripts": {
     "dev": "tsx backend-src/server.ts",
     "build": "vite build && esbuild backend-src/server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
@@ -12,10 +12,10 @@
     "lint": "tsc --noEmit",
     "db:migrate": "tsx backend-src/db/migrate.ts",
     "db:seed": "tsx backend-src/db/seed.ts",
-    "pdf:samples": "bash scripts/build-run.sh scripts/render-samples.ts && bash scripts/build-run.sh scripts/render-visit-sample.ts",
-    "test:integration": "tsx scripts/integration-test.mts",
-    "test:templates": "bash scripts/build-run.sh scripts/template-test.ts",
-    "test:shim": "bash scripts/run-shim-test.sh",
+    "test:skripsi:haversine": "tsx tests/haversine.test.ts",
+    "test:skripsi:blackbox": "tsx tests/skripsi-blackbox.test.ts",
+    "test:skripsi:sus": "tsx tests/skripsi-sus.test.ts",
+    "test:skripsi:all": "tsx tests/haversine.test.ts && tsx tests/skripsi-blackbox.test.ts && tsx tests/skripsi-sus.test.ts",
     "test:whitebox": "tsx tests/whitebox.test.ts",
     "test:blackbox": "tsx tests/blackbox.test.ts"
   },

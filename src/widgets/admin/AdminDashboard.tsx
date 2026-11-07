@@ -36,7 +36,6 @@ import {
   purgeOldPhotos,
   PhotoPurgePreview,
 } from '@/shared/api/admin';
-import { getQuotations } from '@/shared/api/quotationService';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -100,21 +99,12 @@ import {
 import { useAuth } from '@/app/providers/AuthContext';
 import { ChangePasswordModal } from '../auth/ChangePasswordModal';
 import { generateInvite } from '@/shared/api/auth';
-import { TemplateSettingsPanel } from '@/widgets/admin/TemplateSettingsPanel';
-import { CompanyPicker } from '@/widgets/admin/CompanyPicker';
-import { OperationsAnalyticsBento, ExecutiveQuotationSummary } from '@/widgets/admin/OperationsAnalyticsBento';
+import { MonthlyRecapBuilderModal } from '@/widgets/admin/MonthlyRecapBuilderModal';
+import { canGenerateMonthlyRecap } from '@/shared/lib/permenkesRecapEngine';
+import { OperationsAnalyticsBento } from '@/widgets/admin/OperationsAnalyticsBento';
 import { isDirectorUser } from '@/shared/lib/roles';
 import { useAuthStore } from '@/app/store/authStore';
 import { useTheme } from '@/shared/hooks/useTheme';
-import { InventoryPage } from '../../pages/inventory/InventoryPage';
-import { KontrolRayapPage } from '../../pages/customers/KontrolRayapPage';
-import { QuotationPage } from '../../pages/quotation/QuotationPage';
-import { CustomersPage } from '../../pages/customers/CustomersPage';
-import { TrackingPage } from '../../pages/tracking/TrackingPage';
-import { CashflowPage } from '../../pages/cashflow/CashflowPage';
-import { PerformaPage } from '../../pages/performance/PerformaPage';
-import { SPKPage } from '../../pages/spk/SPKPage';
-import { CompaniesPage } from '../../pages/super-admin/CompaniesPage';
 import { Header } from '../common/Header';
 import { AppLayout } from '../common/AppLayout';
 
@@ -128,17 +118,7 @@ type Tab =
   | 'risk-config'
   | 'tracking'
   | 'approval'
-  | 'profile'
-  | 'inventory'
-  | 'quotation'
-  | 'kontrol-rayap'
-  | 'templates'
-  | 'customers'
-  | 'order-tracking'
-  | 'cashflow'
-  | 'performa'
-  | 'spk-cms'
-  | 'saas-companies';
+  | 'profile';
 
 const DATE_PRESETS = [
   { id: 'all', label: 'Semua' },
@@ -185,22 +165,8 @@ export const AdminDashboard: React.FC = () => {
   const isDirector = isDirectorUser(user);
   const activeCompanyId = useAuthStore(st => st.activeCompanyId) || user?.companyId || null;
 
-  // Tab awal: SUPERADMIN & ADMIN langsung membuka Dashboard Utama ('dashboard') agar ringkasan langsung terlihat
-  const [activeTab, setActiveTab] = useState<Tab>(
-    user?.role === 'MASTER_SUPER_ADMIN'
-      ? 'saas-companies'
-      : user?.role === 'INVENTORY'
-      ? 'inventory'
-      : user?.role === 'SUPERADMIN' || user?.role === 'ADMIN'
-      ? 'dashboard'
-      : 'quotation'
-  );
-
-  useEffect(() => {
-    if (user?.role === 'MASTER_SUPER_ADMIN' && activeTab !== 'saas-companies' && activeTab !== 'profile') {
-      setActiveTab('saas-companies');
-    }
-  }, [user?.role, activeTab]);
+  // Tab awal: Default ke Dashboard Monitoring & KPI ('dashboard')
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
 
   const [inviteRole, setInviteRole] = useState<AdminUser['role']>('TEKNISI_LAPANGAN');
   const [newUser, setNewUser] = useState({
@@ -220,8 +186,6 @@ export const AdminDashboard: React.FC = () => {
   const [reports, setReports] = useState<WorkReportListItem[]>([]);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportsError, setReportsError] = useState<string | null>(null);
-
-  const [quotationsList, setQuotationsList] = useState<Quotation[]>([]);
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectSearch, setProjectSearch] = useState('');
@@ -255,6 +219,8 @@ export const AdminDashboard: React.FC = () => {
     searchInput: string;
   } | null>(null);
   const [showFilterDrawer, setShowFilterDrawer] = useState(false);
+  const [showMonthlyRecapModal, setShowMonthlyRecapModal] = useState(false);
+  const [recapModalMode, setRecapModalMode] = useState<'PCO' | 'AR'>('PCO');
   const [searchInput, setSearchInput] = useState('');
 
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
@@ -374,11 +340,10 @@ export const AdminDashboard: React.FC = () => {
     setStaleRefreshError(null);
     try {
       const targetCompany = (isSuper ? activeCompanyId : user?.companyId) ?? '';
-      const [summary, projectRes, executorList, quos, latestLocs] = await Promise.all([
+      const [summary, projectRes, executorList, latestLocs] = await Promise.all([
         fetchAdminSummary(),
         fetchAdminProjects({ limit: 24, page: 1 }),
         fetchExecutors(),
-        targetCompany ? getQuotations({ companyId: targetCompany }).catch(() => []) : Promise.resolve([]),
         fetchLatestLocations().catch(() => []),
       ]);
       setSummaryData(summary);
@@ -386,7 +351,6 @@ export const AdminDashboard: React.FC = () => {
       setProjectTotalPages(projectRes.totalPages || 1);
       setProjectTotalCount(projectRes.totalCount || projectRes.projects.length);
       setExecutors(executorList);
-      setQuotationsList(quos);
       setUserLocations(latestLocs);
       await loadReports();
     } catch (err) {
@@ -400,10 +364,9 @@ export const AdminDashboard: React.FC = () => {
     }
   }, [isAdmin, isSuper, activeCompanyId, user?.companyId, loadReports]);
 
-  // Reset state saat SUPERADMIN berpindah perusahaan agar data perusahaan lama tidak pernah ditampilkan sebagai data baru
+  // Reset state saat berpindah perusahaan agar data lama tidak tertampil
   useEffect(() => {
     setSummaryData(null);
-    setQuotationsList([]);
     setReports([]);
     setProjects([]);
     setExecutors([]);
@@ -422,14 +385,11 @@ export const AdminDashboard: React.FC = () => {
     setIsRefreshingSummary(true);
     setStaleRefreshError(null);
     try {
-      const targetCompany = (isSuper ? activeCompanyId : user?.companyId) ?? '';
-      const [summary, quos] = await Promise.all([
+      const [summary] = await Promise.all([
         fetchAdminSummary(),
-        targetCompany ? getQuotations({ companyId: targetCompany }).catch(() => quotationsList) : Promise.resolve([]),
         loadReports(),
       ]);
       setSummaryData(summary);
-      setQuotationsList(quos);
       setLoadError(null);
     } catch (err) {
       const msg =
@@ -444,22 +404,7 @@ export const AdminDashboard: React.FC = () => {
     } finally {
       setIsRefreshingSummary(false);
     }
-  }, [isAdmin, isSuper, activeCompanyId, user?.companyId, loadReports, summaryData, quotationsList]);
-
-  const quotationSummary = useMemo<ExecutiveQuotationSummary | null>(() => {
-    if (!isAdmin) return null;
-    const totalQuotations = quotationsList.length;
-    const draftCount = quotationsList.filter(q => q.status === 'draft' || q.status === 'pending').length;
-    const approvedCount = quotationsList.filter(q => q.status === 'approved' || q.status === 'sent_to_client').length;
-    const dealCount = quotationsList.filter(q => q.status === 'deal').length;
-    return {
-      totalQuotations,
-      draftCount,
-      approvedCount,
-      dealCount,
-      onOpenQuotations: () => setActiveTab('quotation'),
-    };
-  }, [isAdmin, quotationsList]);
+  }, [isAdmin, isSuper, activeCompanyId, loadReports, summaryData]);
 
   useEffect(() => {
     if (!isAdmin || (isSuper && !activeCompanyId)) return;
@@ -920,20 +865,10 @@ export const AdminDashboard: React.FC = () => {
               year: 'numeric',
             })}
           </p>
-          {isSuper && <CompanyPicker />}
         </div>
       }
     >
       <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
-        {isSuper && !activeCompanyId && (
-          <div
-            role="status"
-            className="p-4 rounded-xl border border-[var(--status-draft-border)] bg-[var(--status-draft-bg)] text-sm text-[var(--status-draft-text)]"
-          >
-            Pilih perusahaan yang akan dikelola pada menu di sidebar untuk mulai melihat ringkasan operasional dan mengatur template.
-          </div>
-        )}
-
         {/* Global Action / Undo Feedback Banner */}
         {actionBanner && (
           <div
@@ -971,15 +906,13 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Tab Dashboard: Fokus HANYA pada Data & Visual Penting (Tanpa Tabel Panjang yang Menumpuk di Bawah) */}
+        {/* Tab Dashboard: Fokus HANYA pada Data & Visual Penting */}
         {activeTab === 'dashboard' && (
           <OperationsAnalyticsBento
             summary={summaryData}
-            quotationSummary={quotationSummary}
             reports={reports}
             projects={projects}
             executors={executors}
-            quotations={quotationsList}
             userLocations={userLocations}
             companyDisplayName={user?.name || 'Gucimas Pratama'}
             isLoading={isLoading}
@@ -1007,14 +940,6 @@ export const AdminDashboard: React.FC = () => {
             onOpenProjectsTab={() => {
               setCameFromDashboard(true);
               setActiveTab('projects');
-            }}
-            onOpenQuotationsTab={() => {
-              setCameFromDashboard(true);
-              setActiveTab('quotation');
-            }}
-            onOpenCustomersTab={() => {
-              setCameFromDashboard(true);
-              setActiveTab('customers');
             }}
             onOpenReportDetail={id => setSelectedReportId(id)}
           />
@@ -1185,6 +1110,33 @@ export const AdminDashboard: React.FC = () => {
                           >
                             <span>Urungkan Reset</span>
                           </button>
+                        )}
+
+                        {canGenerateMonthlyRecap(user?.role) && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRecapModalMode('PCO');
+                                setShowMonthlyRecapModal(true);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                              title="Buat Laporan Rekapitulasi Pest Control & Kalkulator Permenkes No. 2 Tahun 2023 (Khusus Admin)"
+                            >
+                              Rekap Pest Control (Permenkes)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRecapModalMode('AR');
+                                setShowMonthlyRecapModal(true);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                              title="Buat Laporan Rekapitulasi Pengendalian & Monitoring Anti Rayap (Khusus Admin)"
+                            >
+                              Rekap Anti Rayap (AR)
+                            </button>
+                          </>
                         )}
 
                         <button
@@ -2382,18 +2334,6 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               )}
 
-              {activeTab === 'quotation' && <QuotationPage />}
-              {activeTab === 'customers' && <CustomersPage />}
-              {activeTab === 'spk-cms' && <SPKPage />}
-              {activeTab === 'order-tracking' && <TrackingPage />}
-              {activeTab === 'cashflow' && <CashflowPage />}
-              {activeTab === 'performa' && <PerformaPage />}
-              {activeTab === 'inventory' && <InventoryPage />}
-              {activeTab === 'kontrol-rayap' && <KontrolRayapPage />}
-              {activeTab === 'saas-companies' && isMasterSuper && <CompaniesPage />}
-
-              {activeTab === 'templates' && isAdmin && <TemplateSettingsPanel />}
-
               {activeTab === 'risk-config' && (
                 <div className="space-y-4">
                   <RiskConfigPanel
@@ -3181,6 +3121,23 @@ export const AdminDashboard: React.FC = () => {
       )}
       {viewingPhoto && <PhotoViewerModal photo={viewingPhoto} onClose={() => setViewingPhoto(null)} />}
       {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
+      {showMonthlyRecapModal && (
+        <MonthlyRecapBuilderModal
+          isOpen={showMonthlyRecapModal}
+          initialCategoryMode={recapModalMode}
+          onClose={() => setShowMonthlyRecapModal(false)}
+          userRole={user?.role}
+          companyId={activeCompanyId}
+          defaultCompilerName={user?.name || 'Admin Operasional'}
+          availableCustomers={Array.from(
+            new Set([
+              ...projects.map(p => p.clientName).filter(Boolean),
+              ...reports.map(r => r.projectName).filter(Boolean),
+            ])
+          )}
+          reports={selectedReport ? [selectedReport] : []}
+        />
+      )}
       {showAdminCreateProject && (
         <CreateProjectModal
           onClose={() => setShowAdminCreateProject(false)}
