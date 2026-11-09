@@ -322,6 +322,22 @@ run_check(
     "ExecutorHome.tsx dan FieldDashboardPage.tsx mengimplementasikan UI minimalis gaya Figma (Sapaan, 2 kartu Jadwal, 5 dots, Detail Hari ini, Notes :, Clock In) + Floating Bottom Pill bawaan."
 )
 
+
+# KEI-20: Penghapusan Top Tab Bar Ganda (`hideTopBar={true}`) & Kartu Ringkas Proyek/Riwayat Klik-untuk-Detail (Gaya Image 2)
+tab_container_latest = (repo / "src/shared/ui/TabContainer.tsx").read_text(encoding="utf-8")
+exec_home_v2 = (repo / "src/widgets/executor/ExecutorHome.tsx").read_text(encoding="utf-8")
+run_check(
+    "KEI-20",
+    "Phase 6: Penghapusan Top Tab Bar Ganda & Kartu Ringkas Proyek/Riwayat dengan Click-for-Details",
+    "Teknisi membuka ExecutorHome.tsx dan berpindah ke tab Proyek maupun Riwayat melalui Floating Bottom Pill",
+    "1) Pastikan Top Tab Bar horizontal di bagian atas tidak tampil (hideTopBar={true}). 2) Pastikan daftar Proyek dan Riwayat menampilkan kartu ringkas (Tanggal, Klien, Jam, Dot Status) dan saat diklik membuka Detail Proyek / Detail Riwayat.",
+    "Tidak ada navigasi ganda di bagian atas, serta daftar Proyek dan Riwayat tampil bersih seperti referensi Image 2 dan dapat diklik untuk membuka detail lengkap beserta tombol kembali (ArrowLeft)",
+    "CRITICAL", "system", "usability",
+    "hideTopBar" in tab_container_latest
+    and all(k in exec_home_v2 for k in ["hideTopBar={true}", "floatingOnAllScreens={true}", "selectedProjectDetailId", "selectedHistoryDetailId", "Detail Proyek", "Detail Riwayat", "Completed"]),
+    "TabContainer.tsx mendukung hideTopBar={true} & floatingOnAllScreens={true}; ExecutorHome.tsx menampilkan kartu ringkas Proyek & Riwayat dengan interaksi Click-for-Details."
+)
+
 # Write CSV
 csv_out.parent.mkdir(parents=True, exist_ok=True)
 with csv_out.open("w", encoding="utf-8", newline="") as f:
