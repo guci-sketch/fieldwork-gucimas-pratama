@@ -19,17 +19,41 @@ import { formatDistance, calculateDistanceMeters } from '@/shared/utils/geo';
 import { Header } from '../common/Header';
 import { TabContainer } from '@/shared/ui/TabContainer';
 import {
-  Plus, Camera, CheckCircle2, Clock, MapPin, Briefcase, History, User as UserIcon,
-  Home, Check, Lock, Eye, LogOut, ChevronRight, Building, WifiOff, RefreshCw, AlertCircle, ImagePlus, ShieldCheck, X,
+  Plus, Camera, Clock, MapPin, Briefcase, History, User as UserIcon,
+  Home, Check, Lock, Eye, LogOut, AlertCircle, ImagePlus, ShieldCheck, MoreVertical, Users,
 } from 'lucide-react';
 
 import { CustomerReviewFormModal } from './CustomerReviewFormModal';
 import { postLocation } from '@/shared/api/location';
 
+function getTimeGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 11) return 'Selamat Pagi';
+  if (hour < 15) return 'Selamat Siang';
+  if (hour < 18) return 'Selamat Sore';
+  return 'Selamat Malam';
+}
+
+function formatScheduleDateId(dateStr?: string | null): string {
+  const d = dateStr ? new Date(dateStr) : new Date();
+  if (Number.isNaN(d.getTime())) {
+    return new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  }
+  return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function formatScheduleWindow(startTime?: string | null): string {
+  if (!startTime) return '08.00 - 14.00';
+  const normalized = startTime.replace(':', '.');
+  if (normalized.includes('-')) return normalized;
+  const startHour = parseInt(normalized.split('.')[0] || '8', 10);
+  const endHour = Number.isNaN(startHour) ? 14 : Math.min(23, startHour + 6);
+  return `${normalized} - ${String(endHour).padStart(2, '0')}.00`;
+}
+
 export const ExecutorHome: React.FC = () => {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<'home' | 'jobs' | 'history' | 'profile'>('home');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [reports, setReports] = useState<WorkReport[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -37,7 +61,7 @@ export const ExecutorHome: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [pendingCount, setPendingCount] = useState(0);
-  const [serverTimeOffset, setServerTimeOffset] = useState(0);
+  const [serverTimeOffset] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
 
   const [showCreateProject, setShowCreateProject] = useState(false);
@@ -59,6 +83,8 @@ export const ExecutorHome: React.FC = () => {
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [companyTechs, setCompanyTechs] = useState<{ id: string; name: string }[]>([]);
   const [quickManualName, setQuickManualName] = useState('');
+  const [showTeamPicker, setShowTeamPicker] = useState(false);
+  const [selectedScheduleIdx, setSelectedScheduleIdx] = useState(0);
   const [showGpsPrompt, setShowGpsPrompt] = useState(false);
   const [gpsPermissionStatus, setGpsPermissionStatus] = useState<string>('unknown');
 
@@ -212,9 +238,21 @@ export const ExecutorHome: React.FC = () => {
     r.projectAddress.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const activeQueueJobs = filteredReports.filter(r => r.status === 'WORKING' || r.status === 'READY' || r.status === 'DRAFT');
   const ongoingJob = filteredReports.find(r => r.status === 'WORKING');
   const readyJob = filteredReports.find(r => r.status === 'READY' || r.status === 'DRAFT');
   const completedJobs = filteredReports.filter(r => ['COMPLETED', 'FLAGGED', 'REVIEWED'].includes(r.status));
+
+  // Tugas yang ditampilkan pada kartu "Detail Hari ini"
+  const featuredJob: WorkReport | undefined =
+    ongoingJob ||
+    activeQueueJobs[selectedScheduleIdx] ||
+    readyJob ||
+    activeQueueJobs[0];
+
+  const scheduleCardsList: WorkReport[] = activeQueueJobs.length > 0
+    ? activeQueueJobs
+    : completedJobs.slice(0, 2);
 
   const filteredProjects = projects.filter(p => 
     searchQuery === '' || 
@@ -241,7 +279,7 @@ export const ExecutorHome: React.FC = () => {
         setActiveCameraAction(null);
         await loadData();
         setSuccessFeedback({
-          title: '✓ CHECK-IN & FOTO BERHASIL DISIMPAN',
+          title: '✓ CLOCK-IN & FOTO BERHASIL DISIMPAN',
           subtitle: `Anda tercatat aktif bertugas di ${updated.projectName}.`,
           stats: `Jarak: ${updated.checkInDistance !== null && updated.checkInDistance !== undefined ? formatDistance(updated.checkInDistance) : '-'} • ${updated.checkInValid ? 'Sesuai radius' : 'Di luar radius'} • ${updated.photos.length} foto tercatat`,
         });
@@ -345,6 +383,7 @@ export const ExecutorHome: React.FC = () => {
   }, [ongoingJob, serverTimeOffset]);
 
   const initials = user.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+  const greetingText = getTimeGreeting();
 
   const executorTabs = [
     { id: 'home', label: 'Tugas Hari Ini', shortLabel: 'Tugas', icon: <Home size={15} />, badge: (ongoingJob ? 1 : 0) + (readyJob ? 1 : 0) },
@@ -365,6 +404,26 @@ export const ExecutorHome: React.FC = () => {
     (showGpsPrompt && gpsPermissionStatus !== 'granted')
   );
 
+  // Bangun daftar poin Notes : minimalis untuk kartu Detail Hari ini
+  const buildFeaturedNotes = (job: WorkReport): string[] => {
+    const notesList: string[] = [];
+    if (job.workNotes && job.workNotes.trim()) {
+      notesList.push(job.workNotes.trim());
+    }
+    if (job.targetFocus && job.targetFocus.length > 0) {
+      notesList.push(`Fokus target: ${job.targetFocus.join(', ')}`);
+    } else if (job.focusTarget && job.focusTarget.trim()) {
+      notesList.push(`Fokus target: ${job.focusTarget.trim()}`);
+    }
+    if (job.projectAddress) {
+      notesList.push(`Lokasi: ${job.projectAddress} (Radius GPS ${job.projectRadius || 100}m)`);
+    }
+    if (notesList.length === 0) {
+      notesList.push('Pastikan area layanan diperiksa menyeluruh sesuai SOP dan dokumentasikan bukti foto.');
+    }
+    return notesList;
+  };
+
   return (
     <div className="flex flex-col h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
       <Header
@@ -378,7 +437,7 @@ export const ExecutorHome: React.FC = () => {
         onRefresh={loadData}
       />
 
-      {/* Toast Mengambang Konfirmasi Foto / Check-In agar langsung terlihat jelas setelah kamera tertutup */}
+      {/* Toast Mengambang Konfirmasi Foto / Clock-In agar langsung terlihat jelas setelah kamera tertutup */}
       <AnimatePresence>
         {successFeedback && !isAnyModalOpen && (
           <motion.div
@@ -411,9 +470,9 @@ export const ExecutorHome: React.FC = () => {
       </AnimatePresence>
       
       <div className="flex flex-1 overflow-hidden relative">
-        
         <main className="flex-1 overflow-y-auto flex flex-col w-full relative pb-32">
-          <div className="max-w-xl w-full mx-auto px-4 pt-4">
+          {/* Desktop / Tablet Top Sub-Menu + Mobile Floating Bottom Pill (TabContainer) */}
+          <div className="hidden lg:block max-w-xl w-full mx-auto px-4 pt-4">
             <TabContainer
               tabs={executorTabs}
               activeTab={activeTab}
@@ -421,24 +480,15 @@ export const ExecutorHome: React.FC = () => {
               showFloatingBottom={!isAnyModalOpen}
             />
           </div>
-
-          {successFeedback && (
-            <div className="max-w-xl w-full mx-auto px-4 mt-3">
-              <div className="p-4 bg-emerald-50 border-2 border-emerald-500 rounded-2xl shadow-sm text-emerald-900 flex items-start justify-between">
-                <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5">
-                    <Check size={20} />
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-sm text-emerald-950">{successFeedback.title}</h4>
-                    <p className="text-xs text-emerald-800 mt-0.5 font-medium">{successFeedback.subtitle}</p>
-                    {successFeedback.stats && <p className="text-[11px] text-emerald-700 mt-1 font-mono">{successFeedback.stats}</p>}
-                  </div>
-                </div>
-                <button onClick={() => setSuccessFeedback(null)} className="text-emerald-700 hover:text-emerald-900 p-1 text-xs font-bold">✕</button>
-              </div>
-            </div>
-          )}
+          <div className="lg:hidden">
+            <TabContainer
+              tabs={executorTabs}
+              activeTab={activeTab}
+              onChange={(id) => setActiveTab(id as any)}
+              className="hidden"
+              showFloatingBottom={!isAnyModalOpen}
+            />
+          </div>
 
           {actionError && (
             <div className="max-w-xl w-full mx-auto px-4 mt-3">
@@ -452,414 +502,480 @@ export const ExecutorHome: React.FC = () => {
             </div>
           )}
 
-          <div className="flex-1 max-w-xl w-full mx-auto p-4 space-y-4">
-            {isLoading && (
-              <div className="py-16 text-center text-sm text-[var(--text-muted)]">Memuat data pekerjaan...</div>
-            )}
+          {/* ================================================================= */}
+          {/* TAB 1: HOME (DESAIN MINIMALIS FIGMA: SAPAAN + JADWAL + DETAIL)    */}
+          {/* ================================================================= */}
+          {activeTab === 'home' && (
+            <div className="max-w-xl w-full mx-auto flex-1 flex flex-col">
+              {/* Hero Header Warna Identitas (Selamat Pagi, User + Jadwal 2 Kartu) */}
+              <div className="bg-[var(--accent)] text-white px-5 pt-5 pb-10 sm:rounded-b-3xl shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateProject(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    <Plus size={14} /> Tugas Baru
+                  </button>
 
-            {!isLoading && loadError && (
-              <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-center">
-                <p className="text-sm text-rose-800 font-medium mb-2">{loadError}</p>
-                <button onClick={loadData} className="text-xs font-semibold bg-rose-600 text-white px-3 py-1.5 rounded-lg">Coba Lagi</button>
-              </div>
-            )}
-
-            {!isLoading && !loadError && (
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg className="h-4 w-4 text-[var(--text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-                <input
-                  type="text"
-                  placeholder="Cari berdasarkan nama proyek, klien, atau alamat..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-[var(--border-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-xs bg-white text-[var(--text-primary)] placeholder-[var(--text-muted)] shadow-sm"
-                />
-              </div>
-            )}
-
-            {!isLoading && !loadError && activeTab === 'home' && (
-              <>
-                <div className="clean-card p-4 flex items-center justify-between">
-                  <div>
-                    <span className="text-xs text-[var(--text-muted)] font-medium">Petugas Bertugas:</span>
-                    <h2 className="text-base font-bold text-[var(--text-primary)]">{user.name}</h2>
-                    <span className="text-xs text-[var(--text-muted)] font-mono">
-                      NIP: {user.nip || '-'} &bull; {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                    </span>
-                  </div>
-                  <div className="w-10 h-10 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-sm shrink-0">
-                    {initials}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('profile')}
+                    className="relative w-10 h-10 rounded-full bg-white/20 border border-white/30 flex items-center justify-center text-white font-bold text-xs cursor-pointer"
+                    title="Profil Teknisi"
+                  >
+                    <span>{initials}</span>
+                    <span className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-rose-500 border-2 border-[var(--accent)]" />
+                  </button>
                 </div>
 
-                {ongoingJob && (
-                  <div className="bg-[var(--text-primary)] text-white p-5 rounded-xl border border-white/5">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="inline-flex items-center gap-1.5 bg-emerald-950 text-emerald-300 border border-emerald-800 text-xs font-semibold px-2.5 py-1 rounded">
-                        <span className="w-2 h-2 rounded-full bg-emerald-400" /> PEKERJAAN AKTIF
-                      </span>
-                      <div className="flex items-center gap-1 text-xs font-mono text-zinc-300 bg-zinc-800 px-2.5 py-1 rounded border border-zinc-700">
-                        <Clock size={13} className="text-emerald-400" /> {elapsedTime}
-                      </div>
-                    </div>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+                  {greetingText}, {user.name.split(' ')[0] || 'User'}
+                </h1>
 
-                    <div className="flex items-center gap-1.5 mb-1.5">
-                      {(() => {
-                        const meta = getServiceTypeMeta(ongoingJob.serviceType);
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <h2 className="text-base sm:text-lg font-medium text-white/95">Jadwal</h2>
+                    {scheduleCardsList.length > 2 && (
+                      <span className="text-[11px] text-white/80">{scheduleCardsList.length} jadwal tersedia</span>
+                    )}
+                  </div>
+
+                  {scheduleCardsList.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      {scheduleCardsList.slice(0, 2).map((item, idx) => {
+                        const isSelected = selectedScheduleIdx === idx;
                         return (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 border border-zinc-700">
-                            {meta.shortLabel}
-                          </span>
-                        );
-                      })()}
-                      {ongoingJob.targetFocus?.length > 0 && <span className="text-[11px] text-[var(--text-muted)]">• {ongoingJob.targetFocus.join(', ')}</span>}
-                      {ongoingJob.focusTarget && ongoingJob.targetFocus?.length === 0 && <span className="text-[11px] text-[var(--text-muted)]">• {ongoingJob.focusTarget}</span>}
-                    </div>
-                    <h3 className="text-base font-bold text-white tracking-tight">{ongoingJob.projectName}</h3>
-                    <p className="text-xs text-[var(--text-muted)] mt-1 flex items-start gap-1">
-                      <MapPin size={13} className="text-[var(--text-muted)] shrink-0 mt-0.5" />
-                      <span className="truncate">{ongoingJob.projectAddress}</span>
-                    </p>
-
-                    <div className="mt-4 pt-3 border-t border-zinc-800">
-                      <div className="flex items-center justify-between text-xs mb-2">
-                        <span className="text-[var(--text-muted)] font-medium">Dokumentasi Lapangan ({ongoingJob.photos.length} foto)</span>
-                        <span className="text-[11px] text-emerald-400 font-mono">
-                          Check-In: {ongoingJob.checkInAt ? new Date(ongoingJob.checkInAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'} WIB
-                        </span>
-                      </div>
-                      <div className="flex gap-2 overflow-x-auto pb-1">
-                        {ongoingJob.photos.map(photo => (
-                          <button key={photo.id} type="button" onClick={() => setViewingPhoto(photo)} className="relative w-16 h-16 rounded overflow-hidden border border-zinc-700 shrink-0 group hover:border-emerald-400 transition-colors">
-                            <AuthedImage path={photo.url} alt="evidence" purged={!!photo.purgedAt} className="w-full h-full object-cover" />
-                            <span className="absolute bottom-0 inset-x-0 bg-zinc-950/80 text-[9px] font-medium text-white text-center py-0.5 uppercase">
-                              {photo.photoTag ? (photo.photoTag === 'BEFORE' ? 'Awal' : 'Hasil') : photo.photoType === 'CHECK_IN' ? 'Cin' : photo.photoType === 'PROGRESS' ? 'Prog' : 'Cout'}
-                            </span>
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => setSelectedScheduleIdx(idx)}
+                            className={`bg-white text-slate-900 rounded-2xl p-3.5 text-left shadow-md transition-all cursor-pointer border-2 ${
+                              isSelected ? 'border-emerald-300 ring-2 ring-white/40' : 'border-transparent opacity-95 hover:opacity-100'
+                            }`}
+                          >
+                            <p className="text-sm sm:text-base font-bold text-slate-900 leading-snug line-clamp-2">
+                              {formatScheduleDateId(item.createdAt)}
+                            </p>
+                            <div className="flex items-center justify-between mt-3 pt-1">
+                              <span className="text-xs sm:text-sm font-medium text-slate-700">
+                                {formatScheduleWindow(item.scheduledStartTime)}
+                              </span>
+                              <MoreVertical size={16} className="text-slate-700 shrink-0" />
+                            </div>
                           </button>
-                        ))}
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white/95 text-slate-900 rounded-2xl p-3.5 shadow-md">
+                        <p className="text-sm font-bold text-slate-900 leading-snug">
+                          {formatScheduleDateId(new Date().toISOString())}
+                        </p>
+                        <div className="flex items-center justify-between mt-3">
+                          <span className="text-xs font-medium text-slate-700">08.00 - 14.00</span>
+                          <MoreVertical size={16} className="text-slate-700" />
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateProject(true)}
+                        className="bg-white/15 hover:bg-white/25 border border-dashed border-white/40 text-white rounded-2xl p-3.5 flex flex-col justify-between text-left cursor-pointer transition-colors"
+                      >
+                        <span className="text-xs font-bold">+ Buat Jadwal Baru</span>
+                        <span className="text-[11px] text-white/80">Pest Control / Anti Rayap</span>
+                      </button>
                     </div>
+                  )}
+                </div>
+              </div>
 
-                    <div className="grid grid-cols-2 gap-2 mt-5">
-                      <button onClick={() => setActiveCameraAction({ type: 'PROGRESS', report: ongoingJob, photoTag: 'BEFORE' })} className="h-11 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-semibold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 border border-zinc-700 transition-colors">
-                        <ImagePlus size={15} /> Foto Kondisi Awal
-                      </button>
-                      <button onClick={() => setActiveCameraAction({ type: 'PROGRESS', report: ongoingJob, photoTag: 'AFTER' })} className="h-11 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white font-semibold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 border border-zinc-700 transition-colors">
-                        <ImagePlus size={15} /> Foto Hasil Perlakuan
-                      </button>
-                    </div>
-                    <button onClick={() => setTreatmentFormReport(ongoingJob)} className="w-full mt-2 h-11 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-zinc-950 font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 transition-colors">
-                      <LogOut size={16} /> Isi Treatment &amp; Check-Out
+              {/* Lembar Bawah Melengkung (Rounded Bottom Sheet) */}
+              <div className="bg-[var(--bg-primary)] rounded-t-[32px] -mt-5 pt-4 px-4 pb-6 flex-1 space-y-4">
+                {/* Indikator Titik Carousel (• • • • •) */}
+                <div className="flex items-center justify-center gap-2 py-1">
+                  {[0, 1, 2, 3, 4].map(dotIdx => {
+                    const isActiveDot = dotIdx === (selectedScheduleIdx % 5);
+                    return (
+                      <button
+                        key={dotIdx}
+                        type="button"
+                        onClick={() => {
+                          if (dotIdx < scheduleCardsList.length) setSelectedScheduleIdx(dotIdx);
+                        }}
+                        aria-label={`Slide jadwal ${dotIdx + 1}`}
+                        className={`w-2.5 h-2.5 rounded-full transition-all cursor-pointer ${
+                          isActiveDot ? 'bg-[var(--accent)] scale-110' : 'bg-slate-300 hover:bg-slate-400'
+                        }`}
+                      />
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg sm:text-xl font-medium text-slate-800">Detail Hari ini</h2>
+                  {featuredJob && (
+                    <button
+                      type="button"
+                      onClick={() => setShowTeamPicker(prev => !prev)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent)] hover:underline cursor-pointer"
+                    >
+                      <Users size={13} />
+                      Tim ({(featuredJob.teamMembers?.length ? featuredJob.teamMembers : [{ name: user.name }]).length} Orang)
                     </button>
+                  )}
+                </div>
+
+                {isLoading && (
+                  <div className="py-12 text-center text-sm text-[var(--text-muted)]">Memuat jadwal hari ini...</div>
+                )}
+
+                {!isLoading && loadError && (
+                  <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 text-center">
+                    <p className="text-sm text-rose-800 font-medium mb-2">{loadError}</p>
+                    <button onClick={loadData} className="text-xs font-semibold bg-rose-600 text-white px-3 py-1.5 rounded-lg">Coba Lagi</button>
                   </div>
                 )}
 
-                {readyJob && !ongoingJob && (
-                  <div className="clean-card p-5">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold px-2.5 py-1 rounded flex items-center gap-1">
-                        <CheckCircle2 size={13} /> SIAP CHECK-IN
-                      </span>
-                      <span className="text-xs text-[var(--text-muted)] font-medium">Jadwal: {readyJob.scheduledStartTime} WIB</span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 mb-1">
-                      {(() => {
-                        const meta = getServiceTypeMeta(readyJob.serviceType);
-                        return (
-                          <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded border ${meta.badgeClass}`}>
-                            {meta.shortLabel}
-                          </span>
-                        );
-                      })()}
-                      {readyJob.targetFocus?.length > 0 && <span className="text-[11px] text-[var(--text-muted)]">• {readyJob.targetFocus.join(', ')}</span>}
-                      {readyJob.focusTarget && readyJob.targetFocus?.length === 0 && <span className="text-[11px] text-[var(--text-muted)]">• {readyJob.focusTarget}</span>}
-                    </div>
-                    <h3 className="text-base font-bold text-[var(--text-primary)]">{readyJob.projectName}</h3>
-                    <p className="text-xs text-[var(--text-muted)] mt-1 flex items-start gap-1">
-                      <MapPin size={13} className="text-[var(--text-muted)] shrink-0 mt-0.5" />
-                      <span className="truncate">{readyJob.projectAddress}</span>
-                    </p>
-
-                    <div className="bg-[var(--bg-tertiary)] rounded-lg p-3 my-4 border border-[var(--border-subtle)] text-xs space-y-1">
-                      <div className="flex justify-between text-[var(--text-secondary)]">
-                        <span>Radius Geofence:</span>
-                        <span className="font-semibold text-[var(--text-primary)]">{readyJob.projectRadius} meter</span>
-                      </div>
-                      {readyJob.buildingAreaSqm ? (
-                        <div className="flex justify-between text-[var(--text-secondary)]">
-                          <span>Luas Area:</span>
-                          <span className="font-semibold text-[var(--text-primary)]">{readyJob.buildingAreaSqm} m²</span>
+                {!isLoading && !loadError && featuredJob && (
+                  <>
+                    {/* Panel Pilih Tim Teknisi Ringkas (Hanya muncul saat diklik) */}
+                    {showTeamPicker && (
+                      <div className="p-3.5 rounded-2xl border border-emerald-200 bg-white shadow-xs space-y-2 text-xs">
+                        <div className="font-bold text-slate-800 flex items-center justify-between">
+                          <span>Pilih Rekan 1 Tim Lapangan:</span>
+                          <button type="button" onClick={() => setShowTeamPicker(false)} className="text-slate-400 hover:text-slate-700 font-bold">✕</button>
                         </div>
-                      ) : null}
-                      <div className="flex justify-between text-[var(--text-secondary)]">
-                        <span>Verifikasi:</span>
-                        <span className="font-semibold text-[var(--text-primary)]">Kamera Langsung &amp; GPS Spasial</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {companyTechs.map(t => {
+                            const activeList = featuredJob.teamMembers?.length ? featuredJob.teamMembers : [{ id: user.uid, name: user.name }];
+                            const isSel = activeList.some(m => m.id === t.id || m.name.toLowerCase() === t.name.toLowerCase());
+                            return (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => handleToggleQuickTeamMember(featuredJob, { id: t.id, name: t.name, isManual: false })}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors ${
+                                  isSel ? 'bg-[var(--accent)] text-white border-[var(--accent)]' : 'bg-slate-50 text-slate-700 border-slate-200'
+                                }`}
+                              >
+                                {isSel ? '✓ ' : '+ '}{t.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            value={quickManualName}
+                            onChange={e => setQuickManualName(e.target.value)}
+                            placeholder="Ketik nama helper manual..."
+                            className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!quickManualName.trim()) return;
+                              handleToggleQuickTeamMember(featuredJob, { name: quickManualName.trim(), isManual: true });
+                              setQuickManualName('');
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-[var(--accent)] text-white text-[11px] font-bold shrink-0"
+                          >
+                            + Tambah
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Kartu Tugas Minimalis Terpisah (Atas: Tanggal + Lokasi/Layanan + Jam; Bawah: Notes :) */}
+                    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-md overflow-hidden">
+                      <div className="p-4 sm:p-5">
+                        <div className="flex items-center justify-between gap-2">
+                          {(() => {
+                            const meta = getServiceTypeMeta(featuredJob.serviceType);
+                            return (
+                              <span className={`inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md border ${meta.badgeClass}`}>
+                                {meta.shortLabel}
+                              </span>
+                            );
+                          })()}
+                          <p className="text-base sm:text-lg font-bold text-slate-900 text-right">
+                            {formatScheduleDateId(featuredJob.createdAt)}
+                          </p>
+                        </div>
+
+                        <div className="flex items-start justify-between gap-4 mt-3.5">
+                          <div className="space-y-0.5 min-w-0">
+                            <h3 className="text-sm sm:text-base font-semibold text-slate-900 leading-snug">
+                              {featuredJob.clientName || featuredJob.projectName}
+                            </h3>
+                            <p className="text-xs sm:text-sm text-slate-600 leading-snug">
+                              {featuredJob.projectName}
+                            </p>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            {featuredJob.status === 'WORKING' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono text-xs font-bold">
+                                <Clock size={12} /> {elapsedTime}
+                              </span>
+                            ) : (
+                              <span className="text-xs sm:text-sm font-medium text-slate-800">
+                                {formatScheduleWindow(featuredJob.scheduledStartTime)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Garis Pemisah Horizontal + Daftar Poin Notes : */}
+                      <div className="border-t border-slate-300 px-4 sm:px-5 py-3.5 bg-white">
+                        <p className="text-xs sm:text-sm font-medium text-slate-800 mb-1.5">Notes :</p>
+                        <ul className="list-disc pl-5 text-xs sm:text-sm text-slate-700 space-y-1 leading-relaxed">
+                          {buildFeaturedNotes(featuredJob).map((line, idx) => (
+                            <li key={idx}>{line}</li>
+                          ))}
+                        </ul>
+
+                        {featuredJob.photos.length > 0 && (
+                          <div className="flex items-center gap-2 overflow-x-auto pt-3 mt-2.5 border-t border-slate-100">
+                            {featuredJob.photos.map(photo => (
+                              <button
+                                key={photo.id}
+                                type="button"
+                                onClick={() => setViewingPhoto(photo)}
+                                className="relative w-12 h-12 rounded-lg overflow-hidden border border-slate-200 shrink-0"
+                              >
+                                <AuthedImage path={photo.url} alt="evidence" purged={!!photo.purgedAt} className="w-full h-full object-cover" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    {/* Setup Tim Teknisi (Pilih Rekan / Input Manual) Sebelum Check-In */}
-                    <div className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/40 mb-4 space-y-2 text-xs">
-                      <div className="font-bold text-emerald-950 flex items-center justify-between">
-                        <span>Tim Teknisi Bertugas (1 Tim):</span>
-                        <span className="text-[10.5px] font-mono text-emerald-800">
-                          {(readyJob.teamMembers?.length ? readyJob.teamMembers : [{ name: user.name }]).length} Orang
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {companyTechs.map(t => {
-                          const activeList = readyJob.teamMembers?.length ? readyJob.teamMembers : [{ id: user.uid, name: user.name }];
-                          const isSel = activeList.some(m => m.id === t.id || m.name.toLowerCase() === t.name.toLowerCase());
-                          return (
-                            <button
-                              key={t.id}
-                              type="button"
-                              onClick={() => handleToggleQuickTeamMember(readyJob, { id: t.id, name: t.name, isManual: false })}
-                              className={`px-2 py-1 rounded-lg text-[11px] font-semibold border transition-colors ${
-                                isSel ? 'bg-emerald-700 text-white border-emerald-700' : 'bg-white text-slate-700 border-emerald-200'
-                              }`}
-                            >
-                              {isSel ? '✓ ' : '+ '}{t.name}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="text"
-                          value={quickManualName}
-                          onChange={e => setQuickManualName(e.target.value)}
-                          placeholder="Ketik nama teknisi/helper manual jika tidak ada..."
-                          className="flex-1 px-2.5 py-1.5 rounded-lg border border-emerald-300 bg-white text-xs"
-                        />
+                    {/* Tombol Aksi Utama Lebar Penuh (Clock In / Isi Laporan & Clock Out) */}
+                    {featuredJob.status === 'WORKING' ? (
+                      <div className="pt-2 space-y-2.5">
+                        <div className="grid grid-cols-2 gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() => setActiveCameraAction({ type: 'PROGRESS', report: featuredJob, photoTag: 'BEFORE' })}
+                            className="py-3 rounded-xl bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 border border-slate-300 shadow-2xs transition-colors cursor-pointer"
+                          >
+                            <ImagePlus size={15} /> + Foto Awal
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setActiveCameraAction({ type: 'PROGRESS', report: featuredJob, photoTag: 'AFTER' })}
+                            className="py-3 rounded-xl bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 border border-slate-300 shadow-2xs transition-colors cursor-pointer"
+                          >
+                            <ImagePlus size={15} /> + Foto Hasil
+                          </button>
+                        </div>
                         <button
                           type="button"
-                          onClick={() => {
-                            if (!quickManualName.trim()) return;
-                            handleToggleQuickTeamMember(readyJob, { name: quickManualName.trim(), isManual: true });
-                            setQuickManualName('');
-                          }}
-                          className="px-2.5 py-1.5 rounded-lg bg-emerald-700 text-white text-[11px] font-bold shrink-0"
+                          onClick={() => setTreatmentFormReport(featuredJob)}
+                          className="w-full py-3.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-colors cursor-pointer"
                         >
-                          + Manual
+                          <LogOut size={16} /> Isi Laporan &amp; Clock Out
                         </button>
                       </div>
-                      {(readyJob.teamMembers?.filter(m => m.isManual) ?? []).length > 0 && (
-                        <div className="flex flex-wrap gap-1 pt-1">
-                          {readyJob.teamMembers!.filter(m => m.isManual).map((m, i) => (
-                            <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10.5px] font-bold">
-                              {m.name} (Manual)
-                              <button type="button" onClick={() => handleToggleQuickTeamMember(readyJob, m)} className="text-amber-800 hover:text-red-600">✕</button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <button onClick={() => setActiveCameraAction({ type: 'CHECK_IN', report: readyJob })} className="w-full h-11 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-colors">
-                      <Camera size={18} /> Ambil Foto &amp; Check-In
-                    </button>
-                  </div>
+                    ) : (
+                      <div className="pt-3">
+                        <button
+                          type="button"
+                          onClick={() => setActiveCameraAction({ type: 'CHECK_IN', report: featuredJob })}
+                          className="w-full py-3.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                        >
+                          Clock In
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
 
-                {!ongoingJob && !readyJob && (
-                  <div className="clean-card p-8 text-center">
-                    <div className="w-12 h-12 rounded-lg bg-zinc-100 text-[var(--text-muted)] mx-auto flex items-center justify-center mb-3">
-                      <Briefcase size={22} />
-                    </div>
-                    <h3 className="text-base font-bold text-[var(--text-primary)]">Belum ada pekerjaan hari ini</h3>
-                    <p className="text-xs text-[var(--text-muted)] mt-1 max-w-xs mx-auto mb-4">
-                      Buat penugasan proyek baru untuk memulai check-in.
+                {!isLoading && !loadError && !featuredJob && (
+                  <div className="bg-white rounded-2xl border border-slate-200 p-6 text-center shadow-xs space-y-3">
+                    <h3 className="text-sm font-bold text-slate-900">Belum ada jadwal aktif hari ini</h3>
+                    <p className="text-xs text-slate-500 max-w-xs mx-auto">
+                      Tambahkan penugasan Pest Control atau Anti Rayap baru untuk memulai Clock In.
                     </p>
-                    <button onClick={() => setShowCreateProject(true)} className="inline-flex items-center gap-2 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
-                      <Plus size={15} /> Tambah Pekerjaan
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateProject(true)}
+                      className="w-full py-3 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold shadow-sm cursor-pointer"
+                    >
+                      + Buat Tugas Baru
                     </button>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
 
-                <div className="pt-2 pb-4">
-                  <div className="flex items-center justify-between mb-2 px-1">
-                    <h3 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-wider">Riwayat Pekerjaan Saya ({completedJobs.length})</h3>
-                    <button onClick={() => setActiveTab('history')} className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-0.5">
-                      Lihat Semua <ChevronRight size={14} />
+          {/* ================================================================= */}
+          {/* TAB 2, 3, 4: PROYEK, RIWAYAT, PROFIL (MINIMALIS & BERSIH)         */}
+          {/* ================================================================= */}
+          {activeTab !== 'home' && (
+            <div className="flex-1 max-w-xl w-full mx-auto p-4 space-y-4">
+              {activeTab !== 'profile' && (
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Cari nama proyek, klien, atau lokasi..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-xs bg-white text-[var(--text-primary)] placeholder-[var(--text-muted)] shadow-2xs"
+                  />
+                </div>
+              )}
+
+              {!isLoading && !loadError && activeTab === 'jobs' && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-base font-bold text-[var(--text-primary)]">Daftar Proyek Lapangan</h2>
+                    <button onClick={() => setShowCreateProject(true)} className="bg-[var(--accent)] text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1 cursor-pointer">
+                      <Plus size={14} /> Tugas Baru
                     </button>
                   </div>
 
-                  <div className="space-y-2">
-                    {completedJobs.slice(0, 3).map(rep => {
-                      const durationMin = rep.durationSeconds ? Math.round(rep.durationSeconds / 60) : 0;
-                      return (
-                        <div key={rep.id} className="clean-card p-3.5 flex items-center justify-between">
-                          <div className="min-w-0 pr-3">
-                            <div className="flex items-center gap-2 mb-0.5">
-                              <RiskBadge level={rep.riskLevel} score={rep.riskScore} size="sm" />
-                              <span className="text-[11px] font-medium text-[var(--text-muted)]">{new Date(rep.createdAt).toLocaleDateString('id-ID')}</span>
-                            </div>
-                            <h4 className="text-sm font-bold text-[var(--text-primary)] truncate">{rep.projectName}</h4>
-                            <div className="flex items-center gap-3 text-xs text-[var(--text-muted)] mt-1">
-                              <span>
-                                {rep.checkInAt ? new Date(rep.checkInAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'} →{' '}
-                                {rep.checkOutAt ? new Date(rep.checkOutAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                  {filteredProjects.length === 0 && (
+                    <p className="text-xs text-[var(--text-muted)] text-center py-8">Belum ada proyek. Buat proyek pertama Anda.</p>
+                  )}
+
+                  {filteredProjects.map(proj => {
+                    const report = reports.find(r => r.projectId === proj.id);
+                    const meta = getServiceTypeMeta(proj.serviceType);
+                    return (
+                      <div key={proj.id} className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+                        <div className="p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded border mb-1 ${meta.badgeClass}`}>
+                                {meta.shortLabel}
                               </span>
-                              <span>• {durationMin} min</span>
-                              <span>• {rep.photos.length} foto</span>
+                              <h3 className="font-bold text-sm text-slate-900">{proj.projectName}</h3>
+                              {proj.clientName && <p className="text-xs text-slate-600">{proj.clientName}</p>}
                             </div>
+                            <span className="text-xs font-medium text-slate-700 shrink-0">08.00 - 14.00</span>
                           </div>
-                          {rep.photos.length > 0 && (
-                            <button type="button" onClick={() => setViewingPhoto(rep.photos[0])} className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 shrink-0 relative group">
-                              <AuthedImage path={rep.photos[0].url} alt="thumb" purged={!!rep.photos[0].purgedAt} className="w-full h-full object-cover" />
-                              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                <Eye size={14} className="text-white" />
-                              </div>
+                        </div>
+                        <div className="border-t border-slate-200 px-4 py-3 bg-white space-y-2">
+                          <p className="text-xs font-medium text-slate-800">Notes :</p>
+                          <ul className="list-disc pl-4 text-xs text-slate-600 space-y-0.5">
+                            <li>{proj.address} (Radius {proj.radius}m)</li>
+                            {proj.warrantyMonths > 0 && (
+                              <li>
+                                <span className="text-emerald-700 font-semibold">Garansi aktif {proj.warrantyMonths} bulan</span>
+                              </li>
+                            )}
+                          </ul>
+                          {report && report.status === 'READY' && (
+                            <button
+                              onClick={() => { setActiveTab('home'); setActiveCameraAction({ type: 'CHECK_IN', report }); }}
+                              className="w-full mt-2 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                            >
+                              <Camera size={14} /> Clock In
                             </button>
                           )}
                         </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {!isLoading && !loadError && activeTab === 'history' && (
+                <div className="space-y-3">
+                  <h2 className="text-base font-bold text-[var(--text-primary)]">Riwayat Pekerjaan Selesai</h2>
+                  {completedJobs.length === 0 ? (
+                    <p className="text-xs text-[var(--text-muted)]">Belum ada riwayat pekerjaan selesai.</p>
+                  ) : (
+                    completedJobs.map(rep => {
+                      const durationMin = rep.durationSeconds ? Math.round(rep.durationSeconds / 60) : 0;
+                      return (
+                        <div key={rep.id} className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
+                          <div className="p-4">
+                            <div className="flex items-center justify-between mb-1">
+                              <RiskBadge level={rep.riskLevel} score={rep.riskScore} size="sm" />
+                              <span className="text-xs font-bold text-slate-900">{formatScheduleDateId(rep.createdAt)}</span>
+                            </div>
+                            <div className="flex items-start justify-between gap-2 mt-2">
+                              <div>
+                                <h3 className="font-bold text-sm text-slate-900">{rep.projectName}</h3>
+                                <p className="text-xs text-slate-500">{rep.projectAddress}</p>
+                              </div>
+                              <span className="text-xs font-mono text-slate-700 shrink-0">
+                                {rep.checkInAt ? new Date(rep.checkInAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'} -{' '}
+                                {rep.checkOutAt ? new Date(rep.checkOutAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="border-t border-slate-200 px-4 py-3 bg-white space-y-2">
+                            <p className="text-xs font-medium text-slate-800">Notes :</p>
+                            <ul className="list-disc pl-4 text-xs text-slate-600 space-y-0.5">
+                              <li>Durasi kerja: {durationMin} menit • {rep.photos.length} foto bukti</li>
+                              <li>Status GPS: {rep.checkInValid ? 'Sesuai radius' : 'Di luar radius'} ({rep.checkInDistance ?? 0}m)</li>
+                            </ul>
+                            {rep.photos.length > 0 && (
+                              <div className="flex gap-2 overflow-x-auto pt-1">
+                                {rep.photos.map(p => (
+                                  <button key={p.id} type="button" onClick={() => setViewingPhoto(p)} className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 shrink-0 relative group">
+                                    <AuthedImage path={p.url} alt="evidence" purged={!!p.purgedAt} className="w-full h-full object-cover" />
+                                    <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                      <Eye size={13} className="text-white" />
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       );
-                    })}
-                  </div>
+                    })
+                  )}
                 </div>
-              </>
-            )}
+              )}
 
-            {!isLoading && !loadError && activeTab === 'jobs' && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-base font-bold text-[var(--text-primary)]">Daftar Proyek Lapangan</h2>
-                  <button onClick={() => setShowCreateProject(true)} className="bg-emerald-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1">
-                    <Plus size={14} /> Tambah
-                  </button>
-                </div>
-
-                {filteredProjects.length === 0 && <p className="text-xs text-[var(--text-muted)] text-center py-8">Belum ada proyek. Buat proyek pertama Anda.</p>}
-
-                {filteredProjects.map(proj => {
-                  const report = reports.find(r => r.projectId === proj.id);
-                  const meta = getServiceTypeMeta(proj.serviceType);
-                  return (
-                    <div key={proj.id} className="clean-card p-4 space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border mb-1 ${meta.badgeClass}`}>
-                            {meta.shortLabel}
-                          </span>
-                          <h3 className="font-bold text-sm text-[var(--text-primary)]">{proj.projectName}</h3>
-                        </div>
-                        {proj.lockedAt ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[var(--text-muted)] bg-[var(--bg-tertiary)] px-2 py-0.5 rounded border border-slate-200">
-                            <Lock size={11} /> Terkunci
-                          </span>
-                        ) : (
-                          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">Siap Mulai</span>
-                        )}
-                      </div>
-                      <p className="text-xs text-[var(--text-secondary)]">{proj.address}</p>
-                      <div className="flex items-center justify-between text-xs text-[var(--text-muted)] pt-2 border-t border-[var(--border-subtle)]">
-                        <span>Radius: {proj.radius}m</span>
-                        <span>{proj.contractType === 'RECURRING' ? `Berkala${proj.nextServiceDate ? ` • Berikutnya ${new Date(proj.nextServiceDate).toLocaleDateString('id-ID')}` : ''}` : 'Sekali Layanan'}</span>
-                      </div>
-                      {proj.warrantyMonths > 0 && (
-                        <div className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-1 rounded border border-emerald-200/60 flex items-center gap-1">
-                          <ShieldCheck size={12} /> Garansi {proj.warrantyMonths} bulan
-                        </div>
-                      )}
-                      {report && report.status === 'READY' && (
-                        <button
-                          onClick={() => { setActiveTab('home'); setActiveCameraAction({ type: 'CHECK_IN', report }); }}
-                          className="w-full mt-2 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1.5"
-                        >
-                          <Camera size={14} /> Lakukan Check-In
-                        </button>
-                      )}
+              {!isLoading && !loadError && activeTab === 'profile' && (
+                <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 shadow-xs">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-full bg-[var(--accent)] text-white flex items-center justify-center font-bold text-xl">
+                      {initials}
                     </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {!isLoading && !loadError && activeTab === 'history' && (
-              <div className="space-y-3">
-                <h2 className="text-base font-bold text-[var(--text-primary)]">Seluruh Riwayat Pekerjaan</h2>
-                {completedJobs.length === 0 ? (
-                  <p className="text-xs text-[var(--text-muted)]">Belum ada riwayat pekerjaan selesai.</p>
-                ) : (
-                  completedJobs.map(rep => (
-                    <div key={rep.id} className="clean-card p-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <RiskBadge level={rep.riskLevel} score={rep.riskScore} size="sm" />
-                        <span className="text-xs text-[var(--text-muted)] font-mono">{new Date(rep.createdAt).toLocaleDateString('id-ID')}</span>
-                      </div>
-                      <h3 className="font-bold text-sm text-[var(--text-primary)]">{rep.projectName}</h3>
-                      <p className="text-xs text-[var(--text-muted)]">{rep.projectAddress}</p>
-                      <div className="grid grid-cols-2 gap-2 text-xs bg-[var(--bg-tertiary)] p-2.5 rounded-lg border border-[var(--border-subtle)]">
-                        <div>
-                          <span className="text-[var(--text-muted)] block text-[10px]">CHECK-IN</span>
-                          <span className="font-semibold text-[var(--text-secondary)]">
-                            {rep.checkInAt ? new Date(rep.checkInAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'} WIB
-                          </span>
-                          <span className="block text-[10px] text-[var(--text-muted)]">{rep.checkInValid ? '✓ Sesuai' : '⚠ Di luar radius'} ({rep.checkInDistance}m)</span>
-                        </div>
-                        <div>
-                          <span className="text-[var(--text-muted)] block text-[10px]">CHECK-OUT</span>
-                          <span className="font-semibold text-[var(--text-secondary)]">
-                            {rep.checkOutAt ? new Date(rep.checkOutAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'} WIB
-                          </span>
-                          <span className="block text-[10px] text-[var(--text-muted)]">Durasi: {rep.durationSeconds ? Math.round(rep.durationSeconds / 60) : 0} min</span>
-                        </div>
-                      </div>
-                      <div className="flex gap-2 overflow-x-auto pt-1">
-                        {rep.photos.map(p => (
-                          <button key={p.id} type="button" onClick={() => setViewingPhoto(p)} className="w-14 h-14 rounded-lg overflow-hidden border border-slate-200 shrink-0">
-                            <AuthedImage path={p.url} alt="evidence" purged={!!p.purgedAt} className="w-full h-full object-cover" />
-                          </button>
-                        ))}
-                      </div>
+                    <div>
+                      <h3 className="font-bold text-base text-[var(--text-primary)]">{user.name}</h3>
+                      <p className="text-xs text-[var(--text-muted)]">{user.email}</p>
+                      <span className="inline-block mt-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        Teknisi Lapangan
+                      </span>
                     </div>
-                  ))
-                )}
-              </div>
-            )}
-
-            {!isLoading && !loadError && activeTab === 'profile' && (
-              <div className="clean-card p-6 space-y-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xl border-2 border-emerald-500">
-                    {initials}
                   </div>
-                  <div>
-                    <h3 className="font-bold text-base text-[var(--text-primary)]">{user.name}</h3>
-                    <p className="text-xs text-[var(--text-muted)]">{user.email}</p>
-                    <span className="inline-block mt-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                      Role: PELAKSANA (Field Worker)
-                    </span>
+                  <div className="pt-4 border-t border-[var(--border-subtle)] text-xs space-y-2">
+                    <div className="flex justify-between py-1.5 border-b border-[var(--border-subtle)]">
+                      <span className="text-[var(--text-muted)]">NIP:</span>
+                      <span className="font-semibold text-[var(--text-primary)]">{user.nip || '-'}</span>
+                    </div>
+                    <div className="flex justify-between py-1.5 border-b border-[var(--border-subtle)]">
+                      <span className="text-[var(--text-muted)]">Total Pekerjaan:</span>
+                      <span className="font-bold text-[var(--text-primary)]">{reports.length} Penugasan</span>
+                    </div>
                   </div>
-                </div>
-                <div className="pt-4 border-t border-[var(--border-subtle)] text-xs space-y-2">
-                  <div className="flex justify-between py-1.5 border-b border-[var(--border-subtle)]">
-                    <span className="text-[var(--text-muted)]">NIP:</span>
-                    <span className="font-semibold text-[var(--text-primary)]">{user.nip || '-'}</span>
-                  </div>
-                  <div className="flex justify-between py-1.5 border-b border-[var(--border-subtle)]">
-                    <span className="text-[var(--text-muted)]">Total Pekerjaan:</span>
-                    <span className="font-bold text-[var(--text-primary)]">{reports.length} Penugasan</span>
+                  
+                  <div className="pt-2 space-y-2.5">
+                    <button onClick={() => setShowChangePassword(true)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold transition-colors">
+                      <Lock size={15} /> Ubah Kata Sandi
+                    </button>
+                    <button onClick={logout} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[var(--bg-tertiary)] hover:bg-rose-50 hover:text-rose-700 text-[var(--text-secondary)] text-xs sm:text-sm font-semibold transition-colors">
+                      <LogOut size={15} /> Keluar dari Akun
+                    </button>
                   </div>
                 </div>
-                
-                <div className="pt-2 space-y-3">
-                  <button onClick={() => setShowChangePassword(true)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors">
-                    <Lock size={16} /> Ubah Kata Sandi
-                  </button>
-                  <button onClick={logout} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[var(--bg-tertiary)] hover:bg-rose-50 hover:text-rose-700 text-[var(--text-secondary)] text-sm font-semibold transition-colors">
-                    <LogOut size={16} /> Keluar dari Akun
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
+              )}
+            </div>
+          )}
         </main>
 
         {activeCameraAction && (
@@ -888,7 +1004,6 @@ export const ExecutorHome: React.FC = () => {
 
         {checkoutEvidence && (
           <CustomerReviewFormModal
-            technicianName={user.name}
             onClose={() => setCheckoutEvidence(null)}
             onSubmit={handleCustomerReviewSubmit}
           />
@@ -906,7 +1021,7 @@ export const ExecutorHome: React.FC = () => {
               </div>
               <h3 className="text-lg font-bold text-center mb-2">Izinkan Akses GPS</h3>
               <p className="text-sm text-[var(--text-secondary)] text-center mb-6 leading-relaxed">
-                Fieldwork membutuhkan akses lokasi Anda untuk validasi kehadiran di area proyek (Check-In).
+                Fieldwork membutuhkan akses lokasi Anda untuk validasi kehadiran di area proyek (Clock-In).
               </p>
 
               <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 mb-6">

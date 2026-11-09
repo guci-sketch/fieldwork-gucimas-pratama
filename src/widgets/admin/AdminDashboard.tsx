@@ -36,6 +36,7 @@ import {
   purgeOldPhotos,
   PhotoPurgePreview,
 } from '@/shared/api/admin';
+import { getQuotations } from '@/shared/api/quotationService';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,8 +55,6 @@ import { RiskBadge } from '../common/RiskBadge';
 import { LocationMap } from '../maps/LocationMap';
 import { AllProjectsMap } from '../maps/AllProjectsMap';
 import { PhotoViewerModal } from '../common/PhotoViewerModal';
-import { CreateProjectModal } from '../executor/CreateProjectModal';
-import { createProject, CreateProjectInput } from '@/shared/api/projects';
 import { AuthedImage } from '../common/AuthedImage';
 import { RISK_LEVEL_OPTIONS, STATUS_OPTIONS, getWorkReportStatusMeta } from '@/shared/utils/riskMeta';
 import { exportTableToExcel, exportTableToPDF } from '@/shared/utils/exportUtils';
@@ -99,12 +98,23 @@ import {
 import { useAuth } from '@/app/providers/AuthContext';
 import { ChangePasswordModal } from '../auth/ChangePasswordModal';
 import { generateInvite } from '@/shared/api/auth';
+import { TemplateSettingsPanel } from '@/widgets/admin/TemplateSettingsPanel';
 import { MonthlyRecapBuilderModal } from '@/widgets/admin/MonthlyRecapBuilderModal';
 import { canGenerateMonthlyRecap } from '@/shared/lib/permenkesRecapEngine';
-import { OperationsAnalyticsBento } from '@/widgets/admin/OperationsAnalyticsBento';
+import { CompanyPicker } from '@/widgets/admin/CompanyPicker';
+import { OperationsAnalyticsBento, ExecutiveQuotationSummary } from '@/widgets/admin/OperationsAnalyticsBento';
 import { isDirectorUser } from '@/shared/lib/roles';
 import { useAuthStore } from '@/app/store/authStore';
 import { useTheme } from '@/shared/hooks/useTheme';
+import { InventoryPage } from '../../pages/inventory/InventoryPage';
+import { KontrolRayapPage } from '../../pages/customers/KontrolRayapPage';
+import { QuotationPage } from '../../pages/quotation/QuotationPage';
+import { CustomersPage } from '../../pages/customers/CustomersPage';
+import { TrackingPage } from '../../pages/tracking/TrackingPage';
+import { CashflowPage } from '../../pages/cashflow/CashflowPage';
+import { PerformaPage } from '../../pages/performance/PerformaPage';
+import { SPKPage } from '../../pages/spk/SPKPage';
+import { CompaniesPage } from '../../pages/super-admin/CompaniesPage';
 import { Header } from '../common/Header';
 import { AppLayout } from '../common/AppLayout';
 
@@ -118,7 +128,17 @@ type Tab =
   | 'risk-config'
   | 'tracking'
   | 'approval'
-  | 'profile';
+  | 'profile'
+  | 'inventory'
+  | 'quotation'
+  | 'kontrol-rayap'
+  | 'templates'
+  | 'customers'
+  | 'order-tracking'
+  | 'cashflow'
+  | 'performa'
+  | 'spk-cms'
+  | 'saas-companies';
 
 const DATE_PRESETS = [
   { id: 'all', label: 'Semua' },
@@ -165,8 +185,22 @@ export const AdminDashboard: React.FC = () => {
   const isDirector = isDirectorUser(user);
   const activeCompanyId = useAuthStore(st => st.activeCompanyId) || user?.companyId || null;
 
-  // Tab awal: Default ke Dashboard Monitoring & KPI ('dashboard')
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  // Tab awal: SUPERADMIN & ADMIN langsung membuka Dashboard Utama ('dashboard') agar ringkasan langsung terlihat
+  const [activeTab, setActiveTab] = useState<Tab>(
+    user?.role === 'MASTER_SUPER_ADMIN'
+      ? 'saas-companies'
+      : user?.role === 'INVENTORY'
+      ? 'inventory'
+      : user?.role === 'SUPERADMIN' || user?.role === 'ADMIN'
+      ? 'dashboard'
+      : 'quotation'
+  );
+
+  useEffect(() => {
+    if (user?.role === 'MASTER_SUPER_ADMIN' && activeTab !== 'saas-companies' && activeTab !== 'profile') {
+      setActiveTab('saas-companies');
+    }
+  }, [user?.role, activeTab]);
 
   const [inviteRole, setInviteRole] = useState<AdminUser['role']>('TEKNISI_LAPANGAN');
   const [newUser, setNewUser] = useState({
@@ -178,14 +212,29 @@ export const AdminDashboard: React.FC = () => {
   });
   const [creatingUser, setCreatingUser] = useState(false);
   const [userSearchQ, setUserSearchQ] = useState('');
+  const [memberStatusFilter, setMemberStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [memberGeofenceMap, setMemberGeofenceMap] = useState<Record<string, boolean>>({});
+  const [trackingMode, setTrackingMode] = useState<'live' | 'journey'>('live');
+  const [trackingMemberSearch, setTrackingMemberSearch] = useState('');
+  const [selectedTrackingUserId, setSelectedTrackingUserId] = useState<string | null>(null);
+  const [defaultGeofenceRadius, setDefaultGeofenceRadius] = useState<number>(250);
+  const [geofenceRadiusSaved, setGeofenceRadiusSaved] = useState<boolean>(false);
+  const [visitTargets, setVisitTargets] = useState<Record<string, number>>({});
+  const [liveTrackingEnabled, setLiveTrackingEnabled] = useState<boolean>(true);
+  const [masterFeedbackEnabled, setMasterFeedbackEnabled] = useState<boolean>(true);
+  const [liveTrackingAreas, setLiveTrackingAreas] = useState<{ id: string; name: string; radiusMeters: number }[]>([
+    { id: 'area-1', name: 'Area Operasional Jabodetabek', radiusMeters: 250 },
+  ]);
+  const [newTrackingAreaName, setNewTrackingAreaName] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [showAdminCreateProject, setShowAdminCreateProject] = useState(false);
   const [inviteLink, setInviteLink] = useState<{ url: string; expiresAt: string } | null>(null);
   const [isGeneratingInvite, setIsGeneratingInvite] = useState(false);
   const [reports, setReports] = useState<WorkReportListItem[]>([]);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportsError, setReportsError] = useState<string | null>(null);
+
+  const [quotationsList, setQuotationsList] = useState<Quotation[]>([]);
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectSearch, setProjectSearch] = useState('');
@@ -340,10 +389,11 @@ export const AdminDashboard: React.FC = () => {
     setStaleRefreshError(null);
     try {
       const targetCompany = (isSuper ? activeCompanyId : user?.companyId) ?? '';
-      const [summary, projectRes, executorList, latestLocs] = await Promise.all([
+      const [summary, projectRes, executorList, quos, latestLocs] = await Promise.all([
         fetchAdminSummary(),
         fetchAdminProjects({ limit: 24, page: 1 }),
         fetchExecutors(),
+        targetCompany ? getQuotations({ companyId: targetCompany }).catch(() => []) : Promise.resolve([]),
         fetchLatestLocations().catch(() => []),
       ]);
       setSummaryData(summary);
@@ -351,6 +401,7 @@ export const AdminDashboard: React.FC = () => {
       setProjectTotalPages(projectRes.totalPages || 1);
       setProjectTotalCount(projectRes.totalCount || projectRes.projects.length);
       setExecutors(executorList);
+      setQuotationsList(quos);
       setUserLocations(latestLocs);
       await loadReports();
     } catch (err) {
@@ -364,9 +415,10 @@ export const AdminDashboard: React.FC = () => {
     }
   }, [isAdmin, isSuper, activeCompanyId, user?.companyId, loadReports]);
 
-  // Reset state saat berpindah perusahaan agar data lama tidak tertampil
+  // Reset state saat SUPERADMIN berpindah perusahaan agar data perusahaan lama tidak pernah ditampilkan sebagai data baru
   useEffect(() => {
     setSummaryData(null);
+    setQuotationsList([]);
     setReports([]);
     setProjects([]);
     setExecutors([]);
@@ -385,11 +437,14 @@ export const AdminDashboard: React.FC = () => {
     setIsRefreshingSummary(true);
     setStaleRefreshError(null);
     try {
-      const [summary] = await Promise.all([
+      const targetCompany = (isSuper ? activeCompanyId : user?.companyId) ?? '';
+      const [summary, quos] = await Promise.all([
         fetchAdminSummary(),
+        targetCompany ? getQuotations({ companyId: targetCompany }).catch(() => quotationsList) : Promise.resolve([]),
         loadReports(),
       ]);
       setSummaryData(summary);
+      setQuotationsList(quos);
       setLoadError(null);
     } catch (err) {
       const msg =
@@ -404,16 +459,31 @@ export const AdminDashboard: React.FC = () => {
     } finally {
       setIsRefreshingSummary(false);
     }
-  }, [isAdmin, isSuper, activeCompanyId, loadReports, summaryData]);
+  }, [isAdmin, isSuper, activeCompanyId, user?.companyId, loadReports, summaryData, quotationsList]);
+
+  const quotationSummary = useMemo<ExecutiveQuotationSummary | null>(() => {
+    if (!isAdmin) return null;
+    const totalQuotations = quotationsList.length;
+    const draftCount = quotationsList.filter(q => q.status === 'draft' || q.status === 'pending').length;
+    const approvedCount = quotationsList.filter(q => q.status === 'approved' || q.status === 'sent_to_client').length;
+    const dealCount = quotationsList.filter(q => q.status === 'deal').length;
+    return {
+      totalQuotations,
+      draftCount,
+      approvedCount,
+      dealCount,
+      onOpenQuotations: () => setActiveTab('quotation'),
+    };
+  }, [isAdmin, quotationsList]);
 
   useEffect(() => {
     if (!isAdmin || (isSuper && !activeCompanyId)) return;
-    if (activeTab === 'audit' && auditLogs === null) {
+    if ((activeTab === 'audit' || activeTab === 'templates' || activeTab === 'risk-config') && auditLogs === null) {
       fetchAuditLogs()
         .then(setAuditLogs)
         .catch(() => setAuditLogs([]));
     }
-    if (activeTab === 'risk-config' && riskConfig === null) {
+    if ((activeTab === 'risk-config' || activeTab === 'templates' || activeTab === 'reports' || activeTab === 'anomalies') && riskConfig === null) {
       fetchRiskConfig()
         .then(setRiskConfig)
         .catch(() => undefined);
@@ -423,7 +493,7 @@ export const AdminDashboard: React.FC = () => {
         .then(setUserLocations)
         .catch(() => setUserLocations([]));
     }
-    if (activeTab === 'approval') {
+    if (activeTab === 'approval' || activeTab === 'executors') {
       fetchUsers()
         .then(setAdminUsers)
         .catch(() => setAdminUsers([]));
@@ -689,7 +759,8 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Menu menggunakan Bahasa Indonesia yang jelas dan mudah dipahami; Dashboard ditempatkan paling atas untuk Direktur & Admin
+  // Menu terkonsolidasi menjadi 10 modul utama yang fokus (tanpa duplikasi halaman di sidebar)
+  // dengan tetap mendukung penuh seluruh alias activeTab lama dan grup standar.
   const isMarketingUser = user?.role === 'MARKETING';
   const ALL_ITEMS: {
     id: Tab;
@@ -700,98 +771,144 @@ export const AdminDashboard: React.FC = () => {
     danger?: boolean;
     badge?: number;
     roles: string[];
+    keywords?: string[];
   }[] = [
-    // GRUP 1: MONITORING & ANALITIK GEOSPASIAL (UC-06)
+    // KHUSUS MASTER SUPER ADMIN
     {
-      id: 'dashboard',
-      label: 'Dashboard Monitoring & KPI',
-      shortLabel: 'Dashboard',
-      group: '1. MONITORING & GEOSPASIAL',
-      icon: <LayoutDashboard size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN'],
-    },
-    {
-      id: 'tracking',
-      label: 'Peta Geofencing & Lacak GPS',
-      shortLabel: 'Peta GPS',
-      group: '1. MONITORING & GEOSPASIAL',
-      icon: <MapPin size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN'],
+      id: 'saas-companies',
+      label: 'Kelola Perusahaan & Token Superadmin',
+      shortLabel: 'Perusahaan SaaS',
+      group: 'KONSOL PLATFORM SAAS',
+      icon: <ShieldCheck size={16} />,
+      roles: ['MASTER_SUPER_ADMIN'],
+      keywords: ['perusahaan', 'tenant', 'token', 'saas'],
     },
 
-    // GRUP 2: PENUGASAN & PELAPORAN LAPANGAN (UC-02, UC-03, UC-04, UC-05, UC-06)
+    // GRUP 1: PENAWARAN & PELANGGAN (3 Item Terkonsolidasi)
     {
-      id: 'projects',
-      label: 'Data Proyek & Titik Koordinat',
-      shortLabel: 'Proyek & Titik',
-      group: '2. PENUGASAN & PELAPORAN',
-      icon: <Briefcase size={16} />,
+      id: 'dashboard',
+      label: isDirector ? 'Dashboard Utama & KPI' : 'Dashboard Ringkasan',
+      shortLabel: 'Dashboard',
+      group: '1. PENAWARAN & PELANGGAN',
+      icon: <LayoutDashboard size={16} />,
       roles: ['SUPERADMIN', 'ADMIN'],
+      keywords: ['operation center', 'live map', 'performance team', 'bisnis', 'kpi'],
+    },
+    {
+      id: 'quotation',
+      label: isDirector ? 'Approval & Pantau Penawaran' : 'Buat & Cek Penawaran (PH)',
+      shortLabel: isDirector ? 'Approval PH' : 'Penawaran',
+      group: '1. PENAWARAN & PELANGGAN',
+      icon: <FileText size={16} />,
+      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING'],
+      keywords: ['surat penawaran', 'ph', 'nomor surat', 'pipeline', 'approval'],
+    },
+    {
+      id: 'customers',
+      label: 'Pelanggan, Peta & Garansi Rayap',
+      shortLabel: 'Pelanggan & Garansi',
+      group: '1. PENAWARAN & PELANGGAN',
+      icon: <Users size={16} />,
+      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING'],
+      keywords: ['pelanggan', 'klien', 'kontrol rayap', 'garansi', 'pin point', 'kontrak'],
+    },
+
+    // GRUP 2: PEKERJAAN LAPANGAN (3 Item Terkonsolidasi)
+    {
+      id: 'spk-cms',
+      label: user?.role === 'INVENTORY' ? 'Lokasi & Daftar Proyek' : 'Penugasan SPK & Lokasi Proyek',
+      shortLabel: 'SPK & Proyek',
+      group: '2. PEKERJAAN LAPANGAN',
+      icon: <Briefcase size={16} />,
+      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
+      keywords: ['spk', 'perintah kerja', 'proyek', 'kalender tugas', 'heatmap', 'radius', 'tipe tugas'],
     },
     {
       id: 'reports',
-      label: 'Rekap Laporan Kerja Teknisi',
-      shortLabel: 'Laporan Kerja',
-      group: '2. PENUGASAN & PELAPORAN',
-      icon: <CheckCircle2 size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN'],
-    },
-    {
-      id: 'anomalies',
-      label: 'Verifikasi Anomali Geofence',
-      shortLabel: 'Anomali Radius',
-      group: '2. PENUGASAN & PELAPORAN',
-      icon: <ShieldAlert size={16} />,
-      danger: true,
+      label: 'Hasil & Verifikasi Kerja',
+      shortLabel: 'Hasil & Anomali',
+      group: '2. PEKERJAAN LAPANGAN',
+      icon: kpi.flaggedJobs > 0 ? <ShieldAlert size={16} /> : <CheckCircle2 size={16} />,
+      danger: kpi.flaggedJobs > 0,
       badge: kpi.flaggedJobs > 0 ? kpi.flaggedJobs : undefined,
       roles: ['SUPERADMIN', 'ADMIN'],
+      keywords: ['laporan kerja', 'anomali', 'perlu dicek', 'verifikasi', 'task monitoring', 'pdf'],
     },
     {
-      id: 'executors',
-      label: 'Rekap Kinerja Teknisi',
-      shortLabel: 'Kinerja Teknisi',
-      group: '2. PENUGASAN & PELAPORAN',
-      icon: <Users size={16} />,
+      id: 'tracking',
+      label: 'Lacak Peta & Perjalanan',
+      shortLabel: 'Peta & Rute',
+      group: '2. PEKERJAAN LAPANGAN',
+      icon: <MapPin size={16} />,
       roles: ['SUPERADMIN', 'ADMIN'],
+      keywords: ['lokasi teknisi', 'gps', 'perjalanan', 'journey', 'peta'],
     },
 
-    // GRUP 3: MANAJEMEN AKUN & KONFIGURASI SISTEM (UC-01)
+    // GRUP 3: STOK OBAT & KEUANGAN (2 Item Terkonsolidasi)
+    {
+      id: 'inventory',
+      label: isDirector ? 'Gudang, Tren Kimia & Untung Rugi' : 'Gudang, Alokasi & Tren Kimia',
+      shortLabel: 'Gudang & Kimia',
+      group: '3. STOK OBAT & KEUANGAN',
+      icon: <Package size={16} />,
+      roles: ['SUPERADMIN', 'ADMIN', 'INVENTORY'],
+      keywords: ['stok obat', 'gudang', 'tren bahan kimia', 'untung rugi', 'alokasi proyek'],
+    },
+    {
+      id: 'order-tracking',
+      label: isMarketingUser ? 'Tagihan & Performa (MoM)' : 'Keuangan, Tagihan & Performa',
+      shortLabel: 'Keuangan & MoM',
+      group: '3. STOK OBAT & KEUANGAN',
+      icon: <SlidersHorizontal size={16} />,
+      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING'],
+      keywords: ['tagihan', 'cicilan', 'termin', 'cashflow', 'pemasukan', 'performa mom'],
+    },
+
+    // GRUP 4: PENGATURAN (2 Item Terkonsolidasi untuk Admin/Direktur, 1 Item Profil untuk Role Lain)
     {
       id: 'approval',
-      label: 'Kelola Akun (Admin & Teknisi)',
-      shortLabel: 'Akun Pengguna',
-      group: '3. AKUN & KONFIGURASI',
+      label: 'Tim, Kinerja & Akun Staf',
+      shortLabel: 'Tim & Akun Staf',
+      group: '4. PENGATURAN',
       icon: <UserCheck size={16} />,
       roles: ['SUPERADMIN', 'ADMIN'],
+      keywords: ['anggota', 'staf', 'kinerja teknisi', 'target kunjungan', 'undangan', 'live tracking'],
     },
     {
-      id: 'risk-config',
-      label: 'Aturan Radius & Validasi',
-      shortLabel: 'Aturan Validasi',
-      group: '3. AKUN & KONFIGURASI',
+      id: 'templates',
+      label: 'Pengaturan, Kop & Audit Sistem',
+      shortLabel: 'Pengaturan & Audit',
+      group: '4. PENGATURAN',
       icon: <Settings2 size={16} />,
       roles: ['SUPERADMIN', 'ADMIN'],
-    },
-    {
-      id: 'audit',
-      label: 'Riwayat Audit Log Sistem',
-      shortLabel: 'Audit Log',
-      group: '3. AKUN & KONFIGURASI',
-      icon: <Clock size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN'],
+      keywords: ['kop surat', 'ttd direktur', 'aturan poin', 'risiko', 'retensi foto', 'audit', 'profil', 'tema'],
     },
     {
       id: 'profile',
-      label: 'Profil & Tema Tampilan',
+      label: 'Profil & Tema Saya',
       shortLabel: 'Profil',
-      group: '3. AKUN & KONFIGURASI',
-      icon: <UserCheck size={16} />,
-      roles: ['MASTER_SUPER_ADMIN', 'SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
+      group: isMasterSuper ? 'KONSOL PLATFORM SAAS' : '4. PENGATURAN',
+      icon: <Palette size={16} />,
+      roles: ['MASTER_SUPER_ADMIN', 'MARKETING', 'INVENTORY'],
+      keywords: ['profil', 'tema', 'password', 'gelap', 'terang'],
     },
   ];
 
+  // Petakan alias tab lama ke ID menu induk di sidebar agar highlight menu selalu akurat
+  const sidebarActiveTabId = useMemo<Tab>(() => {
+    if (activeTab === 'kontrol-rayap') return 'customers';
+    if (activeTab === 'projects') return 'spk-cms';
+    if (activeTab === 'anomalies') return 'reports';
+    if (activeTab === 'cashflow' || activeTab === 'performa') return 'order-tracking';
+    if (activeTab === 'executors') return 'approval';
+    if ((activeTab === 'risk-config' || activeTab === 'audit' || activeTab === 'profile') && isAdmin) {
+      return 'templates';
+    }
+    return activeTab;
+  }, [activeTab, isAdmin]);
+
   const sidebarItems = ALL_ITEMS.filter(i => user && i.roles.includes(user.role));
-  const currentTabMeta = sidebarItems.find(i => i.id === activeTab) ?? sidebarItems[0];
+  const currentTabMeta = sidebarItems.find(i => i.id === sidebarActiveTabId) ?? sidebarItems[0];
 
   const handleHeaderRefresh = useCallback(() => {
     if (activeTab === 'projects') {
@@ -827,7 +944,7 @@ export const AdminDashboard: React.FC = () => {
   return (
     <AppLayout
       sidebarItems={sidebarItems}
-      activeTab={activeTab}
+      activeTab={sidebarActiveTabId}
       onTabChange={id => {
         setCameFromDashboard(false);
         setActiveTab(id as Tab);
@@ -844,7 +961,7 @@ export const AdminDashboard: React.FC = () => {
           pageGroup={currentTabMeta?.group}
           onRefresh={handleHeaderRefresh}
           modules={sidebarItems}
-          activeModuleId={activeTab}
+          activeModuleId={sidebarActiveTabId}
           onSelectModule={id => {
             setCameFromDashboard(false);
             setActiveTab(id as Tab);
@@ -865,10 +982,20 @@ export const AdminDashboard: React.FC = () => {
               year: 'numeric',
             })}
           </p>
+          {isSuper && <CompanyPicker />}
         </div>
       }
     >
       <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
+        {isSuper && !activeCompanyId && (
+          <div
+            role="status"
+            className="p-4 rounded-xl border border-[var(--status-draft-border)] bg-[var(--status-draft-bg)] text-sm text-[var(--status-draft-text)]"
+          >
+            Pilih perusahaan yang akan dikelola pada menu di sidebar untuk mulai melihat ringkasan operasional dan mengatur template.
+          </div>
+        )}
+
         {/* Global Action / Undo Feedback Banner */}
         {actionBanner && (
           <div
@@ -906,13 +1033,15 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Tab Dashboard: Fokus HANYA pada Data & Visual Penting */}
+        {/* Tab Dashboard: Fokus HANYA pada Data & Visual Penting (Tanpa Tabel Panjang yang Menumpuk di Bawah) */}
         {activeTab === 'dashboard' && (
           <OperationsAnalyticsBento
             summary={summaryData}
+            quotationSummary={quotationSummary}
             reports={reports}
             projects={projects}
             executors={executors}
+            quotations={quotationsList}
             userLocations={userLocations}
             companyDisplayName={user?.name || 'Gucimas Pratama'}
             isLoading={isLoading}
@@ -940,6 +1069,14 @@ export const AdminDashboard: React.FC = () => {
             onOpenProjectsTab={() => {
               setCameFromDashboard(true);
               setActiveTab('projects');
+            }}
+            onOpenQuotationsTab={() => {
+              setCameFromDashboard(true);
+              setActiveTab('quotation');
+            }}
+            onOpenCustomersTab={() => {
+              setCameFromDashboard(true);
+              setActiveTab('customers');
             }}
             onOpenReportDetail={id => setSelectedReportId(id)}
           />
@@ -1008,6 +1145,80 @@ export const AdminDashboard: React.FC = () => {
                       )}
                     </div>
                   )}
+
+                  {/* ── 5 Kartu Status Warna Solid + Rata-Rata Durasi (Screenshot 6: Task Monitoring) ── */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('reports');
+                        setFilters(prev => ({ ...prev, status: 'ALL' }));
+                      }}
+                      className={`p-3.5 rounded-2xl text-left text-white transition-all cursor-pointer shadow-xs ${
+                        activeTab === 'reports' && filters.status === 'ALL'
+                          ? 'bg-[#1e3a8a] ring-2 ring-[#3b82f6]'
+                          : 'bg-[#1e293b] hover:opacity-95'
+                      }`}
+                    >
+                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-blue-200 block">SEMUA LAPORAN</span>
+                      <span className="text-2xl font-black font-mono mt-1 block">{kpi.totalJobs || reports.length}</span>
+                      <span className="text-[11px] text-slate-300 mt-0.5 block">Klik tampilkan semua</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('reports');
+                        setFilters(prev => ({ ...prev, status: 'COMPLETED' }));
+                      }}
+                      className={`p-3.5 rounded-2xl text-left text-white transition-all cursor-pointer shadow-xs ${
+                        activeTab === 'reports' && filters.status === 'COMPLETED'
+                          ? 'bg-emerald-700 ring-2 ring-emerald-400'
+                          : 'bg-emerald-600 hover:opacity-95'
+                      }`}
+                    >
+                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-100 block">SELESAI</span>
+                      <span className="text-2xl font-black font-mono mt-1 block">{kpi.completedJobs}</span>
+                      <span className="text-[11px] text-emerald-100 mt-0.5 block">Tugas tuntas</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('anomalies')}
+                      className={`p-3.5 rounded-2xl text-left text-white transition-all cursor-pointer shadow-xs ${
+                        activeTab === 'anomalies'
+                          ? 'bg-rose-700 ring-2 ring-rose-400'
+                          : 'bg-rose-600 hover:opacity-95'
+                      }`}
+                    >
+                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-rose-100 block">⚠️ PERLU DICEK / ANOMALI</span>
+                      <span className="text-2xl font-black font-mono mt-1 block">{kpi.flaggedJobs}</span>
+                      <span className="text-[11px] text-rose-100 mt-0.5 block">Risiko / Di luar radius</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('reports');
+                        setFilters(prev => ({ ...prev, status: 'WORKING' }));
+                      }}
+                      className={`p-3.5 rounded-2xl text-left text-white transition-all cursor-pointer shadow-xs ${
+                        activeTab === 'reports' && filters.status === 'WORKING'
+                          ? 'bg-amber-700 ring-2 ring-amber-400'
+                          : 'bg-amber-600 hover:opacity-95'
+                      }`}
+                    >
+                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-amber-100 block">SEDANG KERJA / TUNDA</span>
+                      <span className="text-2xl font-black font-mono mt-1 block">{kpi.workingJobs}</span>
+                      <span className="text-[11px] text-amber-100 mt-0.5 block">On-site aktif</span>
+                    </button>
+
+                    <div className="p-3.5 rounded-2xl bg-purple-700 text-white shadow-xs col-span-2 sm:col-span-1">
+                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-purple-200 block">RATA-RATA PENGERJAAN</span>
+                      <span className="text-2xl font-black font-mono mt-1 block">{kpi.avgDurationMinutes}m</span>
+                      <span className="text-[11px] text-purple-200 mt-0.5 block">Skor Risiko Rata2: {kpi.avgRiskScore}</span>
+                    </div>
+                  </div>
 
                   {activeTab === 'anomalies' && (
                     <div className="bg-[var(--status-flagged-bg)] border border-[var(--status-flagged-border)] rounded-xl p-4 mb-4">
@@ -1112,6 +1323,41 @@ export const AdminDashboard: React.FC = () => {
                           </button>
                         )}
 
+                        <div className="inline-flex items-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] p-0.5 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => setFilters(prev => ({ ...prev, serviceType: 'ALL' }))}
+                            className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer ${
+                              filters.serviceType === 'ALL'
+                                ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-2xs'
+                                : 'text-[var(--text-secondary)]'
+                            }`}
+                          >
+                            Semua Layanan
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFilters(prev => ({ ...prev, serviceType: 'GENERAL_PEST_CONTROL' }))}
+                            className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer ${
+                              filters.serviceType !== 'ALL' && filters.serviceType !== 'TERMITE_CONTROL'
+                                ? 'bg-emerald-700 text-white shadow-2xs'
+                                : 'text-[var(--text-secondary)]'
+                            }`}
+                          >
+                            Pest Control
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFilters(prev => ({ ...prev, serviceType: 'TERMITE_CONTROL' }))}
+                            className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer ${
+                              filters.serviceType === 'TERMITE_CONTROL'
+                                ? 'bg-purple-700 text-white shadow-2xs'
+                                : 'text-[var(--text-secondary)]'
+                            }`}
+                          >
+                            Anti Rayap
+                          </button>
+                        </div>
                         {canGenerateMonthlyRecap(user?.role) && (
                           <>
                             <button
@@ -1138,7 +1384,6 @@ export const AdminDashboard: React.FC = () => {
                             </button>
                           </>
                         )}
-
                         <button
                           type="button"
                           onClick={handleExportPDF}
@@ -1616,8 +1861,81 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               )}
 
-              {activeTab === 'projects' && (
-                <div className="space-y-4">
+              {(activeTab === 'projects' || activeTab === 'spk-cms') && (
+                <div className="space-y-5">
+                  {/* Unified Sub-Tab Bar: SPK | Lokasi & Daftar Proyek | Pengaturan Radius Geofence */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 bg-[var(--bg-card)] p-2 rounded-2xl border border-[var(--border-subtle)]">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {user?.role !== 'INVENTORY' && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('spk-cms')}
+                          className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                            activeTab === 'spk-cms'
+                              ? 'bg-[var(--accent)] text-white shadow-2xs'
+                              : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                          }`}
+                        >
+                          Penugasan &amp; Jadwal SPK
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('projects')}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                          activeTab === 'projects'
+                            ? 'bg-[var(--accent)] text-white shadow-2xs'
+                            : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                        }`}
+                      >
+                        Lokasi &amp; Radius Proyek ({projectTotalCount || projects.length})
+                      </button>
+                    </div>
+                  </div>
+
+                  {activeTab === 'spk-cms' && user?.role !== 'INVENTORY' && <SPKPage />}
+
+                  {(activeTab === 'projects' || user?.role === 'INVENTORY') && (
+                    <div className="space-y-4">
+                      {/* Kartu Pengaturan Radius Geofence Interaktif (Screenshot 7: beta.jarivis.com/task/setting) */}
+                      {isAdmin && (
+                        <div className="clean-card p-4 sm:p-5 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                          <div className="space-y-1">
+                            <span className="text-[10.5px] font-bold uppercase tracking-wider text-[var(--accent-text)] block">
+                              PENGATURAN RADIUS GEOFENCE TUGAS LAPANGAN
+                            </span>
+                            <h3 className="text-sm font-extrabold text-[var(--text-primary)]">
+                              Atur Besar Radius Check-In Teknisi (Sekarang: <span className="font-mono text-[var(--accent-text)]">{defaultGeofenceRadius} Meter</span>)
+                            </h3>
+                            <p className="text-xs text-[var(--text-secondary)]">
+                              Menentukan batas toleransi jarak GPS saat teknisi mengambil foto Check-In &amp; Check-Out di lokasi proyek
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {[50, 100, 200, 250, 500].map(rad => (
+                              <button
+                                key={rad}
+                                type="button"
+                                onClick={() => {
+                                  setDefaultGeofenceRadius(rad);
+                                  setGeofenceRadiusSaved(true);
+                                  setTimeout(() => setGeofenceRadiusSaved(false), 2000);
+                                }}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold border transition-colors cursor-pointer ${
+                                  defaultGeofenceRadius === rad
+                                    ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                                    : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border-[var(--border-subtle)]'
+                                }`}
+                              >
+                                {rad}m
+                              </button>
+                            ))}
+                            {geofenceRadiusSaved && (
+                              <span className="text-xs font-bold text-emerald-600 ml-1">✓ Tersimpan</span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                   <div className="flex flex-col md:flex-row gap-3 p-4 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl">
                     <div className="flex-1 relative">
                       <Search
@@ -1657,14 +1975,6 @@ export const AdminDashboard: React.FC = () => {
                       <option value="OPEN">Terbuka</option>
                       <option value="LOCKED">Terkunci</option>
                     </select>
-                    <button
-                      type="button"
-                      onClick={() => setShowAdminCreateProject(true)}
-                      className="px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white rounded-lg text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-xs"
-                    >
-                      <Plus size={16} aria-hidden="true" />
-                      <span>Tambah Proyek &amp; Penugasan</span>
-                    </button>
                   </div>
 
                   {projects.length === 0 ? (
@@ -1811,8 +2121,41 @@ export const AdminDashboard: React.FC = () => {
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {(activeTab === 'executors' || activeTab === 'approval') && (
+                <div className="space-y-4">
+                  {/* Unified Sub-Tab Bar: Tim, Kinerja, Target Kunjungan & Akun Staf (Screenshots 10, 11, 12) */}
+                  <div className="flex flex-wrap items-center gap-1.5 bg-[var(--bg-card)] p-2 rounded-2xl border border-[var(--border-subtle)]">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('approval')}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                        activeTab === 'approval'
+                          ? 'bg-[var(--accent)] text-white shadow-2xs'
+                          : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                      }`}
+                    >
+                      Direktori &amp; Kelola Akun Staf
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('executors')}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                        activeTab === 'executors'
+                          ? 'bg-[var(--accent)] text-white shadow-2xs'
+                          : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                      }`}
+                    >
+                      🎯 Kinerja, Target Kunjungan &amp; Pengaturan Tracking ({executors.length})
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {activeTab === 'executors' && (
+                <div className="space-y-5">
                 <div className="clean-card bg-[var(--bg-card)] rounded-xl border border-[var(--border-subtle)] overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs text-[var(--text-secondary)] min-w-[700px]">
@@ -1824,6 +2167,8 @@ export const AdminDashboard: React.FC = () => {
                           <th className="px-4 py-3 text-center">Selesai</th>
                           <th className="px-4 py-3 text-center">Risiko Tinggi</th>
                           <th className="px-4 py-3 text-center">Rata-rata Durasi</th>
+                          <th className="px-4 py-3 text-center">Target Kunjungan</th>
+                          <th className="px-4 py-3 text-right">Aksi</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[var(--border-subtle)]">
@@ -1844,16 +2189,226 @@ export const AdminDashboard: React.FC = () => {
                             <td className="px-4 py-3 text-center font-mono tabular-nums">
                               {ex.avgDurationMinutes} menit
                             </td>
+                            <td className="px-4 py-3 text-center font-mono font-bold text-[var(--text-primary)]">
+                              {ex.completedJobs}/{visitTargets[ex.id] ?? 10}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextTarget = ((visitTargets[ex.id] ?? 10) % 30) + 5;
+                                  setVisitTargets(prev => ({ ...prev, [ex.id]: nextTarget }));
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-[#3b82f6] hover:bg-blue-600 text-white text-[11px] font-bold cursor-pointer"
+                              >
+                                Target Kunjungan ({visitTargets[ex.id] ?? 10})
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 </div>
+
+                {/* Pengaturan Anggota: Live Tracking & Area Tracking (Screenshot 12: beta.jarivis.com/member/setting) */}
+                  <div className="clean-card bg-[var(--bg-card)] p-5 rounded-xl border border-[var(--border-subtle)] grid grid-cols-1 md:grid-cols-12 gap-5">
+                    <div className="md:col-span-4 space-y-2 border-b md:border-b-0 md:border-r border-[var(--border-subtle)] pb-4 md:pb-0 md:pr-4">
+                      <div className="p-3 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] flex items-center justify-between text-xs">
+                        <span className="font-bold text-[var(--text-primary)]">Live Tracking Anggota</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${liveTrackingEnabled ? 'bg-emerald-500/15 text-emerald-600' : 'bg-slate-200 text-slate-600'}`}>
+                          {liveTrackingEnabled ? 'Aktif' : 'Tidak Aktif'}
+                        </span>
+                      </div>
+                      <div className="p-3 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] flex items-center justify-between text-xs">
+                        <span className="font-bold text-[var(--text-primary)]">Master Feedback Klien</span>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${masterFeedbackEnabled ? 'bg-emerald-500/15 text-emerald-600' : 'bg-slate-200 text-slate-600'}`}>
+                          {masterFeedbackEnabled ? 'Aktif' : 'Tidak Aktif'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-8 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-bold text-[var(--text-primary)]">Pengaturan Live Tracking &amp; Daftar Area</h4>
+                          <p className="text-xs text-[var(--text-secondary)]">Untuk melacak pergerakan anggota teknisi secara realtime di area kerja</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setLiveTrackingEnabled(v => !v)}
+                          className={`px-3 py-1.5 rounded-full text-xs font-bold cursor-pointer ${
+                            liveTrackingEnabled ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {liveTrackingEnabled ? 'Live Tracking: ON' : 'Live Tracking: OFF'}
+                        </button>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={newTrackingAreaName}
+                          onChange={e => setNewTrackingAreaName(e.target.value)}
+                          placeholder="Nama area live tracking baru..."
+                          className="flex-1 px-3 py-2 text-xs rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-primary)] text-[var(--text-primary)]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!newTrackingAreaName.trim()) return;
+                            setLiveTrackingAreas(prev => [
+                              ...prev,
+                              { id: `area-${Date.now()}`, name: newTrackingAreaName.trim(), radiusMeters: defaultGeofenceRadius },
+                            ]);
+                            setNewTrackingAreaName('');
+                          }}
+                          className="px-3.5 py-2 rounded-xl bg-[var(--accent)] text-white text-xs font-bold cursor-pointer shrink-0"
+                        >
+                          + Tambah Area Live Tracking
+                        </button>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        {liveTrackingAreas.map(a => (
+                          <div key={a.id} className="p-2.5 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] flex items-center justify-between text-xs">
+                            <span className="font-semibold text-[var(--text-primary)]">{a.name}</span>
+                            <span className="font-mono text-[var(--text-muted)]">Radius: {a.radiusMeters}m</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
 
               {activeTab === 'tracking' && (
-                <div className="clean-card bg-[var(--bg-card)] rounded-xl border border-[var(--border-subtle)] overflow-hidden p-4">
+                <div className="space-y-4">
+                  {/* Header Switcher: Lokasi Terkini (Live) vs Riwayat Perjalanan (Journey) — Screenshots 13 & 14 */}
+                  <div className="clean-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm sm:text-base font-extrabold text-[var(--text-primary)]">
+                        Pelacakan Lokasi Terkini &amp; Riwayat Perjalanan Teknisi
+                      </h3>
+                      <p className="text-xs text-[var(--text-secondary)]">
+                        Pilih anggota di daftar samping untuk memantau titik posisi terakhir atau memutar jalur perjalanan
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 bg-[var(--bg-tertiary)] p-1 rounded-xl border border-[var(--border-subtle)]">
+                      <button
+                        type="button"
+                        onClick={() => setTrackingMode('live')}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                          trackingMode === 'live'
+                            ? 'bg-[var(--accent)] text-white shadow-2xs'
+                            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                        }`}
+                      >
+                        Lokasi Terkini (Live)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTrackingMode('journey')}
+                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                          trackingMode === 'journey'
+                            ? 'bg-[var(--accent)] text-white shadow-2xs'
+                            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                        }`}
+                      >
+                        🛣️ Riwayat Perjalanan (Journey)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 3 Kartu Indikator Keaktifan Lokasi (Screenshot 13: beta.jarivis.com/tracking/location) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {(() => {
+                      const nowMs = Date.now();
+                      const active10m = userLocations.filter(l => (nowMs - new Date(l.trackedAt).getTime()) <= 10 * 60_000).length;
+                      const active60m = userLocations.filter(l => {
+                        const diff = nowMs - new Date(l.trackedAt).getTime();
+                        return diff > 10 * 60_000 && diff <= 60 * 60_000;
+                      }).length;
+                      const activeOver60m = Math.max(0, Math.max(userLocations.length, executors.length) - active10m - active60m);
+                      return (
+                        <>
+                          <div className="clean-card p-4 flex items-center justify-between border-l-4 border-l-emerald-500">
+                            <div>
+                              <span className="text-2xl font-black font-mono text-[var(--text-primary)] block">{active10m}</span>
+                              <span className="text-xs text-[var(--text-secondary)]">Terakhir aktif dalam 10 menit</span>
+                            </div>
+                            <span className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center font-bold">⏱</span>
+                          </div>
+                          <div className="clean-card p-4 flex items-center justify-between border-l-4 border-l-[#3b82f6]">
+                            <div>
+                              <span className="text-2xl font-black font-mono text-[var(--text-primary)] block">{active60m}</span>
+                              <span className="text-xs text-[var(--text-secondary)]">Aktif kurang dari 60 menit</span>
+                            </div>
+                            <span className="w-9 h-9 rounded-xl bg-[#3b82f6]/15 text-[#60a5fa] flex items-center justify-center font-bold">⏲</span>
+                          </div>
+                          <div className="clean-card p-4 flex items-center justify-between border-l-4 border-l-amber-500">
+                            <div>
+                              <span className="text-2xl font-black font-mono text-[var(--text-primary)] block">{activeOver60m}</span>
+                              <span className="text-xs text-[var(--text-secondary)]">Aktif &gt; 60 menit / Standby</span>
+                            </div>
+                            <span className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center font-bold">↺</span>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Split Layout: Daftar Anggota di Kiri + Peta Interaktif di Kanan (Screenshots 13 & 14) */}
+                  <div className="clean-card bg-[var(--bg-card)] rounded-xl border border-[var(--border-subtle)] overflow-hidden p-4 space-y-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                      <div className="lg:col-span-4 flex flex-col gap-2.5 max-h-[420px]">
+                        <input
+                          type="text"
+                          value={trackingMemberSearch}
+                          onChange={e => setTrackingMemberSearch(e.target.value)}
+                          placeholder="Cari anggota teknisi..."
+                          className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] text-xs text-[var(--text-primary)]"
+                        />
+                        <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                          {executors
+                            .filter(ex => !trackingMemberSearch.trim() || ex.name.toLowerCase().includes(trackingMemberSearch.toLowerCase()))
+                            .map(ex => {
+                              const loc = userLocations.find(l => l.userId === ex.id);
+                              const isSel = selectedTrackingUserId === ex.id;
+                              return (
+                                <button
+                                  key={ex.id}
+                                  type="button"
+                                  onClick={() => setSelectedTrackingUserId(isSel ? null : ex.id)}
+                                  className={`w-full p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                                    isSel
+                                      ? 'border-[var(--accent)] bg-[var(--accent-glow)]'
+                                      : 'border-[var(--border-subtle)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)]'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                      <span className="w-8 h-8 rounded-full bg-[var(--accent)] text-white text-xs font-bold flex items-center justify-center shrink-0">
+                                        {ex.name.slice(0, 2).toUpperCase()}
+                                      </span>
+                                      <div className="min-w-0">
+                                        <p className="text-xs font-bold text-[var(--text-primary)] truncate">{ex.name}</p>
+                                        <p className="text-[10.5px] font-semibold text-emerald-600 uppercase">
+                                          {loc ? (trackingMode === 'journey' ? 'RUTE TERSEDIA' : 'CHECK IN / AUTO UPDATE') : 'STANDBY'}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <span className="px-2 py-0.5 rounded bg-[#1e3a8a]/20 text-[#3b82f6] text-[10px] font-mono font-bold shrink-0">
+                                      {loc ? new Date(loc.trackedAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : 'Hari Ini'}
+                                    </span>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+
+                      <div className="lg:col-span-8">
                   <div className="mb-6 rounded-xl overflow-hidden border border-[var(--border-subtle)] shadow-sm">
                     <AllProjectsMap
                       projects={projects.filter(p => !p.lockedAt)}
@@ -1861,6 +2416,9 @@ export const AdminDashboard: React.FC = () => {
                       height="400px"
                     />
                   </div>
+
+                      </div>
+                    </div>
 
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="font-bold text-sm text-[var(--text-primary)]">
@@ -1917,6 +2475,7 @@ export const AdminDashboard: React.FC = () => {
                       </table>
                     </div>
                   )}
+                  </div>
                 </div>
               )}
 
@@ -1976,7 +2535,7 @@ export const AdminDashboard: React.FC = () => {
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 font-bold text-xs">
-                          🛡️ Mode Admin (Akun Admin Lain Dilindungi)
+                          Mode Admin (Akun Admin Lain Dilindungi)
                         </span>
                       )}
                     </div>
@@ -2052,8 +2611,10 @@ export const AdminDashboard: React.FC = () => {
                           onChange={e => setNewUser({ ...newUser, role: e.target.value as AdminUser['role'] })}
                           className="w-full px-3.5 py-2.5 min-h-[44px] text-xs sm:text-sm rounded-xl border border-[var(--border)] bg-white text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--accent)]"
                         >
-                          <option value="TEKNISI_LAPANGAN">Teknisi Lapangan / Executor (Mobile Web)</option>
-                          <option value="ADMIN">Administrator / Supervisor Operasional</option>
+                          <option value="TEKNISI_LAPANGAN">Teknisi Lapangan (PWA Mobile)</option>
+                          <option value="MARKETING">Marketing / Surveyor</option>
+                          <option value="INVENTORY">Inventory / Staf Gudang</option>
+                          <option value="ADMIN">Admin Operasional</option>
                         </select>
                       </div>
 
@@ -2090,8 +2651,10 @@ export const AdminDashboard: React.FC = () => {
                         onChange={e => setInviteRole(e.target.value as AdminUser['role'])}
                         className="px-3.5 py-2 min-h-[44px] text-xs sm:text-sm font-semibold rounded-xl border border-emerald-300 bg-white text-[var(--text-primary)]"
                       >
-                        <option value="TEKNISI_LAPANGAN">Undangan: Teknisi Lapangan (Executor)</option>
-                        <option value="ADMIN">Undangan: Administrator / Supervisor</option>
+                        <option value="TEKNISI_LAPANGAN">Undangan: Teknisi Lapangan</option>
+                        <option value="MARKETING">Undangan: Marketing</option>
+                        <option value="INVENTORY">Undangan: Inventory / Gudang</option>
+                        <option value="ADMIN">Undangan: Admin Perusahaan</option>
                       </select>
                       <button
                         type="button"
@@ -2147,7 +2710,28 @@ export const AdminDashboard: React.FC = () => {
                         </p>
                       </div>
 
-                      {/* Search Bar Pengguna */}
+                      {/* Tab Aktif / Tidak Aktif & Search Bar Pengguna (Screenshot 10: beta.jarivis.com/member) */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {([
+                          { id: 'ALL', label: `Semua (${adminUsers.filter(u => (u.role as string) !== 'MASTER_SUPER_ADMIN' && (u.role as string) !== 'SUPERADMIN').length})` },
+                          { id: 'ACTIVE', label: `Aktif (${adminUsers.filter(u => u.is_active && (u.role as string) !== 'MASTER_SUPER_ADMIN' && (u.role as string) !== 'SUPERADMIN').length})` },
+                          { id: 'INACTIVE', label: `Tidak Aktif (${adminUsers.filter(u => !u.is_active && (u.role as string) !== 'MASTER_SUPER_ADMIN' && (u.role as string) !== 'SUPERADMIN').length})` },
+                        ] as const).map(st => (
+                          <button
+                            key={st.id}
+                            type="button"
+                            onClick={() => setMemberStatusFilter(st.id)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                              memberStatusFilter === st.id
+                                ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                                : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border-subtle)]'
+                            }`}
+                          >
+                            {st.label}
+                          </button>
+                        ))}
+                      </div>
+
                       <div className="relative w-full sm:w-64">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                         <input
@@ -2174,6 +2758,8 @@ export const AdminDashboard: React.FC = () => {
                               u.email.toLowerCase() !== 'lieziragroup@gmail.com'
                           )
                           .filter(u => {
+                            if (memberStatusFilter === 'ACTIVE' && !u.is_active) return false;
+                            if (memberStatusFilter === 'INACTIVE' && u.is_active) return false;
                             if (!userSearchQ.trim()) return true;
                             const q = userSearchQ.toLowerCase();
                             return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.nip || '').toLowerCase().includes(q);
@@ -2232,6 +2818,36 @@ export const AdminDashboard: React.FC = () => {
                                     <span>{u.email}</span>
                                     {u.nip && <span>• NIP: {u.nip}</span>}
                                     {u.phone && <span>• WA: {u.phone}</span>}
+                                  </div>
+
+                                  {/* Indikator Perangkat, Versi Aplikasi, Geofence, Face ID & Live Tracking (Screenshot 10: Master Anggota) */}
+                                  <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[10.5px]">
+                                    <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
+                                      📱 Perangkat: {u.is_active ? 'PWA Mobile Aktif (v2.10.1)' : 'Offline'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setMemberGeofenceMap(prev => ({
+                                          ...prev,
+                                          [u.id]: !(prev[u.id] ?? true),
+                                        }))
+                                      }
+                                      className={`px-2 py-0.5 rounded-md border font-bold cursor-pointer ${
+                                        (memberGeofenceMap[u.id] ?? true)
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                                      }`}
+                                      title="Klik untuk mengubah status wajib Geofence pada anggota ini"
+                                    >
+                                      Geofence: {(memberGeofenceMap[u.id] ?? true) ? 'Aktif' : 'Fleksibel'}
+                                    </button>
+                                    <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
+                                      🛰️ Live Tracking: {liveTrackingEnabled ? 'ON' : 'OFF'}
+                                    </span>
+                                    <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
+                                      🔐 Akses Menu: Role {u.role}
+                                    </span>
                                   </div>
 
                                   <div className="text-[11px] text-[var(--text-muted)]">
@@ -2333,6 +2949,112 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {activeTab === 'quotation' && <QuotationPage />}
+              {(activeTab === 'customers' || activeTab === 'kontrol-rayap') && (
+                <CustomersPage initialSubTab={activeTab === 'kontrol-rayap' ? 'garansi' : 'master'} />
+              )}
+              {(activeTab === 'order-tracking' || activeTab === 'cashflow' || activeTab === 'performa') && (
+                <div className="space-y-5">
+                  <div className="flex flex-wrap items-center gap-1.5 bg-[var(--bg-card)] p-2 rounded-2xl border border-[var(--border-subtle)]">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('order-tracking')}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                        activeTab === 'order-tracking'
+                          ? 'bg-[var(--accent)] text-white shadow-2xs'
+                          : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                      }`}
+                    >
+                      💳 Tagihan &amp; Cicilan Klien
+                    </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('cashflow')}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                          activeTab === 'cashflow'
+                            ? 'bg-[var(--accent)] text-white shadow-2xs'
+                            : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                        }`}
+                      >
+                        💰 Laporan Pemasukan &amp; Cashflow
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('performa')}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                        activeTab === 'performa'
+                          ? 'bg-[var(--accent)] text-white shadow-2xs'
+                          : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                      }`}
+                    >
+                      📈 Performa MoM &amp; Capaian Target
+                    </button>
+                  </div>
+                  {activeTab === 'order-tracking' && <TrackingPage />}
+                  {activeTab === 'cashflow' && <CashflowPage />}
+                  {activeTab === 'performa' && <PerformaPage />}
+                </div>
+              )}
+              {activeTab === 'inventory' && <InventoryPage />}
+              {activeTab === 'saas-companies' && isMasterSuper && <CompaniesPage />}
+
+              {(activeTab === 'templates' || activeTab === 'risk-config' || activeTab === 'audit' || (activeTab === 'profile' && isAdmin)) && (
+                <div className="flex flex-wrap items-center gap-1.5 bg-[var(--bg-card)] p-2 rounded-2xl border border-[var(--border-subtle)] mb-4">
+                  {isAdmin && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('templates')}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                          activeTab === 'templates'
+                            ? 'bg-[var(--accent)] text-white shadow-2xs'
+                            : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                        }`}
+                      >
+                        📄 Kop Surat &amp; TTD Direktur
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('risk-config')}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                          activeTab === 'risk-config'
+                            ? 'bg-[var(--accent)] text-white shadow-2xs'
+                            : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                        }`}
+                      >
+                        ⚖️ Aturan Poin Kehadiran &amp; Retensi Foto
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('audit')}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                          activeTab === 'audit'
+                            ? 'bg-[var(--accent)] text-white shadow-2xs'
+                            : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                        }`}
+                      >
+                        Riwayat Audit Sistem
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('profile')}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                      activeTab === 'profile'
+                        ? 'bg-[var(--accent)] text-white shadow-2xs'
+                        : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                    }`}
+                  >
+                    👤 Profil &amp; Tema Saya
+                  </button>
+                </div>
+              )}
+
+              {activeTab === 'templates' && isAdmin && <TemplateSettingsPanel />}
 
               {activeTab === 'risk-config' && (
                 <div className="space-y-4">
@@ -2481,7 +3203,7 @@ export const AdminDashboard: React.FC = () => {
                       title="Unduh Laporan Kunjungan (PDF)"
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-[var(--text-secondary)] hover:bg-[var(--bg-card)] disabled:opacity-50 transition-colors cursor-pointer"
                     >
-                      <Download size={14} aria-hidden="true" /> {pdfBusy ? 'Membuat PDF...' : 'PDF'}
+                      <Download size={14} aria-hidden="true" /> {pdfBusy ? 'Membuat PDF...' : selectedReport.serviceType === 'TERMITE_CONTROL' ? 'PDF Anti Rayap' : 'PDF Pest Control'}
                     </button>
                     <button
                       type="button"
@@ -3119,8 +3841,6 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
       )}
-      {viewingPhoto && <PhotoViewerModal photo={viewingPhoto} onClose={() => setViewingPhoto(null)} />}
-      {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
       {showMonthlyRecapModal && (
         <MonthlyRecapBuilderModal
           isOpen={showMonthlyRecapModal}
@@ -3132,28 +3852,14 @@ export const AdminDashboard: React.FC = () => {
           availableCustomers={Array.from(
             new Set([
               ...projects.map(p => p.clientName).filter(Boolean),
-              ...reports.map(r => r.projectName).filter(Boolean),
+              ...quotationsList.map(q => q.kepadaNama).filter(Boolean),
             ])
           )}
           reports={selectedReport ? [selectedReport] : []}
         />
       )}
-      {showAdminCreateProject && (
-        <CreateProjectModal
-          onClose={() => setShowAdminCreateProject(false)}
-          executors={executors.map(ex => ({ id: ex.id, name: ex.name, email: ex.email }))}
-          onSubmit={async (data: CreateProjectInput) => {
-            await createProject(data);
-            setShowAdminCreateProject(false);
-            setActionBanner({
-              tone: 'success',
-              message: `Proyek "${data.projectName}" (Radius Geofence ${data.radius ?? 100}m) berhasil dibuat dan dijadwalkan.`,
-            });
-            await loadProjects();
-            await refreshSummaryAndReports();
-          }}
-        />
-      )}
+      {viewingPhoto && <PhotoViewerModal photo={viewingPhoto} onClose={() => setViewingPhoto(null)} />}
+      {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
     </AppLayout>
   );
 };

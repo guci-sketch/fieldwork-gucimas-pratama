@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { query, withTransaction } from '../../db/pool.js';
 import { asyncHandler, HttpError } from '../../utils/asyncHandler.js';
 import { requireAuth, requireRole, withTenant, isAdminRole } from '../../middleware/auth.js';
-import { ADMIN_ROLES, FIELD_ROLES } from '../../types.js';
+import { FIELD_ROLES } from '../../types.js';
 import { logAction } from '../../utils/audit.js';
 import { isValidCoordinate } from '../../utils/geo.js';
 import { uuidParam } from '../../utils/validate.js';
@@ -37,7 +37,6 @@ const createProjectSchema = z.object({
   nextServiceDate: z.string().optional(),
   scheduledStartTime: z.string().regex(/^\d{2}:\d{2}$/).default('08:00'),
   notes: z.string().optional(),
-  executorId: z.string().uuid().optional(),
 });
 
 function mapProject(row: any) {
@@ -70,7 +69,7 @@ function mapProject(row: any) {
 // PRD 8: Pelaksana creates their own project. Admin can view all (see admin routes).
 projectRouter.post(
   '/',
-  requireRole(...FIELD_ROLES, ...ADMIN_ROLES),
+  requireRole(...FIELD_ROLES),
   asyncHandler(async (req, res) => {
     const parsed = createProjectSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -112,7 +111,7 @@ projectRouter.post(
       // Auto-create the READY work report for this project (PRD Section 8).
       const report = await client.query(
         `insert into work_reports (project_id, executor_id, status, company_id) values ($1,$2,'READY',$3) returning id`,
-        [row.id, d.executorId || req.user!.id, req.user!.companyId]
+        [row.id, req.user!.id, req.user!.companyId]
       );
       return { project: row, reportId: report.rows[0].id as string };
     });

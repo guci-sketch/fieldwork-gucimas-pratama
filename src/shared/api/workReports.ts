@@ -28,7 +28,6 @@ export interface EvidencePayload {
   customerPhone?: string;
   customerFeedback?: string;
   customerSignature?: string;
-  technicianSignature?: string;
 }
 
 export interface TeamMemberEntry {
@@ -163,8 +162,6 @@ export function mapDbWorkReportFull(row: any): WorkReport {
     customerPhone: row.customer_phone ?? null,
     customerFeedback: row.customer_feedback ?? null,
     customerSignature: row.customer_signature ?? null,
-    technicianSignature: row.technician_signature ?? null,
-    technicianSignedAt: row.technician_signed_at ?? null,
     notes: row.notes ?? null,
     teamMembers: Array.isArray(row.team_members) ? row.team_members : [],
     photos,
@@ -426,8 +423,6 @@ export async function checkOut(reportId: string, evidence: EvidencePayload): Pro
       customer_phone: evidence.customerPhone ?? current.customerPhone,
       customer_feedback: evidence.customerFeedback ?? current.customerFeedback,
       customer_signature: evidence.customerSignature ?? current.customerSignature,
-      technician_signature: evidence.technicianSignature ?? (current as any).technicianSignature,
-      technician_signed_at: evidence.technicianSignature ? new Date().toISOString() : undefined,
       notes: evidence.notes ?? current.notes,
       updated_at: new Date().toISOString(),
     })

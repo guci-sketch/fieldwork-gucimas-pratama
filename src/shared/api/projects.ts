@@ -20,7 +20,6 @@ export interface CreateProjectInput {
   nextServiceDate?: string;
   scheduledStartTime?: string;
   notes?: string;
-  executorId?: string;
 }
 
 function resolveActiveCompanyId(): string | null {
@@ -100,7 +99,7 @@ export async function createProject(input: CreateProjectInput): Promise<{ projec
     .insert({
       company_id: companyId,
       project_id: projRow.id,
-      executor_id: input.executorId || st.user.uid,
+      executor_id: st.user.uid,
       status: 'READY',
       customer_name: input.clientName || input.projectName,
       notes: input.notes ?? null,

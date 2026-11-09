@@ -76,12 +76,13 @@ export function formatDecimalId(value: number): string {
   return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 1 }).format(value);
 }
 
-// ─── JARIVIS SUB-TAB NAVIGATION BAR (`Dashboard Monitoring & Geofencing Haversine`) ──────────────────────
+// ─── JARIVIS SUB-TAB NAVIGATION BAR (`Dasbor Personal`) ──────────────────────
 
 export const JARIVIS_SUB_TABS: { id: JarivisDashboardTabId; label: string; eyebrow: string }[] = [
   { id: 'operationCenter', label: 'Operation Center', eyebrow: 'GUCI EMAS OPERATION CENTER' },
-  { id: 'liveMap', label: 'Live Map Geofencing', eyebrow: 'GUCI EMAS LIVE MAP GEOFENCING' },
-  { id: 'performanceTeam', label: 'Kinerja Teknisi', eyebrow: 'GUCI EMAS PERFORMANCE TEAM' },
+  { id: 'liveMap', label: 'Live Map', eyebrow: 'GUCI EMAS LIVE MAP' },
+  { id: 'performanceTeam', label: 'Performance Team', eyebrow: 'GUCI EMAS PERFORMANCE TEAM' },
+  { id: 'business', label: 'Bisnis', eyebrow: 'GUCI EMAS BUSINESS' },
 ];
 
 export const JARIVIS_PERIOD_OPTIONS: { id: JarivisPeriodKey; label: string }[] = [
@@ -98,11 +99,11 @@ export const JarivisSubTabBar: React.FC<{
 }> = ({ activeTab, onSelectTab }) => (
   <div className="space-y-3">
     <h1 className="text-lg sm:text-xl font-bold text-[var(--text-primary)] tracking-tight">
-      Dashboard Monitoring & Geofencing Haversine
+      Dasbor Personal
     </h1>
     <div
       role="tablist"
-      aria-label="Kategori Dashboard Monitoring & Geofencing Haversine"
+      aria-label="Kategori Dasbor Personal"
       className="flex items-center gap-1 sm:gap-2 border-b border-[var(--border-subtle)] overflow-x-auto no-scrollbar"
     >
       {JARIVIS_SUB_TABS.map(tab => {
