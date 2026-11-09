@@ -20,7 +20,7 @@ import { Header } from '../common/Header';
 import { TabContainer } from '@/shared/ui/TabContainer';
 import {
   Plus, Camera, Clock, MapPin, Briefcase, History, User as UserIcon,
-  Home, Check, Lock, Eye, LogOut, AlertCircle, ImagePlus, ShieldCheck, MoreVertical, Users,
+  Home, Check, Lock, Eye, LogOut, AlertCircle, ImagePlus, MoreVertical, Users, ArrowLeft,
 } from 'lucide-react';
 
 import { CustomerReviewFormModal } from './CustomerReviewFormModal';
@@ -85,6 +85,9 @@ export const ExecutorHome: React.FC = () => {
   const [quickManualName, setQuickManualName] = useState('');
   const [showTeamPicker, setShowTeamPicker] = useState(false);
   const [selectedScheduleIdx, setSelectedScheduleIdx] = useState(0);
+  // State untuk Click-for-Details pada tab Proyek dan Riwayat (Gaya Figma Image 2)
+  const [selectedProjectDetailId, setSelectedProjectDetailId] = useState<string | null>(null);
+  const [selectedHistoryDetailId, setSelectedHistoryDetailId] = useState<string | null>(null);
   const [showGpsPrompt, setShowGpsPrompt] = useState(false);
   const [gpsPermissionStatus, setGpsPermissionStatus] = useState<string>('unknown');
 
@@ -260,6 +263,9 @@ export const ExecutorHome: React.FC = () => {
     (p.clientName && p.clientName.toLowerCase().includes(searchQuery.toLowerCase())) ||
     p.address.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const selectedProjectObj = filteredProjects.find(p => p.id === selectedProjectDetailId) || null;
+  const selectedHistoryObj = completedJobs.find(r => r.id === selectedHistoryDetailId) || null;
 
   const handleCreateProjectSubmit = async (data: CreateProjectInput) => {
     await createProject(data);
@@ -471,24 +477,19 @@ export const ExecutorHome: React.FC = () => {
       
       <div className="flex flex-1 overflow-hidden relative">
         <main className="flex-1 overflow-y-auto flex flex-col w-full relative pb-32">
-          {/* Desktop / Tablet Top Sub-Menu + Mobile Floating Bottom Pill (TabContainer) */}
-          <div className="hidden lg:block max-w-xl w-full mx-auto px-4 pt-4">
-            <TabContainer
-              tabs={executorTabs}
-              activeTab={activeTab}
-              onChange={(id) => setActiveTab(id as any)}
-              showFloatingBottom={!isAnyModalOpen}
-            />
-          </div>
-          <div className="lg:hidden">
-            <TabContainer
-              tabs={executorTabs}
-              activeTab={activeTab}
-              onChange={(id) => setActiveTab(id as any)}
-              className="hidden"
-              showFloatingBottom={!isAnyModalOpen}
-            />
-          </div>
+          {/* Hanya tampilkan Floating Bottom Pill tanpa Top Tab Bar di atas (hideTopBar={true}) */}
+          <TabContainer
+            tabs={executorTabs}
+            activeTab={activeTab}
+            onChange={(id) => {
+              setActiveTab(id as any);
+              setSelectedProjectDetailId(null);
+              setSelectedHistoryDetailId(null);
+            }}
+            hideTopBar={true}
+            floatingOnAllScreens={true}
+            showFloatingBottom={!isAnyModalOpen}
+          />
 
           {actionError && (
             <div className="max-w-xl w-full mx-auto px-4 mt-3">
@@ -816,130 +817,416 @@ export const ExecutorHome: React.FC = () => {
           )}
 
           {/* ================================================================= */}
-          {/* TAB 2, 3, 4: PROYEK, RIWAYAT, PROFIL (MINIMALIS & BERSIH)         */}
+          {/* TAB 2: PROYEK (GAYA FIGMA IMAGE 2: COMPACT CARDS + KLIK DETAIL)   */}
           {/* ================================================================= */}
-          {activeTab !== 'home' && (
-            <div className="flex-1 max-w-xl w-full mx-auto p-4 space-y-4">
-              {activeTab !== 'profile' && (
-                <div className="relative">
-                  <input
-                    type="text"
-                    placeholder="Cari nama proyek, klien, atau lokasi..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--border-subtle)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-xs bg-white text-[var(--text-primary)] placeholder-[var(--text-muted)] shadow-2xs"
-                  />
-                </div>
-              )}
+          {activeTab === 'jobs' && (
+            <div className="max-w-xl w-full mx-auto flex-1 flex flex-col">
+              {/* Top Accent Strip agar melengkung rapi seperti Image 2 */}
+              <div className="bg-[var(--accent)] h-7 w-full shrink-0" />
 
-              {!isLoading && !loadError && activeTab === 'jobs' && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-base font-bold text-[var(--text-primary)]">Daftar Proyek Lapangan</h2>
-                    <button onClick={() => setShowCreateProject(true)} className="bg-[var(--accent)] text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1 cursor-pointer">
-                      <Plus size={14} /> Tugas Baru
+              <div className="bg-[var(--bg-primary)] rounded-t-[28px] -mt-4 pt-5 px-4 pb-6 flex-1 space-y-4">
+                {/* Header Row: Title + Back Arrow / + Tugas Baru */}
+                <div className="flex items-center justify-between px-1">
+                  <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+                    {selectedProjectObj ? 'Detail Proyek' : 'Proyek'}
+                  </h2>
+                  <div className="flex items-center gap-2">
+                    {!selectedProjectObj && (
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateProject(true)}
+                        className="bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1 shadow-xs cursor-pointer transition-colors"
+                      >
+                        <Plus size={14} /> Tugas Baru
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedProjectObj) {
+                          setSelectedProjectDetailId(null);
+                        } else {
+                          setActiveTab('home');
+                        }
+                      }}
+                      className="w-9 h-9 rounded-full bg-white border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-slate-800 shadow-2xs cursor-pointer transition-colors"
+                      title={selectedProjectObj ? 'Kembali ke daftar proyek' : 'Kembali ke Beranda'}
+                    >
+                      <ArrowLeft size={18} />
                     </button>
                   </div>
+                </div>
 
-                  {filteredProjects.length === 0 && (
-                    <p className="text-xs text-[var(--text-muted)] text-center py-8">Belum ada proyek. Buat proyek pertama Anda.</p>
-                  )}
-
-                  {filteredProjects.map(proj => {
-                    const report = reports.find(r => r.projectId === proj.id);
-                    const meta = getServiceTypeMeta(proj.serviceType);
+                {/* Jika Kartu Proyek Diklik -> Tampilkan Detail Proyek Minimalis */}
+                {selectedProjectObj ? (
+                  (() => {
+                    const report = reports.find(r => r.projectId === selectedProjectObj.id);
+                    const meta = getServiceTypeMeta(selectedProjectObj.serviceType);
+                    const dateStr = selectedProjectObj.nextServiceDate || selectedProjectObj.createdAt;
+                    const schedWindow = formatScheduleWindow(report?.scheduledStartTime);
                     return (
-                      <div key={proj.id} className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
-                        <div className="p-4">
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded border mb-1 ${meta.badgeClass}`}>
+                      <div className="space-y-4 pt-1">
+                        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-md overflow-hidden">
+                          <div className="p-4 sm:p-5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className={`inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md border ${meta.badgeClass}`}>
                                 {meta.shortLabel}
                               </span>
-                              <h3 className="font-bold text-sm text-slate-900">{proj.projectName}</h3>
-                              {proj.clientName && <p className="text-xs text-slate-600">{proj.clientName}</p>}
+                              <p className="text-base sm:text-lg font-bold text-slate-900 text-right">
+                                {formatScheduleDateId(dateStr)}
+                              </p>
                             </div>
-                            <span className="text-xs font-medium text-slate-700 shrink-0">08.00 - 14.00</span>
-                          </div>
-                        </div>
-                        <div className="border-t border-slate-200 px-4 py-3 bg-white space-y-2">
-                          <p className="text-xs font-medium text-slate-800">Notes :</p>
-                          <ul className="list-disc pl-4 text-xs text-slate-600 space-y-0.5">
-                            <li>{proj.address} (Radius {proj.radius}m)</li>
-                            {proj.warrantyMonths > 0 && (
-                              <li>
-                                <span className="text-emerald-700 font-semibold">Garansi aktif {proj.warrantyMonths} bulan</span>
-                              </li>
-                            )}
-                          </ul>
-                          {report && report.status === 'READY' && (
-                            <button
-                              onClick={() => { setActiveTab('home'); setActiveCameraAction({ type: 'CHECK_IN', report }); }}
-                              className="w-full mt-2 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                            >
-                              <Camera size={14} /> Clock In
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
 
-              {!isLoading && !loadError && activeTab === 'history' && (
-                <div className="space-y-3">
-                  <h2 className="text-base font-bold text-[var(--text-primary)]">Riwayat Pekerjaan Selesai</h2>
-                  {completedJobs.length === 0 ? (
-                    <p className="text-xs text-[var(--text-muted)]">Belum ada riwayat pekerjaan selesai.</p>
-                  ) : (
-                    completedJobs.map(rep => {
-                      const durationMin = rep.durationSeconds ? Math.round(rep.durationSeconds / 60) : 0;
-                      return (
-                        <div key={rep.id} className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
-                          <div className="p-4">
-                            <div className="flex items-center justify-between mb-1">
-                              <RiskBadge level={rep.riskLevel} score={rep.riskScore} size="sm" />
-                              <span className="text-xs font-bold text-slate-900">{formatScheduleDateId(rep.createdAt)}</span>
-                            </div>
-                            <div className="flex items-start justify-between gap-2 mt-2">
-                              <div>
-                                <h3 className="font-bold text-sm text-slate-900">{rep.projectName}</h3>
-                                <p className="text-xs text-slate-500">{rep.projectAddress}</p>
+                            <div className="flex items-start justify-between gap-4 mt-3.5">
+                              <div className="space-y-0.5 min-w-0">
+                                <h3 className="text-sm sm:text-base font-semibold text-slate-900 leading-snug">
+                                  {selectedProjectObj.clientName || selectedProjectObj.projectName}
+                                </h3>
+                                <p className="text-xs sm:text-sm text-slate-600 leading-snug">
+                                  {selectedProjectObj.projectName}
+                                </p>
                               </div>
-                              <span className="text-xs font-mono text-slate-700 shrink-0">
-                                {rep.checkInAt ? new Date(rep.checkInAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'} -{' '}
-                                {rep.checkOutAt ? new Date(rep.checkOutAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                              <span className="text-xs sm:text-sm font-medium text-slate-800 shrink-0">
+                                {schedWindow}
                               </span>
                             </div>
                           </div>
-                          <div className="border-t border-slate-200 px-4 py-3 bg-white space-y-2">
-                            <p className="text-xs font-medium text-slate-800">Notes :</p>
-                            <ul className="list-disc pl-4 text-xs text-slate-600 space-y-0.5">
-                              <li>Durasi kerja: {durationMin} menit • {rep.photos.length} foto bukti</li>
-                              <li>Status GPS: {rep.checkInValid ? 'Sesuai radius' : 'Di luar radius'} ({rep.checkInDistance ?? 0}m)</li>
+
+                          <div className="border-t border-slate-300 px-4 sm:px-5 py-3.5 bg-white space-y-2">
+                            <p className="text-xs sm:text-sm font-medium text-slate-800">Notes :</p>
+                            <ul className="list-disc pl-5 text-xs sm:text-sm text-slate-700 space-y-1 leading-relaxed">
+                              <li>Lokasi: {selectedProjectObj.address} (Radius GPS {selectedProjectObj.radius}m)</li>
+                              <li>
+                                Tipe Kontrak: {selectedProjectObj.contractType === 'RECURRING' ? 'Kunjungan Berkala' : 'Sekali Layanan'}
+                              </li>
+                              {selectedProjectObj.warrantyMonths > 0 && (
+                                <li className="text-emerald-800 font-medium">
+                                  Garansi Aktif: {selectedProjectObj.warrantyMonths} bulan
+                                </li>
+                              )}
+                              {report?.targetFocus && report.targetFocus.length > 0 && (
+                                <li>Fokus Target: {report.targetFocus.join(', ')}</li>
+                              )}
                             </ul>
-                            {rep.photos.length > 0 && (
-                              <div className="flex gap-2 overflow-x-auto pt-1">
-                                {rep.photos.map(p => (
-                                  <button key={p.id} type="button" onClick={() => setViewingPhoto(p)} className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 shrink-0 relative group">
-                                    <AuthedImage path={p.url} alt="evidence" purged={!!p.purgedAt} className="w-full h-full object-cover" />
-                                    <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                      <Eye size={13} className="text-white" />
-                                    </div>
-                                  </button>
-                                ))}
+                          </div>
+                        </div>
+
+                        {report && (report.status === 'READY' || report.status === 'DRAFT') && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedProjectDetailId(null);
+                              setActiveTab('home');
+                              setActiveCameraAction({ type: 'CHECK_IN', report });
+                            }}
+                            className="w-full py-3.5 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                          >
+                            <Camera size={16} /> Clock In Sekarang
+                          </button>
+                        )}
+
+                        {report && report.status === 'WORKING' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedProjectDetailId(null);
+                              setActiveTab('home');
+                            }}
+                            className="w-full py-3.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm shadow-md flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                          >
+                            <Clock size={16} /> Lihat Pekerjaan yang Sedang Berlangsung
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProjectDetailId(null)}
+                          className="w-full py-3 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
+                        >
+                          ← Kembali ke Daftar Proyek
+                        </button>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  /* Daftar Kartu Proyek Ringkas (Gaya Image 2: Tanggal + Subjudul Klien + Jam + Dot Status, Klik untuk Detail) */
+                  <>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Cari proyek, klien, atau lokasi..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200/90 focus:outline-none focus:ring-2 focus:ring-[var(--accent)] text-xs bg-white text-slate-800 placeholder-slate-400 shadow-2xs"
+                      />
+                    </div>
+
+                    {filteredProjects.length === 0 && (
+                      <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
+                        <p className="text-xs text-slate-500">Belum ada proyek yang sesuai pencarian.</p>
+                      </div>
+                    )}
+
+                    <div className="space-y-3">
+                      {filteredProjects.map(proj => {
+                        const report = reports.find(r => r.projectId === proj.id);
+                        const meta = getServiceTypeMeta(proj.serviceType);
+                        const dateStr = proj.nextServiceDate || proj.createdAt;
+                        const timeRange = formatScheduleWindow(report?.scheduledStartTime);
+
+                        let dotColor = 'bg-emerald-500';
+                        let statusText = 'Siap Mulai';
+                        if (report?.status === 'WORKING') {
+                          dotColor = 'bg-amber-500';
+                          statusText = 'Sedang Dikerjakan';
+                        } else if (report?.status === 'COMPLETED' || report?.status === 'REVIEWED') {
+                          dotColor = 'bg-emerald-500';
+                          statusText = 'Completed';
+                        } else if (proj.lockedAt) {
+                          dotColor = 'bg-rose-500';
+                          statusText = 'Terkunci';
+                        } else if (proj.warrantyMonths > 0) {
+                          dotColor = 'bg-sky-500';
+                          statusText = 'Garansi Aktif';
+                        }
+
+                        return (
+                          <button
+                            key={proj.id}
+                            type="button"
+                            onClick={() => setSelectedProjectDetailId(proj.id)}
+                            className="w-full bg-white rounded-2xl p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] border border-slate-200/80 hover:border-emerald-500/70 text-left transition-all cursor-pointer block"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+                                  {formatScheduleDateId(dateStr)}
+                                </p>
+                                <p className="text-xs font-medium text-slate-500 mt-0.5 truncate">
+                                  {proj.clientName || proj.projectName} • {meta.shortLabel}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between mt-3.5 pt-1">
+                              <span className="text-sm font-medium text-slate-700">
+                                {timeRange}
+                              </span>
+                              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
+                                <span className={`w-2.5 h-2.5 rounded-full ${dotColor}`} />
+                                <span>{statusText}</span>
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* TAB 3: RIWAYAT (GAYA FIGMA IMAGE 2: REPORT CARDS + KLIK DETAIL)   */}
+          {/* ================================================================= */}
+          {activeTab === 'history' && (
+            <div className="max-w-xl w-full mx-auto flex-1 flex flex-col">
+              {/* Top Accent Strip agar melengkung rapi seperti Image 2 */}
+              <div className="bg-[var(--accent)] h-7 w-full shrink-0" />
+
+              <div className="bg-[var(--bg-primary)] rounded-t-[28px] -mt-4 pt-5 px-4 pb-6 flex-1 space-y-4">
+                {/* Header Row: Title + Back Arrow */}
+                <div className="flex items-center justify-between px-1">
+                  <h2 className="text-2xl font-bold text-slate-900 tracking-tight">
+                    {selectedHistoryObj ? 'Detail Riwayat' : 'Riwayat'}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedHistoryObj) {
+                        setSelectedHistoryDetailId(null);
+                      } else {
+                        setActiveTab('home');
+                      }
+                    }}
+                    className="w-9 h-9 rounded-full bg-white border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-slate-800 shadow-2xs cursor-pointer transition-colors"
+                    title={selectedHistoryObj ? 'Kembali ke daftar riwayat' : 'Kembali ke Beranda'}
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
+                </div>
+
+                {/* Jika Kartu Riwayat Diklik -> Tampilkan Detail Riwayat Lengkap */}
+                {selectedHistoryObj ? (
+                  (() => {
+                    const durationMin = selectedHistoryObj.durationSeconds ? Math.round(selectedHistoryObj.durationSeconds / 60) : 0;
+                    const meta = getServiceTypeMeta(selectedHistoryObj.serviceType);
+                    const cinTime = selectedHistoryObj.checkInAt
+                      ? new Date(selectedHistoryObj.checkInAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(':', '.')
+                      : '08.00';
+                    const coutTime = selectedHistoryObj.checkOutAt
+                      ? new Date(selectedHistoryObj.checkOutAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(':', '.')
+                      : '14.00';
+                    return (
+                      <div className="space-y-4 pt-1">
+                        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-md overflow-hidden">
+                          <div className="p-4 sm:p-5">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className={`inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md border ${meta.badgeClass}`}>
+                                  {meta.shortLabel}
+                                </span>
+                                <RiskBadge level={selectedHistoryObj.riskLevel} score={selectedHistoryObj.riskScore} size="sm" />
+                              </div>
+                              <p className="text-base sm:text-lg font-bold text-slate-900 text-right">
+                                {formatScheduleDateId(selectedHistoryObj.createdAt)}
+                              </p>
+                            </div>
+
+                            <div className="flex items-start justify-between gap-4 mt-3.5">
+                              <div className="space-y-0.5 min-w-0">
+                                <h3 className="text-sm sm:text-base font-semibold text-slate-900 leading-snug">
+                                  {selectedHistoryObj.clientName || selectedHistoryObj.projectName}
+                                </h3>
+                                <p className="text-xs sm:text-sm text-slate-600 leading-snug">
+                                  {selectedHistoryObj.projectName}
+                                </p>
+                              </div>
+                              <span className="text-xs sm:text-sm font-medium text-slate-800 shrink-0">
+                                {cinTime} - {coutTime}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="border-t border-slate-300 px-4 sm:px-5 py-3.5 bg-white space-y-2.5">
+                            <p className="text-xs sm:text-sm font-medium text-slate-800">Notes :</p>
+                            <ul className="list-disc pl-5 text-xs sm:text-sm text-slate-700 space-y-1 leading-relaxed">
+                              <li>Lokasi: {selectedHistoryObj.projectAddress}</li>
+                              <li>Durasi Pengerjaan: {durationMin} menit ({selectedHistoryObj.photos.length} foto dokumentasi)</li>
+                              <li>
+                                Validasi GPS: {selectedHistoryObj.checkInValid ? 'Sesuai radius' : 'Di luar radius'} ({selectedHistoryObj.checkInDistance ?? 0}m)
+                              </li>
+                              {selectedHistoryObj.treatmentRecord?.chemicalName && (
+                                <li>
+                                  Bahan Kimia &amp; Dosis: {selectedHistoryObj.treatmentRecord.chemicalName} ({selectedHistoryObj.treatmentRecord.dosage || '-'})
+                                </li>
+                              )}
+                            </ul>
+
+                            {selectedHistoryObj.photos.length > 0 && (
+                              <div className="pt-2 border-t border-slate-100">
+                                <p className="text-[11px] font-semibold text-slate-500 mb-2">Dokumentasi Foto (Klik untuk memperbesar):</p>
+                                <div className="flex gap-2 overflow-x-auto pb-1">
+                                  {selectedHistoryObj.photos.map(p => (
+                                    <button
+                                      key={p.id}
+                                      type="button"
+                                      onClick={() => setViewingPhoto(p)}
+                                      className="w-14 h-14 rounded-xl overflow-hidden border border-slate-200 shrink-0 relative group"
+                                    >
+                                      <AuthedImage path={p.url} alt="evidence" purged={!!p.purgedAt} className="w-full h-full object-cover" />
+                                      <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                        <Eye size={14} className="text-white" />
+                                      </div>
+                                    </button>
+                                  ))}
+                                </div>
                               </div>
                             )}
                           </div>
                         </div>
-                      );
-                    })
-                  )}
-                </div>
-              )}
 
-              {!isLoading && !loadError && activeTab === 'profile' && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedHistoryDetailId(null)}
+                          className="w-full py-3 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
+                        >
+                          ← Kembali ke Daftar Riwayat
+                        </button>
+                      </div>
+                    );
+                  })()
+                ) : (
+                  /* Daftar Kartu Riwayat Ringkas (Persis Referensi Image 2: Tanggal + Jam + Dot Status, Klik untuk Detail) */
+                  <>
+                    {completedJobs.length === 0 ? (
+                      <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
+                        <p className="text-xs text-slate-500">Belum ada riwayat pekerjaan selesai.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {completedJobs.map(rep => {
+                          const meta = getServiceTypeMeta(rep.serviceType);
+                          const cinTime = rep.checkInAt
+                            ? new Date(rep.checkInAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(':', '.')
+                            : '08.00';
+                          const coutTime = rep.checkOutAt
+                            ? new Date(rep.checkOutAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(':', '.')
+                            : '14.00';
+
+                          let dotColor = 'bg-emerald-500';
+                          let statusLabel = 'Completed';
+                          if (rep.status === 'FLAGGED') {
+                            dotColor = 'bg-amber-500';
+                            statusLabel = 'Perlu Tinjauan';
+                          } else if (rep.checkInValid === false) {
+                            dotColor = 'bg-sky-500';
+                            statusLabel = 'Luar Radius';
+                          }
+
+                          return (
+                            <button
+                              key={rep.id}
+                              type="button"
+                              onClick={() => setSelectedHistoryDetailId(rep.id)}
+                              className="w-full bg-white rounded-2xl p-4 shadow-[0_4px_12px_rgba(15,23,42,0.06)] border border-slate-200/80 hover:border-emerald-500/70 text-left transition-all cursor-pointer block"
+                            >
+                              <p className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
+                                {formatScheduleDateId(rep.createdAt)}
+                              </p>
+                              <p className="text-xs font-medium text-slate-500 mt-0.5 truncate">
+                                {rep.clientName || rep.projectName} • {meta.shortLabel}
+                              </p>
+
+                              <div className="flex items-center justify-between mt-3.5 pt-1">
+                                <span className="text-sm font-medium text-slate-700">
+                                  {cinTime} - {coutTime}
+                                </span>
+                                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700">
+                                  <span className={`w-2.5 h-2.5 rounded-full ${dotColor}`} />
+                                  <span>{statusLabel}</span>
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ================================================================= */}
+          {/* TAB 4: PROFIL TEKNISI                                             */}
+          {/* ================================================================= */}
+          {activeTab === 'profile' && (
+            <div className="max-w-xl w-full mx-auto flex-1 flex flex-col">
+              <div className="bg-[var(--accent)] h-7 w-full shrink-0" />
+              <div className="bg-[var(--bg-primary)] rounded-t-[28px] -mt-4 pt-5 px-4 pb-6 flex-1 space-y-4">
+                <div className="flex items-center justify-between px-1">
+                  <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Profil</h2>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('home')}
+                    className="w-9 h-9 rounded-full bg-white border border-slate-200 hover:bg-slate-100 flex items-center justify-center text-slate-800 shadow-2xs cursor-pointer transition-colors"
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
+                </div>
+
                 <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 shadow-xs">
                   <div className="flex items-center gap-4">
                     <div className="w-16 h-16 rounded-full bg-[var(--accent)] text-white flex items-center justify-center font-bold text-xl">
@@ -973,7 +1260,7 @@ export const ExecutorHome: React.FC = () => {
                     </button>
                   </div>
                 </div>
-              )}
+              </div>
             </div>
           )}
         </main>
