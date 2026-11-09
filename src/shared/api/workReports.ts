@@ -28,6 +28,7 @@ export interface EvidencePayload {
   customerPhone?: string;
   customerFeedback?: string;
   customerSignature?: string;
+  technicianSignature?: string;
 }
 
 export interface TeamMemberEntry {
@@ -162,6 +163,8 @@ export function mapDbWorkReportFull(row: any): WorkReport {
     customerPhone: row.customer_phone ?? null,
     customerFeedback: row.customer_feedback ?? null,
     customerSignature: row.customer_signature ?? null,
+    technicianSignature: row.technician_signature ?? null,
+    technicianSignedAt: row.technician_signed_at ?? null,
     notes: row.notes ?? null,
     teamMembers: Array.isArray(row.team_members) ? row.team_members : [],
     photos,
@@ -260,7 +263,7 @@ export async function checkIn(reportId: string, evidence: EvidencePayload): Prom
     .from('work_reports')
     .update({
       status: 'WORKING',
-      check_in_at: nowIso,
+      check_in_at: current.checkInAt || nowIso,
       check_in_latitude: evidence.latitude,
       check_in_longitude: evidence.longitude,
       check_in_accuracy: evidence.accuracy,
@@ -273,19 +276,45 @@ export async function checkIn(reportId: string, evidence: EvidencePayload): Prom
 
   if (upErr) throw new Error(upErr.message);
 
-  await supabase.from('documentation_photos').insert({
-    work_report_id: reportId,
-    photo_type: 'CHECK_IN',
-    photo_tag: evidence.photoTag ?? null,
-    storage_path: dataUrl,
-    latitude: evidence.latitude,
-    longitude: evidence.longitude,
-    accuracy: evidence.accuracy,
-    distance_to_project: dist,
-    is_within_radius: valid,
-    captured_at: nowIso,
-    metadata: { projectName: current.projectName, executorName: current.executorName },
-  });
+  // Cegah duplikasi foto CHECK_IN (CIN) beruntun pada laporan kerja yang sama
+  const existingCheckInPhotos = current.photos.filter(p => p.photoType === 'CHECK_IN');
+  if (existingCheckInPhotos.length > 0) {
+    const primaryCinId = existingCheckInPhotos[0].id;
+    await supabase
+      .from('documentation_photos')
+      .update({
+        storage_path: dataUrl,
+        latitude: evidence.latitude,
+        longitude: evidence.longitude,
+        accuracy: evidence.accuracy,
+        distance_to_project: dist,
+        is_within_radius: valid,
+        captured_at: nowIso,
+        metadata: { projectName: current.projectName, executorName: current.executorName },
+      })
+      .eq('id', primaryCinId);
+
+    // Jika sebelumnya sempat terduplikasi (misal 11 foto CIN), bersihkan duplikat ekstra
+    if (existingCheckInPhotos.length > 1) {
+      const duplicateIds = existingCheckInPhotos.slice(1).map(p => p.id);
+      await supabase.from('documentation_photos').delete().in('id', duplicateIds);
+    }
+  } else {
+    const { error: photoErr } = await supabase.from('documentation_photos').insert({
+      work_report_id: reportId,
+      photo_type: 'CHECK_IN',
+      photo_tag: evidence.photoTag ?? null,
+      storage_path: dataUrl,
+      latitude: evidence.latitude,
+      longitude: evidence.longitude,
+      accuracy: evidence.accuracy,
+      distance_to_project: dist,
+      is_within_radius: valid,
+      captured_at: nowIso,
+      metadata: { projectName: current.projectName, executorName: current.executorName },
+    });
+    if (photoErr) throw new Error(photoErr.message);
+  }
 
   return fetchWorkReport(reportId);
 }
@@ -397,6 +426,8 @@ export async function checkOut(reportId: string, evidence: EvidencePayload): Pro
       customer_phone: evidence.customerPhone ?? current.customerPhone,
       customer_feedback: evidence.customerFeedback ?? current.customerFeedback,
       customer_signature: evidence.customerSignature ?? current.customerSignature,
+      technician_signature: evidence.technicianSignature ?? (current as any).technicianSignature,
+      technician_signed_at: evidence.technicianSignature ? new Date().toISOString() : undefined,
       notes: evidence.notes ?? current.notes,
       updated_at: new Date().toISOString(),
     })
