@@ -338,6 +338,26 @@ run_check(
     "TabContainer.tsx mendukung hideTopBar={true} & floatingOnAllScreens={true}; ExecutorHome.tsx menampilkan kartu ringkas Proyek & Riwayat dengan interaksi Click-for-Details."
 )
 
+
+# KEI-21: Integrasi Desain & Komponen Referensi RedesignFieldworkGuciMasLite-main ke Guci-App-main
+css_latest = (repo / "src/app/index.css").read_text(encoding="utf-8")
+login_latest = (repo / "src/widgets/auth/LoginForm.tsx").read_text(encoding="utf-8")
+app_layout_latest = (repo / "src/widgets/common/AppLayout.tsx").read_text(encoding="utf-8")
+exec_home_v3 = (repo / "src/widgets/executor/ExecutorHome.tsx").read_text(encoding="utf-8")
+run_check(
+    "KEI-21",
+    "Phase 7: Integrasi UI/UX RedesignFieldworkGuciMasLite (Split Login, Brand Mark, Guided Work Checklist, Filter Chips, & TechProfile)",
+    "Pengguna membuka halaman Login, Sidebar Admin, maupun Workspace Teknisi (ExecutorHome.tsx)",
+    "Periksa token warna #245c45, 3-bar brand-mark, Split Login 2 kolom dengan Role Switcher, Guided Work Checklist (lite-work-checklist), Filter Chips (lite-filter-chips), ConnectionBanner, serta struktur Detail Tugas & Profil Teknisi",
+    "Seluruh elemen terbaik dari RedesignFieldworkGuciMasLite-main terintegrasi mulus ke Guci-App-main tanpa menghilangkan fitur bisnis eksisting",
+    "CRITICAL", "system", "usability",
+    all(k in css_latest for k in ["--green: #245c45", ".brand-mark", ".lite-work-checklist", ".lite-filter-chips", ".lite-connection-banner"])
+    and all(k in login_latest for k in ["Pekerjaan lapangan yang lebih jelas, dari penugasan hingga laporan.", "brand-mark", "handleSwitchRoleMode"])
+    and "brand-mark" in app_layout_latest
+    and all(k in exec_home_v3 for k in ["lite-work-checklist", "lite-filter-chips", "lite-connection-banner", "projectFilterChip", "historyFilterChip"]),
+    "index.css, LoginForm.tsx, AppLayout.tsx, dan ExecutorHome.tsx mengintegrasikan sistem desain RedesignFieldworkGuciMasLite-main secara utuh."
+)
+
 # Write CSV
 csv_out.parent.mkdir(parents=True, exist_ok=True)
 with csv_out.open("w", encoding="utf-8", newline="") as f:

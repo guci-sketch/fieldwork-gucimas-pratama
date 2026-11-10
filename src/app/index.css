@@ -5,9 +5,9 @@
   --font-sans: "Inter", "Outfit", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  --color-primary: #1a5c38;
-  --color-primary-hover: #13462a;
-  --color-primary-light: rgba(26, 92, 56, 0.08);
+  --color-primary: #245c45;
+  --color-primary-hover: #1d4b38;
+  --color-primary-light: #e8f1eb;
   --color-cream: #FDFBF7;
   --color-warm-white: #FAF9F7;
   --color-tertiary: #825100;
@@ -58,7 +58,7 @@ textarea {
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent-blue);
+  outline: 3px solid rgba(53, 108, 145, 0.28);
   outline-offset: 2px;
 }
 
@@ -101,91 +101,102 @@ input[type="number"] {
 :root {
   color-scheme: light;
 
-  /* Surfaces — Clean Enterprise Light Slate Canvas */
-  --bg-primary: #f4f6f9;
-  --bg-secondary: #edf0f5;
-  --bg-tertiary: #e5e9f0;
+  /* RedesignFieldworkGuciMasLite Design System Tokens */
+  --green: #245c45;
+  --green-hover: #1d4b38;
+  --green-soft: #e8f1eb;
+  --canvas: #f6f8f6;
+  --surface: #ffffff;
+  --subtle: #eff3f0;
+  --text: #17231c;
+  --secondary: #66736b;
+  --muted: #87928b;
+
+  /* Surfaces — Clean Enterprise Sage-Slate Canvas */
+  --bg-primary: #f6f8f6;
+  --bg-secondary: #eff3f0;
+  --bg-tertiary: #e6ece8;
   --bg-card: #ffffff;
   --bg-elevated: #ffffff;
-  --bg-skeleton: #e2e8f0;
+  --bg-skeleton: #e1e8e2;
 
   /* Content & Typography */
-  --text-primary: #111827;
-  --text-secondary: #4b5563;
-  --text-muted: #6b7280;
+  --text-primary: #17231c;
+  --text-secondary: #66736b;
+  --text-muted: #87928b;
   --text-inverse: #ffffff;
 
-  /* Brand & Jarivis Interactive Accents */
-  --accent: #1a5c38;
-  --accent-hover: #13462a;
-  --accent-glow: rgba(37, 99, 235, 0.10);
-  --accent-muted: rgba(37, 99, 235, 0.08);
-  --accent-text: #1d4ed8;
+  /* Brand & Interactive Accents */
+  --accent: #245c45;
+  --accent-hover: #1d4b38;
+  --accent-glow: #e8f1eb;
+  --accent-muted: rgba(36, 92, 69, 0.08);
+  --accent-text: #245c45;
 
-  --accent-blue: #2563eb;
-  --accent-blue-hover: #1d4ed8;
-  --accent-blue-soft: rgba(37, 99, 235, 0.12);
+  --accent-blue: #356c91;
+  --accent-blue-hover: #295b7c;
+  --accent-blue-soft: #eaf2f8;
 
-  /* Jarivis "PERLU PERHATIAN!" Alert Card Tokens */
+  /* Alert Card Tokens */
   --alert-surface-bg: #7f1d1d;
   --alert-surface-border: #991b1b;
   --alert-surface-text: #ffffff;
   --alert-surface-muted: #fecaca;
 
-  --brand-gold: #b45309;
-  --brand-gold-soft: #fef3c7;
+  --brand-gold: #a96b16;
+  --brand-gold-soft: #fff4df;
 
   /* Semantic Status Tokens */
-  --status-draft-bg: #fef3c7;
-  --status-draft-text: #92400e;
-  --status-draft-border: #fde68a;
+  --status-draft-bg: #eff2f0;
+  --status-draft-text: #626e66;
+  --status-draft-border: #d8e0da;
 
-  --status-ready-bg: #f1f5f9;
-  --status-ready-text: #334155;
-  --status-ready-border: #cbd5e1;
+  --status-ready-bg: #eaf2f8;
+  --status-ready-text: #356c91;
+  --status-ready-border: #c5d9e8;
 
-  --status-working-bg: #eff6ff;
-  --status-working-text: #1d4ed8;
+  --status-working-bg: #eaf2f8;
+  --status-working-text: #356c91;
   --status-working-border: #bfdbfe;
 
-  --status-completed-bg: #ecfdf5;
-  --status-completed-text: #065f46;
-  --status-completed-border: #a7f3d0;
+  --status-completed-bg: #e8f4ec;
+  --status-completed-text: #257a4b;
+  --status-completed-border: #b8dcc6;
 
-  --status-reviewed-bg: #f0fdf4;
-  --status-reviewed-text: #166534;
-  --status-reviewed-border: #86efac;
+  --status-reviewed-bg: #e7f3f0;
+  --status-reviewed-text: #287267;
+  --status-reviewed-border: #b2d8d2;
 
-  --status-flagged-bg: #fef2f2;
-  --status-flagged-text: #b91c1c;
-  --status-flagged-border: #fecaca;
+  --status-flagged-bg: #fcecec;
+  --status-flagged-text: #b54141;
+  --status-flagged-border: #f5c2c2;
 
-  --status-approved-bg: #dcfce7;
-  --status-approved-text: #166534;
+  --status-approved-bg: #e8f4ec;
+  --status-approved-text: #257a4b;
 
-  --success: #059669;
-  --warning: #d97706;
-  --danger: #dc2626;
-  --info: #2563eb;
+  --success: #257a4b;
+  --warning: #a96b16;
+  --danger: #b54141;
+  --info: #356c91;
 
   /* Operational Chart Tokens */
-  --chart-total: #2563eb;
-  --chart-total-fill: rgba(37, 99, 235, 0.12);
-  --chart-completed: #10b981;
-  --chart-flagged: #ef4444;
-  --chart-working: #3b82f6;
-  --chart-ready: #64748b;
-  --chart-draft: #f59e0b;
-  --chart-reviewed: #14b8a6;
-  --chart-grid: #e2e8f0;
+  --chart-total: #245c45;
+  --chart-total-fill: rgba(36, 92, 69, 0.12);
+  --chart-completed: #257a4b;
+  --chart-flagged: #b54141;
+  --chart-working: #356c91;
+  --chart-ready: #66736b;
+  --chart-draft: #a96b16;
+  --chart-reviewed: #287267;
+  --chart-grid: #e1e8e2;
   --tooltip-bg: #ffffff;
-  --tooltip-border: #cbd5e1;
+  --tooltip-border: #cbd4ce;
 
   /* Borders, Radius, Shadows */
-  --border: #dde2eb;
-  --border-subtle: #dde2eb;
-  --border-light: #edf0f5;
-  --border-focus: rgba(37, 99, 235, 0.35);
+  --border: #e1e8e2;
+  --border-subtle: #e1e8e2;
+  --border-light: #eff3f0;
+  --border-focus: rgba(36, 92, 69, 0.32);
 
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -193,9 +204,9 @@ input[type="number"] {
   --radius-xl: 14px;
   --radius-2xl: 18px;
 
-  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.05);
-  --shadow-md: 0 4px 14px -2px rgba(15, 23, 42, 0.07);
-  --shadow-lg: 0 10px 28px -4px rgba(15, 23, 42, 0.10);
+  --shadow-sm: 0 1px 2px rgba(23, 35, 28, 0.035);
+  --shadow-md: 0 4px 12px rgba(23, 35, 28, 0.06);
+  --shadow-lg: 0 10px 28px -4px rgba(23, 35, 28, 0.10);
 
   background-color: var(--bg-primary);
   color: var(--text-primary);
@@ -203,7 +214,7 @@ input[type="number"] {
   line-height: 1.5;
 }
 
-/* Dark Theme — Jarivis Matte Slate Enterprise Dark Palette (WCAG 2.2 AA verified) */
+/* Dark Theme — Matte Slate Enterprise Dark Palette (WCAG 2.2 AA verified) */
 html.dark,
 [data-theme="dark"] {
   color-scheme: dark;
@@ -220,17 +231,16 @@ html.dark,
   --text-muted: #6b7280;
   --text-inverse: #0f1115;
 
-  --accent: #3b82f6;
-  --accent-hover: #2563eb;
-  --accent-glow: rgba(59, 130, 246, 0.16);
-  --accent-muted: rgba(59, 130, 246, 0.12);
-  --accent-text: #60a5fa;
+  --accent: #10b981;
+  --accent-hover: #059669;
+  --accent-glow: rgba(16, 185, 129, 0.16);
+  --accent-muted: rgba(16, 185, 129, 0.12);
+  --accent-text: #34d399;
 
   --accent-blue: #3b82f6;
   --accent-blue-hover: #2563eb;
   --accent-blue-soft: rgba(59, 130, 246, 0.16);
 
-  /* Jarivis "PERLU PERHATIAN!" Deep Crimson Alert Card */
   --alert-surface-bg: #4c1d24;
   --alert-surface-border: #7f1d1d;
   --alert-surface-text: #ffffff;
@@ -271,8 +281,8 @@ html.dark,
   --danger: #ef4444;
   --info: #3b82f6;
 
-  --chart-total: #3b82f6;
-  --chart-total-fill: rgba(59, 130, 246, 0.15);
+  --chart-total: #10b981;
+  --chart-total-fill: rgba(16, 185, 129, 0.15);
   --chart-completed: #10b981;
   --chart-flagged: #ef4444;
   --chart-working: #60a5fa;
@@ -286,7 +296,7 @@ html.dark,
   --border: #282d37;
   --border-subtle: #282d37;
   --border-light: #222731;
-  --border-focus: rgba(59, 130, 246, 0.45);
+  --border-focus: rgba(16, 185, 129, 0.45);
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.35);
   --shadow-md: 0 4px 14px -2px rgba(0, 0, 0, 0.45);
@@ -332,7 +342,7 @@ html.dark,
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
   }
   .clean-input:focus {
-    border-color: var(--accent-blue);
+    border-color: var(--accent);
     box-shadow: 0 0 0 3px var(--accent-glow);
   }
 
@@ -349,6 +359,126 @@ html.dark,
   .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
+}
+
+/* ============================================================================
+   RedesignFieldworkGuciMasLite Reference Component Classes
+   ============================================================================ */
+.brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: #ffffff;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2.5px;
+  padding: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  flex: none;
+}
+.brand-mark span {
+  display: block;
+  width: 5px;
+  background: var(--green, #245c45);
+  border-radius: 5px 5px 1px 1px;
+}
+.brand-mark span:nth-child(1) { height: 10px; }
+.brand-mark span:nth-child(2) { height: 17px; }
+.brand-mark span:nth-child(3) { height: 13px; }
+
+.brand-mark.emerald-bg {
+  background: var(--green, #245c45);
+}
+.brand-mark.emerald-bg span {
+  background: #ffffff;
+}
+
+.lite-connection-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 13px;
+  border-radius: 12px;
+  background: #e8f4ec;
+  color: #257a4b;
+  border: 1px solid #c9e4d2;
+  font-size: 11px;
+}
+.lite-connection-banner.pending,
+.lite-connection-banner.offline {
+  background: #fff4df;
+  color: #895b13;
+  border-color: #edd5a5;
+}
+
+.lite-work-checklist {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 4px 14px;
+}
+.lite-work-checklist > div,
+.lite-work-checklist > button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  text-align: left;
+  padding: 8px 0;
+}
+.lite-work-checklist > :last-child {
+  border-bottom: 0;
+}
+.lite-step-circle {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #edf1ee;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+.lite-step-circle.done {
+  background: #e8f4ec;
+  color: #257a4b;
+}
+.lite-step-circle.current {
+  background: var(--green, #245c45);
+  color: #ffffff;
+}
+
+.lite-filter-chips {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+.lite-filter-chips button {
+  border: 1px solid var(--border);
+  background: #ffffff;
+  border-radius: 999px;
+  min-height: 32px;
+  padding: 0 13px;
+  font-size: 11.5px;
+  white-space: nowrap;
+  color: var(--secondary);
+  font-weight: 500;
+  cursor: pointer;
+}
+.lite-filter-chips button.active {
+  border-color: #b8ccbe;
+  background: var(--green-soft, #e8f1eb);
+  color: var(--green, #245c45);
+  font-weight: 700;
 }
 
 /* Harmonize common legacy utility classes in dark mode so existing modules stay readable */

@@ -21,6 +21,7 @@ import { TabContainer } from '@/shared/ui/TabContainer';
 import {
   Plus, Camera, Clock, MapPin, Briefcase, History, User as UserIcon,
   Home, Check, Lock, Eye, LogOut, AlertCircle, ImagePlus, MoreVertical, Users, ArrowLeft,
+  Wifi, CloudOff, RefreshCw, CalendarDays, ClipboardCheck, CheckCircle2, ChevronRight, ShieldCheck,
 } from 'lucide-react';
 
 import { CustomerReviewFormModal } from './CustomerReviewFormModal';
@@ -55,6 +56,8 @@ export const ExecutorHome: React.FC = () => {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<'home' | 'jobs' | 'history' | 'profile'>('home');
   const [searchQuery, setSearchQuery] = useState('');
+  const [projectFilterChip, setProjectFilterChip] = useState<'ALL' | 'READY' | 'WORKING' | 'WARRANTY'>('ALL');
+  const [historyFilterChip, setHistoryFilterChip] = useState<'ALL' | 'COMPLETED' | 'FLAGGED'>('ALL');
   const [reports, setReports] = useState<WorkReport[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -85,7 +88,7 @@ export const ExecutorHome: React.FC = () => {
   const [quickManualName, setQuickManualName] = useState('');
   const [showTeamPicker, setShowTeamPicker] = useState(false);
   const [selectedScheduleIdx, setSelectedScheduleIdx] = useState(0);
-  // State untuk Click-for-Details pada tab Proyek dan Riwayat (Gaya Figma Image 2)
+  // State untuk Click-for-Details pada tab Proyek dan Riwayat (Gaya Figma Image 2 & RedesignFieldworkGuciMasLite)
   const [selectedProjectDetailId, setSelectedProjectDetailId] = useState<string | null>(null);
   const [selectedHistoryDetailId, setSelectedHistoryDetailId] = useState<string | null>(null);
   const [showGpsPrompt, setShowGpsPrompt] = useState(false);
@@ -257,14 +260,27 @@ export const ExecutorHome: React.FC = () => {
     ? activeQueueJobs
     : completedJobs.slice(0, 2);
 
-  const filteredProjects = projects.filter(p => 
-    searchQuery === '' || 
-    p.projectName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (p.clientName && p.clientName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    p.address.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredProjects = projects.filter(p => {
+    const matchSearch =
+      searchQuery === '' || 
+      p.projectName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      (p.clientName && p.clientName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      p.address.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchSearch) return false;
+    const rep = reports.find(r => r.projectId === p.id);
+    if (projectFilterChip === 'READY') return !rep || rep.status === 'READY' || rep.status === 'DRAFT';
+    if (projectFilterChip === 'WORKING') return rep?.status === 'WORKING';
+    if (projectFilterChip === 'WARRANTY') return p.warrantyMonths > 0;
+    return true;
+  });
 
-  const selectedProjectObj = filteredProjects.find(p => p.id === selectedProjectDetailId) || null;
+  const filteredHistoryJobs = completedJobs.filter(rep => {
+    if (historyFilterChip === 'COMPLETED') return rep.status === 'COMPLETED' || rep.status === 'REVIEWED';
+    if (historyFilterChip === 'FLAGGED') return rep.status === 'FLAGGED';
+    return true;
+  });
+
+  const selectedProjectObj = projects.find(p => p.id === selectedProjectDetailId) || null;
   const selectedHistoryObj = completedJobs.find(r => r.id === selectedHistoryDetailId) || null;
 
   const handleCreateProjectSubmit = async (data: CreateProjectInput) => {
@@ -504,7 +520,7 @@ export const ExecutorHome: React.FC = () => {
           )}
 
           {/* ================================================================= */}
-          {/* TAB 1: HOME (DESAIN MINIMALIS FIGMA: SAPAAN + JADWAL + DETAIL)    */}
+          {/* TAB 1: HOME (DESAIN MINIMALIS FIGMA + LITE 6-STEP WORK CHECKLIST) */}
           {/* ================================================================= */}
           {activeTab === 'home' && (
             <div className="max-w-xl w-full mx-auto flex-1 flex flex-col">
@@ -614,6 +630,25 @@ export const ExecutorHome: React.FC = () => {
                   })}
                 </div>
 
+                {/* Banner Status Sinkronisasi (Adaptasi RedesignFieldworkGuciMasLite ConnectionBanner) */}
+                {pendingCount > 0 && (
+                  <div className="lite-connection-banner pending">
+                    <CloudOff size={16} className="shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <strong className="block text-xs">Menunggu sinkronisasi ({pendingCount})</strong>
+                      <span>Data aman tersimpan di perangkat dan siap dikirim saat online.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={attemptSync}
+                      disabled={isSyncing}
+                      className="px-2.5 py-1 rounded-lg bg-amber-800 text-white text-[11px] font-semibold shrink-0 cursor-pointer"
+                    >
+                      {isSyncing ? 'Sinkron...' : 'Sinkronkan'}
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between">
                   <h2 className="text-lg sm:text-xl font-medium text-slate-800">Detail Hari ini</h2>
                   {featuredJob && (
@@ -689,8 +724,9 @@ export const ExecutorHome: React.FC = () => {
                       </div>
                     )}
 
-                    {/* Kartu Tugas Minimalis Terpisah (Atas: Tanggal + Lokasi/Layanan + Jam; Bawah: Notes :) */}
-                    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-md overflow-hidden">
+                    {/* Kartu Tugas Minimalis Terpisah + Top Green Accent Bar (Gaya Lite active-task) */}
+                    <div className="bg-white rounded-2xl border border-[var(--border)] shadow-md overflow-hidden relative">
+                      <div className="h-1 w-full bg-[var(--accent)]" />
                       <div className="p-4 sm:p-5">
                         <div className="flex items-center justify-between gap-2">
                           {(() => {
@@ -731,7 +767,7 @@ export const ExecutorHome: React.FC = () => {
                       </div>
 
                       {/* Garis Pemisah Horizontal + Daftar Poin Notes : */}
-                      <div className="border-t border-slate-300 px-4 sm:px-5 py-3.5 bg-white">
+                      <div className="border-t border-slate-200 px-4 sm:px-5 py-3.5 bg-white">
                         <p className="text-xs sm:text-sm font-medium text-slate-800 mb-1.5">Notes :</p>
                         <ul className="list-disc pl-5 text-xs sm:text-sm text-slate-700 space-y-1 leading-relaxed">
                           {buildFeaturedNotes(featuredJob).map((line, idx) => (
@@ -756,9 +792,59 @@ export const ExecutorHome: React.FC = () => {
                       </div>
                     </div>
 
+                    {/* Guided 6-Step Work Progress Checklist (Dari RedesignFieldworkGuciMasLite saat WORKING) */}
+                    {featuredJob.status === 'WORKING' && (
+                      <div className="lite-work-checklist shadow-2xs">
+                        <div>
+                          <span className="lite-step-circle done"><Check size={14} /></span>
+                          <div>
+                            <strong className="block text-xs text-slate-900">1. Check-in GPS</strong>
+                            <small className="block text-[11px] text-slate-500">
+                              Selesai • {featuredJob.checkInValid ? 'Dalam area pekerjaan' : 'Tercatat'}
+                            </small>
+                          </div>
+                          <span className="text-[10.5px] font-semibold text-emerald-700">✓ Valid</span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveCameraAction({ type: 'PROGRESS', report: featuredJob, photoTag: 'BEFORE' })}
+                          className="cursor-pointer"
+                        >
+                          <span className={`lite-step-circle ${featuredJob.photos.length >= 2 ? 'done' : 'current'}`}>
+                            {featuredJob.photos.length >= 2 ? <Check size={14} /> : '2'}
+                          </span>
+                          <div>
+                            <strong className="block text-xs text-slate-900">2. Dokumentasi Foto (Kondisi Awal &amp; Hasil)</strong>
+                            <small className="block text-[11px] text-slate-500">
+                              {featuredJob.photos.length} foto tersimpan • Ketuk untuk tambah foto
+                            </small>
+                          </div>
+                          <ChevronRight size={16} className="text-slate-400" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setTreatmentFormReport(featuredJob)}
+                          className="cursor-pointer"
+                        >
+                          <span className={`lite-step-circle ${featuredJob.treatmentRecord ? 'done' : 'current'}`}>
+                            {featuredJob.treatmentRecord ? <Check size={14} /> : '3'}
+                          </span>
+                          <div>
+                            <strong className="block text-xs text-slate-900">3. Form Treatment &amp; Check-out</strong>
+                            <small className="block text-[11px] text-slate-500">
+                              Catat temuan hama (&gt; 0), dosis obat, &amp; tanda tangan PIC
+                            </small>
+                          </div>
+                          <ChevronRight size={16} className="text-slate-400" />
+                        </button>
+                      </div>
+                    )}
+
                     {/* Tombol Aksi Utama Lebar Penuh (Clock In / Isi Laporan & Clock Out) */}
                     {featuredJob.status === 'WORKING' ? (
-                      <div className="pt-2 space-y-2.5">
+                      <div className="pt-1 space-y-2.5">
                         <div className="grid grid-cols-2 gap-2.5">
                           <button
                             type="button"
@@ -817,7 +903,7 @@ export const ExecutorHome: React.FC = () => {
           )}
 
           {/* ================================================================= */}
-          {/* TAB 2: PROYEK (GAYA FIGMA IMAGE 2: COMPACT CARDS + KLIK DETAIL)   */}
+          {/* TAB 2: PROYEK (GAYA FIGMA IMAGE 2 + LITE FILTER CHIPS & DETAIL)   */}
           {/* ================================================================= */}
           {activeTab === 'jobs' && (
             <div className="max-w-xl w-full mx-auto flex-1 flex flex-col">
@@ -857,7 +943,7 @@ export const ExecutorHome: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Jika Kartu Proyek Diklik -> Tampilkan Detail Proyek Minimalis */}
+                {/* Jika Kartu Proyek Diklik -> Tampilkan Detail Proyek Minimalis (Gaya TaskDetail Lite) */}
                 {selectedProjectObj ? (
                   (() => {
                     const report = reports.find(r => r.projectId === selectedProjectObj.id);
@@ -867,6 +953,7 @@ export const ExecutorHome: React.FC = () => {
                     return (
                       <div className="space-y-4 pt-1">
                         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-md overflow-hidden">
+                          <div className="h-1 w-full bg-[var(--accent)]" />
                           <div className="p-4 sm:p-5">
                             <div className="flex items-center justify-between gap-2">
                               <span className={`inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-md border ${meta.badgeClass}`}>
@@ -890,15 +977,42 @@ export const ExecutorHome: React.FC = () => {
                                 {schedWindow}
                               </span>
                             </div>
+
+                            {/* Informasi Pekerjaan Terstruktur (Adaptasi TaskDetail RedesignFieldworkGuciMasLite) */}
+                            <div className="grid grid-cols-1 gap-2.5 mt-4 pt-3.5 border-t border-slate-100 text-xs">
+                              <div className="flex items-start gap-2.5">
+                                <CalendarDays size={16} className="text-[var(--accent)] shrink-0 mt-0.5" />
+                                <div>
+                                  <span className="text-[10.5px] text-slate-500 block">Jadwal &amp; Kontrak</span>
+                                  <strong className="text-slate-900">
+                                    {formatScheduleDateId(dateStr)} · {schedWindow} ({selectedProjectObj.contractType === 'RECURRING' ? 'Berkala' : 'Sekali Layanan'})
+                                  </strong>
+                                </div>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <ClipboardCheck size={16} className="text-[var(--accent)] shrink-0 mt-0.5" />
+                                <div>
+                                  <span className="text-[10.5px] text-slate-500 block">Jenis Layanan</span>
+                                  <strong className="text-slate-900">{meta.label}</strong>
+                                </div>
+                              </div>
+                              <div className="flex items-start gap-2.5">
+                                <MapPin size={16} className="text-[var(--accent)] shrink-0 mt-0.5" />
+                                <div>
+                                  <span className="text-[10.5px] text-slate-500 block">Lokasi &amp; Radius Geofence</span>
+                                  <strong className="text-slate-900">{selectedProjectObj.address}</strong>
+                                  <span className="block text-[11px] text-slate-500 mt-0.5">
+                                    Radius validasi check-in: {selectedProjectObj.radius} meter
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
                           </div>
 
-                          <div className="border-t border-slate-300 px-4 sm:px-5 py-3.5 bg-white space-y-2">
+                          <div className="border-t border-slate-200 px-4 sm:px-5 py-3.5 bg-[#f8faf8] space-y-2">
                             <p className="text-xs sm:text-sm font-medium text-slate-800">Notes :</p>
                             <ul className="list-disc pl-5 text-xs sm:text-sm text-slate-700 space-y-1 leading-relaxed">
                               <li>Lokasi: {selectedProjectObj.address} (Radius GPS {selectedProjectObj.radius}m)</li>
-                              <li>
-                                Tipe Kontrak: {selectedProjectObj.contractType === 'RECURRING' ? 'Kunjungan Berkala' : 'Sekali Layanan'}
-                              </li>
                               {selectedProjectObj.warrantyMonths > 0 && (
                                 <li className="text-emerald-800 font-medium">
                                   Garansi Aktif: {selectedProjectObj.warrantyMonths} bulan
@@ -907,6 +1021,7 @@ export const ExecutorHome: React.FC = () => {
                               {report?.targetFocus && report.targetFocus.length > 0 && (
                                 <li>Fokus Target: {report.targetFocus.join(', ')}</li>
                               )}
+                              {report?.workNotes && <li>{report.workNotes}</li>}
                             </ul>
                           </div>
                         </div>
@@ -949,7 +1064,7 @@ export const ExecutorHome: React.FC = () => {
                     );
                   })()
                 ) : (
-                  /* Daftar Kartu Proyek Ringkas (Gaya Image 2: Tanggal + Subjudul Klien + Jam + Dot Status, Klik untuk Detail) */
+                  /* Daftar Kartu Proyek Ringkas (Gaya Image 2 + Filter Chips Lite) */
                   <>
                     <div className="relative">
                       <input
@@ -961,9 +1076,41 @@ export const ExecutorHome: React.FC = () => {
                       />
                     </div>
 
+                    {/* Filter Chips dari RedesignFieldworkGuciMasLite */}
+                    <div className="lite-filter-chips no-scrollbar">
+                      <button
+                        type="button"
+                        className={projectFilterChip === 'ALL' ? 'active' : ''}
+                        onClick={() => setProjectFilterChip('ALL')}
+                      >
+                        Semua ({projects.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={projectFilterChip === 'READY' ? 'active' : ''}
+                        onClick={() => setProjectFilterChip('READY')}
+                      >
+                        Siap Dikerjakan
+                      </button>
+                      <button
+                        type="button"
+                        className={projectFilterChip === 'WORKING' ? 'active' : ''}
+                        onClick={() => setProjectFilterChip('WORKING')}
+                      >
+                        Berlangsung
+                      </button>
+                      <button
+                        type="button"
+                        className={projectFilterChip === 'WARRANTY' ? 'active' : ''}
+                        onClick={() => setProjectFilterChip('WARRANTY')}
+                      >
+                        Bergaransi
+                      </button>
+                    </div>
+
                     {filteredProjects.length === 0 && (
                       <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
-                        <p className="text-xs text-slate-500">Belum ada proyek yang sesuai pencarian.</p>
+                        <p className="text-xs text-slate-500">Belum ada proyek yang sesuai filter pencarian.</p>
                       </div>
                     )}
 
@@ -1028,7 +1175,7 @@ export const ExecutorHome: React.FC = () => {
           )}
 
           {/* ================================================================= */}
-          {/* TAB 3: RIWAYAT (GAYA FIGMA IMAGE 2: REPORT CARDS + KLIK DETAIL)   */}
+          {/* TAB 3: RIWAYAT (GAYA FIGMA IMAGE 2 + LITE FILTER CHIPS & DETAIL)  */}
           {/* ================================================================= */}
           {activeTab === 'history' && (
             <div className="max-w-xl w-full mx-auto flex-1 flex flex-col">
@@ -1057,7 +1204,7 @@ export const ExecutorHome: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Jika Kartu Riwayat Diklik -> Tampilkan Detail Riwayat Lengkap */}
+                {/* Jika Kartu Riwayat Diklik -> Tampilkan Detail Riwayat Lengkap (Gaya TechReview Lite) */}
                 {selectedHistoryObj ? (
                   (() => {
                     const durationMin = selectedHistoryObj.durationSeconds ? Math.round(selectedHistoryObj.durationSeconds / 60) : 0;
@@ -1071,6 +1218,7 @@ export const ExecutorHome: React.FC = () => {
                     return (
                       <div className="space-y-4 pt-1">
                         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-md overflow-hidden">
+                          <div className="h-1 w-full bg-[var(--accent)]" />
                           <div className="p-4 sm:p-5">
                             <div className="flex items-center justify-between gap-2">
                               <div className="flex items-center gap-1.5">
@@ -1097,9 +1245,26 @@ export const ExecutorHome: React.FC = () => {
                                 {cinTime} - {coutTime}
                               </span>
                             </div>
+
+                            {/* Ringkasan Kelengkapan Bukti (Gaya TechReview RedesignFieldworkGuciMasLite) */}
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-100 text-[11px]">
+                              {[
+                                ['Check-in GPS', selectedHistoryObj.checkInValid ? 'Valid' : 'Tercatat'],
+                                ['Dokumentasi', `${selectedHistoryObj.photos.length} Foto`],
+                                ['Durasi Kerja', `${durationMin} Menit`],
+                              ].map(([k, v]) => (
+                                <div key={k} className="p-2 rounded-lg bg-[#f6f8f6] border border-slate-200/70 flex items-center gap-1.5">
+                                  <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                                  <div className="min-w-0">
+                                    <span className="text-[10px] text-slate-500 block leading-none">{k}</span>
+                                    <strong className="text-slate-900 truncate block mt-0.5">{v}</strong>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           </div>
 
-                          <div className="border-t border-slate-300 px-4 sm:px-5 py-3.5 bg-white space-y-2.5">
+                          <div className="border-t border-slate-200 px-4 sm:px-5 py-3.5 bg-white space-y-2.5">
                             <p className="text-xs sm:text-sm font-medium text-slate-800">Notes :</p>
                             <ul className="list-disc pl-5 text-xs sm:text-sm text-slate-700 space-y-1 leading-relaxed">
                               <li>Lokasi: {selectedHistoryObj.projectAddress}</li>
@@ -1148,15 +1313,39 @@ export const ExecutorHome: React.FC = () => {
                     );
                   })()
                 ) : (
-                  /* Daftar Kartu Riwayat Ringkas (Persis Referensi Image 2: Tanggal + Jam + Dot Status, Klik untuk Detail) */
+                  /* Daftar Kartu Riwayat Ringkas (Persis Referensi Image 2 + Filter Chips Lite) */
                   <>
-                    {completedJobs.length === 0 ? (
+                    <div className="lite-filter-chips no-scrollbar">
+                      <button
+                        type="button"
+                        className={historyFilterChip === 'ALL' ? 'active' : ''}
+                        onClick={() => setHistoryFilterChip('ALL')}
+                      >
+                        Semua ({completedJobs.length})
+                      </button>
+                      <button
+                        type="button"
+                        className={historyFilterChip === 'COMPLETED' ? 'active' : ''}
+                        onClick={() => setHistoryFilterChip('COMPLETED')}
+                      >
+                        Selesai
+                      </button>
+                      <button
+                        type="button"
+                        className={historyFilterChip === 'FLAGGED' ? 'active' : ''}
+                        onClick={() => setHistoryFilterChip('FLAGGED')}
+                      >
+                        Perlu Tinjauan
+                      </button>
+                    </div>
+
+                    {filteredHistoryJobs.length === 0 ? (
                       <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
-                        <p className="text-xs text-slate-500">Belum ada riwayat pekerjaan selesai.</p>
+                        <p className="text-xs text-slate-500">Belum ada riwayat pekerjaan selesai pada kategori ini.</p>
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {completedJobs.map(rep => {
+                        {filteredHistoryJobs.map(rep => {
                           const meta = getServiceTypeMeta(rep.serviceType);
                           const cinTime = rep.checkInAt
                             ? new Date(rep.checkInAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(':', '.')
@@ -1210,7 +1399,7 @@ export const ExecutorHome: React.FC = () => {
           )}
 
           {/* ================================================================= */}
-          {/* TAB 4: PROFIL TEKNISI                                             */}
+          {/* TAB 4: PROFIL TEKNISI (GAYA TECHPROFILE LITE)                     */}
           {/* ================================================================= */}
           {activeTab === 'profile' && (
             <div className="max-w-xl w-full mx-auto flex-1 flex flex-col">
@@ -1227,38 +1416,74 @@ export const ExecutorHome: React.FC = () => {
                   </button>
                 </div>
 
-                <div className="bg-white rounded-2xl border border-slate-200 p-6 space-y-4 shadow-xs">
-                  <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-full bg-[var(--accent)] text-white flex items-center justify-center font-bold text-xl">
-                      {initials}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-base text-[var(--text-primary)]">{user.name}</h3>
-                      <p className="text-xs text-[var(--text-muted)]">{user.email}</p>
-                      <span className="inline-block mt-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                        Teknisi Lapangan
-                      </span>
-                    </div>
+                {/* Centered Avatar & Role (Gaya TechProfile RedesignFieldworkGuciMasLite) */}
+                <div className="text-center py-3">
+                  <div className="w-[70px] h-[70px] rounded-full bg-[#dbece1] text-[var(--accent)] flex items-center justify-center font-bold text-xl mx-auto shadow-2xs">
+                    {initials}
                   </div>
-                  <div className="pt-4 border-t border-[var(--border-subtle)] text-xs space-y-2">
-                    <div className="flex justify-between py-1.5 border-b border-[var(--border-subtle)]">
-                      <span className="text-[var(--text-muted)]">NIP:</span>
-                      <span className="font-semibold text-[var(--text-primary)]">{user.nip || '-'}</span>
-                    </div>
-                    <div className="flex justify-between py-1.5 border-b border-[var(--border-subtle)]">
-                      <span className="text-[var(--text-muted)]">Total Pekerjaan:</span>
-                      <span className="font-bold text-[var(--text-primary)]">{reports.length} Penugasan</span>
-                    </div>
+                  <h3 className="font-bold text-xl text-slate-900 mt-3 mb-0.5">{user.name}</h3>
+                  <p className="text-xs text-slate-500">Teknisi Lapangan · PT Guci Emas Pratama</p>
+                </div>
+
+                {/* Connection Status Banner */}
+                <div className={`lite-connection-banner ${pendingCount > 0 ? 'pending' : ''}`}>
+                  {pendingCount > 0 ? <CloudOff size={16} /> : <Wifi size={16} />}
+                  <div className="flex-1">
+                    <strong className="block text-xs">
+                      {pendingCount > 0 ? `Menunggu sinkronisasi (${pendingCount})` : 'Online'}
+                    </strong>
+                    <span>
+                      {pendingCount > 0
+                        ? 'Data aman tersimpan di perangkat.'
+                        : 'Data akan dikirim langsung ke server.'}
+                    </span>
                   </div>
-                  
-                  <div className="pt-2 space-y-2.5">
-                    <button onClick={() => setShowChangePassword(true)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold transition-colors">
-                      <Lock size={15} /> Ubah Kata Sandi
-                    </button>
-                    <button onClick={logout} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[var(--bg-tertiary)] hover:bg-rose-50 hover:text-rose-700 text-[var(--text-secondary)] text-xs sm:text-sm font-semibold transition-colors">
-                      <LogOut size={15} /> Keluar dari Akun
-                    </button>
+                </div>
+
+                {/* Menu List Bergaya RedesignFieldworkGuciMasLite */}
+                <div className="bg-white rounded-2xl border border-[var(--border)] overflow-hidden shadow-2xs divide-y divide-[var(--border)]">
+                  <div className="p-4 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-3">
+                      <UserIcon size={18} className="text-slate-500" />
+                      <div>
+                        <strong className="block text-slate-900">Informasi Akun &amp; NIP</strong>
+                        <small className="text-slate-500">{user.email} · NIP: {user.nip || '-'}</small>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10.5px]">
+                      {reports.length} Tugas
+                    </span>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowChangePassword(true)}
+                    className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Lock size={18} className="text-slate-500" />
+                      <div>
+                        <strong className="block text-xs text-slate-900">Ubah Kata Sandi</strong>
+                        <small className="text-[11px] text-slate-500">Perbarui kata sandi keamanan akun Anda</small>
+                      </div>
+                    </div>
+                    <ChevronRight size={17} className="text-slate-400" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={logout}
+                    className="w-full p-4 flex items-center justify-between text-left hover:bg-rose-50/60 text-rose-700 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <LogOut size={18} className="text-rose-600" />
+                      <div>
+                        <strong className="block text-xs text-rose-700">Keluar</strong>
+                        <small className="text-[11px] text-rose-500">Akhiri sesi pada perangkat ini</small>
+                      </div>
+                    </div>
+                    <ChevronRight size={17} className="text-rose-400" />
+                  </button>
                 </div>
               </div>
             </div>
