@@ -255,11 +255,9 @@ export function AppLayout({
                                 aria-label={isSidebarOpen ? 'Tutup navigasi sidebar' : 'Buka navigasi sidebar'}
                                 aria-expanded={isSidebarOpen}
                                 title="Buka / Tutup Detail Menu Sidebar"
-                                className="brand-mark emerald-bg hover:opacity-95 transition-opacity cursor-pointer shrink-0"
+                                className="w-9 h-9 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white flex items-center justify-center font-black text-xs shrink-0 shadow-2xs tracking-tighter cursor-pointer"
                             >
-                                <span />
-                                <span />
-                                <span />
+                                FW
                             </button>
                             <div
                                 className={cn(

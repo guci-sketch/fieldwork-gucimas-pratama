@@ -73,7 +73,6 @@ interface DerivedCustomer {
     services: ServiceRecord[]; totalQuotations: number; totalDeal: number;
     lastServiceDate: Date | null; jasaDigunakan: string[];
     warranties: WarrantyInfo[]; activeWarranty: WarrantyInfo | null;
-    needsAdminDetails?: boolean;
     checklists: ControlChecklist[];
 }
 
@@ -580,11 +579,6 @@ function CustomerCard({ customer, expanded, onToggle, onAddChecklist, onEditProf
                     <div className="flex items-center gap-2 flex-wrap mb-0.5">
                         <p className="text-sm font-bold text-slate-900">{customer.name}</p>
                         <WarrantyBadge w={customer.activeWarranty ?? customer.warranties[0] ?? null} />
-                        {(customer.needsAdminDetails || (!customer.up && !customer.wa)) && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                                Input Teknisi • Lengkapi Detail Admin
-                            </span>
-                        )}
                     </div>
                     {customer.address && (
                         <p className="text-xs text-slate-400 truncate flex items-center gap-1 mb-0.5">
@@ -1189,7 +1183,6 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
         setHubTab(initialSubTab);
     }, [initialSubTab]);
     const [quotations, setQuotations] = useState<Quotation[]>([]);
-    const [fieldProjects, setFieldProjects] = useState<any[]>([]);
     const [checklists, setChecklists] = useState<(ControlChecklist & { customerId: string })[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchQ, setSearchQ] = useState("");
@@ -1282,23 +1275,14 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
         if (!user) return;
         setLoading(true);
         try {
-            // Load quotations + field projects (agar pelanggan baru yang diinput teknisi di lapangan otomatis muncul untuk dilengkapi Admin)
-            const [quotesData, projRes] = await Promise.all([
-                getQuotations({
-                    companyId: user.companyId,
-                    byUid: canSeeAll ? undefined : user.uid,
-                }),
-                supabase
-                    .from("projects")
-                    .select("id, client_name, project_name, address, latitude, longitude, service_type, work_date, created_at")
-                    .eq("company_id", user.companyId)
-                    .order("created_at", { ascending: false })
-                    .limit(300),
-            ]);
+            // Load quotations — this is the primary data source
+            const quotesData = await getQuotations({
+                companyId: user.companyId,
+                byUid: canSeeAll ? undefined : user.uid,
+            });
             setQuotations(quotesData);
-            setFieldProjects(projRes.data || []);
         } catch (err) {
-            console.error("[CustomersPage] load quotations/projects error:", err);
+            console.error("[CustomersPage] load quotations error:", err);
         }
 
         // Load checklists separately — don't block quotations if this fails
@@ -1394,55 +1378,13 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
             if (c.wilayah === "Tidak Diketahui" && c.address) c.wilayah = extractWilayah(c.address);
         });
 
-        fieldProjects.forEach((p: any) => {
-            const cName = String(p.client_name || "").trim();
-            if (!cName) return;
-            const key = cName.toLowerCase().replace(/\s+/g, "_");
-            const svcLabel = p.service_type === "TERMITE_CONTROL" ? "Anti Rayap" : "Pest Control";
-            if (!map.has(key)) {
-                const addr = String(p.address || "").trim();
-                map.set(key, {
-                    id: key,
-                    name: cName,
-                    address: addr,
-                    addressFull: addr ? [addr] : [],
-                    up: undefined,
-                    wa: "",
-                    wilayah: extractWilayah(addr),
-                    latitude: typeof p.latitude === "number" && p.latitude !== 0 ? p.latitude : undefined,
-                    longitude: typeof p.longitude === "number" && p.longitude !== 0 ? p.longitude : undefined,
-                    services: [{
-                        noSurat: `FIELD-${String(p.id).slice(0, 6).toUpperCase()}`,
-                        kategori: p.service_type === "TERMITE_CONTROL" ? "AR" : "PCO",
-                        jenisLayanan: svcLabel,
-                        tanggal: p.created_at ? new Date(p.created_at) : new Date(),
-                        status: "deal",
-                        marketingNama: "Input Lapangan Teknisi",
-                    }],
-                    totalQuotations: 0,
-                    totalDeal: 1,
-                    lastServiceDate: p.created_at ? new Date(p.created_at) : new Date(),
-                    jasaDigunakan: [svcLabel],
-                    warranties: [],
-                    activeWarranty: null,
-                    checklists: [],
-                    needsAdminDetails: true,
-                });
-            } else {
-                const existing = map.get(key)!;
-                if (!existing.up && !existing.wa) {
-                    existing.needsAdminDetails = true;
-                }
-            }
-        });
-
         checklists.forEach(cl => {
             const c = map.get(cl.customerId);
             if (c) c.checklists.push(cl);
         });
 
         return map;
-    }, [quotations, fieldProjects, checklists]);
+    }, [quotations, checklists]);
 
     const missingPinCustomers = useMemo(
         () => Array.from(customerMap.values()).filter(c => !c.latitude || !c.longitude),
