@@ -290,6 +290,112 @@ run_check(
     "CreateProjectModal.tsx dan serviceMeta.ts menampilkan 2 layanan utama (Pest Control & Anti Rayap) dengan sub-tipe tugas Jarivis."
 )
 
+
+# KEI-18: Fokus Hama Lainnya Langsung Masuk ke Checkbox & Pemilik/Pelanggan Terhubung Database + Input Baru Teknisi
+create_proj_modal_latest = (repo / "src/widgets/executor/CreateProjectModal.tsx").read_text(encoding="utf-8")
+cust_page_latest = (repo / "src/pages/customers/CustomersPage.tsx").read_text(encoding="utf-8")
+run_check(
+    "KEI-18",
+    "Phase 5: Pilihan Hama Lainnya Langsung Menjadi Checkbox Aktif & Autocomplete Database Pelanggan (+ Input Baru Teknisi)",
+    "Teknisi/Admin membuka CreateProjectModal.tsx lalu memilih hama dari dropdown Pilih hama lainnya dan memilih/mengetik Pemilik/Pelanggan",
+    "1) Pilih item dari dropdown Pilih hama lainnya -> langsung tampil sebagai checkbox tercentang di grid. 2) Pilih pelanggan dari database atau ketik pelanggan baru -> tersinkron ke Master Pelanggan untuk dilengkapi Admin.",
+    "Item dropdown hama lainnya langsung ter-render dan ter-checklist di visibleFocusCheckboxes, serta pelanggan baru dari lapangan muncul di CustomersPage dengan penanda Lengkapi Detail Admin",
+    "CRITICAL", "integration", "functional",
+    all(k in create_proj_modal_latest for k in ["visibleFocusCheckboxes", "handleAddFocusToCheckboxes", "extraFocusOptions", "dbCustomers", "handleSelectDatabaseCustomer", "needsAdminDetails"])
+    and "Input Teknisi • Lengkapi Detail Admin" in cust_page_latest,
+    "visibleFocusCheckboxes & handleAddFocusToCheckboxes langsung menambah checkbox baru yang tercentang; dbCustomers & needsAdminDetails menghubungkan input pelanggan teknisi ke Master Pelanggan Admin."
+)
+
+
+# KEI-19: Minimalist Technician UI/UX (Figma Reference: Greeting Header + Jadwal Carousel + Detail Hari ini + Notes + Clock In + Floating Bottom Pill)
+exec_home_latest = (repo / "src/widgets/executor/ExecutorHome.tsx").read_text(encoding="utf-8")
+field_dash_latest = (repo / "src/pages/field/FieldDashboardPage.tsx").read_text(encoding="utf-8")
+run_check(
+    "KEI-19",
+    "Phase 6: Adaptasi UI/UX Minimalis Teknisi (Gaya Figma + Floating Bottom Pill Bawaan)",
+    "Teknisi membuka halaman utama (ExecutorHome.tsx / FieldDashboardPage.tsx)",
+    "Periksa Hero Sapaan (Selamat Pagi), Carousel 2 Kartu Jadwal dengan ikon 3 titik (MoreVertical), indikator titik (5 dots), kartu terpisah Detail Hari ini dengan daftar Notes :, tombol penuh Clock In, serta Floating Bottom Pill bawaan (showFloatingBottom={!isAnyModalOpen})",
+    "Tampilan teknisi bersih & minimalis sesuai gambar referensi Figma dengan tetap mempertahankan Floating Bottom Pill bawaan yang otomatis bersembunyi saat kamera/modal terbuka",
+    "CRITICAL", "system", "usability",
+    all(k in exec_home_latest for k in ["Selamat Pagi", "Jadwal", "Detail Hari ini", "Notes :", "Clock In", "MoreVertical", "showFloatingBottom={!isAnyModalOpen}"])
+    and all(k in field_dash_latest for k in ["Selamat Pagi", "Jadwal", "Detail Hari ini", "Notes :", "Clock In"]),
+    "ExecutorHome.tsx dan FieldDashboardPage.tsx mengimplementasikan UI minimalis gaya Figma (Sapaan, 2 kartu Jadwal, 5 dots, Detail Hari ini, Notes :, Clock In) + Floating Bottom Pill bawaan."
+)
+
+
+# KEI-20: Penghapusan Top Tab Bar Ganda (`hideTopBar={true}`) & Kartu Ringkas Proyek/Riwayat Klik-untuk-Detail (Gaya Image 2)
+tab_container_latest = (repo / "src/shared/ui/TabContainer.tsx").read_text(encoding="utf-8")
+exec_home_v2 = (repo / "src/widgets/executor/ExecutorHome.tsx").read_text(encoding="utf-8")
+run_check(
+    "KEI-20",
+    "Phase 6: Penghapusan Top Tab Bar Ganda & Kartu Ringkas Proyek/Riwayat dengan Click-for-Details",
+    "Teknisi membuka ExecutorHome.tsx dan berpindah ke tab Proyek maupun Riwayat melalui Floating Bottom Pill",
+    "1) Pastikan Top Tab Bar horizontal di bagian atas tidak tampil (hideTopBar={true}). 2) Pastikan daftar Proyek dan Riwayat menampilkan kartu ringkas (Tanggal, Klien, Jam, Dot Status) dan saat diklik membuka Detail Proyek / Detail Riwayat.",
+    "Tidak ada navigasi ganda di bagian atas, serta daftar Proyek dan Riwayat tampil bersih seperti referensi Image 2 dan dapat diklik untuk membuka detail lengkap beserta tombol kembali (ArrowLeft)",
+    "CRITICAL", "system", "usability",
+    "hideTopBar" in tab_container_latest
+    and all(k in exec_home_v2 for k in ["hideTopBar={true}", "floatingOnAllScreens={true}", "selectedProjectDetailId", "selectedHistoryDetailId", "Detail Proyek", "Detail Riwayat", "Completed"]),
+    "TabContainer.tsx mendukung hideTopBar={true} & floatingOnAllScreens={true}; ExecutorHome.tsx menampilkan kartu ringkas Proyek & Riwayat dengan interaksi Click-for-Details."
+)
+
+
+# KEI-21: Integrasi Desain & Komponen Referensi RedesignFieldworkGuciMasLite-main ke Guci-App-main
+css_latest = (repo / "src/app/index.css").read_text(encoding="utf-8")
+login_latest = (repo / "src/widgets/auth/LoginForm.tsx").read_text(encoding="utf-8")
+app_layout_latest = (repo / "src/widgets/common/AppLayout.tsx").read_text(encoding="utf-8")
+exec_home_v3 = (repo / "src/widgets/executor/ExecutorHome.tsx").read_text(encoding="utf-8")
+run_check(
+    "KEI-21",
+    "Phase 7: Integrasi UI/UX RedesignFieldworkGuciMasLite (Split Login, Brand Mark, Guided Work Checklist, Filter Chips, & TechProfile)",
+    "Pengguna membuka halaman Login, Sidebar Admin, maupun Workspace Teknisi (ExecutorHome.tsx)",
+    "Periksa token warna #245c45, 3-bar brand-mark, Split Login 2 kolom dengan Role Switcher, Guided Work Checklist (lite-work-checklist), Filter Chips (lite-filter-chips), ConnectionBanner, serta struktur Detail Tugas & Profil Teknisi",
+    "Seluruh elemen terbaik dari RedesignFieldworkGuciMasLite-main terintegrasi mulus ke Guci-App-main tanpa menghilangkan fitur bisnis eksisting",
+    "CRITICAL", "system", "usability",
+    all(k in css_latest for k in ["--green: #245c45", ".brand-mark", ".lite-work-checklist", ".lite-filter-chips", ".lite-connection-banner"])
+    and all(k in login_latest for k in ["Pekerjaan lapangan yang lebih jelas, dari penugasan hingga laporan.", "brand-mark", "handleSwitchRoleMode"])
+    and "brand-mark" in app_layout_latest
+    and all(k in exec_home_v3 for k in ["lite-work-checklist", "lite-filter-chips", "lite-connection-banner", "projectFilterChip", "historyFilterChip"]),
+    "index.css, LoginForm.tsx, AppLayout.tsx, dan ExecutorHome.tsx mengintegrasikan sistem desain RedesignFieldworkGuciMasLite-main secara utuh."
+)
+
+
+# KEI-22: Implementasi Penuh Layar Teknisi Mengikuti Referensi RedesignFieldworkGuciMasLite + Floating Bottom Pill
+exec_home_v4 = (repo / "src/widgets/executor/ExecutorHome.tsx").read_text(encoding="utf-8")
+run_check(
+    "KEI-22",
+    "Phase 8: Implementasi Penuh UI/UX Teknisi Referensi RedesignFieldworkGuciMasLite + Floating Bottom Pill",
+    "Teknisi masuk ke aplikasi dan menjalankan alur Beranda -> Detail Tugas -> Check-in GPS -> Pekerjaan Berlangsung -> Dokumentasi Foto -> Form Treatment -> Check-out -> Review -> Status Pengiriman",
+    "Periksa keberadaan komponen referensi Lite (tech-home-head, active-task, next-task, mobile-task-list, detail-hero, work-checklist, capture-card, sync-hero, tech-profile) dan pastikan navigasi bawah menggunakan Floating Bottom Pill (TabContainer hideTopBar={true} floatingOnAllScreens={true}) tanpa bar .tech-nav statis",
+    "Seluruh halaman teknisi mengikuti desain RedesignFieldworkGuciMasLite dengan navigasi bawah berupa Floating Bottom Pill yang otomatis sembunyi saat masuk ke sub-halaman workflow",
+    "CRITICAL", "system", "usability",
+    all(k in exec_home_v4 for k in [
+        "tech-home-head", "active-task", "next-task", "mobile-task-list",
+        "detail-hero", "work-checklist", "capture-card", "sync-hero", "tech-profile",
+        "hideTopBar={true}", "floatingOnAllScreens={true}", "showFloatingBottom={!isAnyModalOpen}"
+    ]) and '<nav className="tech-nav">' not in exec_home_v4,
+    "ExecutorHome.tsx mengadopsi penuh seluruh halaman teknisi RedesignFieldworkGuciMasLite dan mengganti .tech-nav bawah menjadi Floating Bottom Pill."
+)
+
+
+# KEI-23: Full Merge Guci-App-main + RedesignFieldworkGuciMasLite-main (AdminShell #173f30 Sidebar, Topbar, 5 KPI Grid, Priority Panel, Timeline, & Technician Flow)
+app_layout_v5 = (repo / "src/widgets/common/AppLayout.tsx").read_text(encoding="utf-8")
+header_v5 = (repo / "src/widgets/common/Header.tsx").read_text(encoding="utf-8")
+bento_v5 = (repo / "src/widgets/admin/OperationsAnalyticsBento.tsx").read_text(encoding="utf-8")
+css_v5 = (repo / "src/app/index.css").read_text(encoding="utf-8")
+run_check(
+    "KEI-23",
+    "Phase 9: Full Merge Guci-App-main & RedesignFieldworkGuciMasLite-main (AdminShell + TechnicianShell)",
+    "Admin maupun Teknisi membuka aplikasi hasil merge kedua repositori",
+    "Periksa Sidebar #173f30 dengan brand-mark putih, Topbar 64px dengan avatar green, 5 KPI Grid (.kpi-grid) + Panel Perlu Tindakan & Aktivitas Terbaru (.dashboard-grid) di Dashboard Admin, serta alur Teknisi Lite + Floating Bottom Pill",
+    "Kedua sistem tergabung utuh dengan menjadikan RedesignFieldworkGuciMasLite-main sebagai referensi utama UI/UX di seluruh role",
+    "CRITICAL", "system", "usability",
+    "#173f30" in app_layout_v5
+    and "avatar green" in header_v5
+    and all(k in bento_v5 for k in ["kpi-grid", "priority-panel", "Perlu tindakan", "Aktivitas terbaru"])
+    and all(k in css_v5 for k in [".kpi-grid", ".dashboard-grid", ".action-list", ".timeline"]),
+    "AppLayout.tsx (#173f30 sidebar), Header.tsx (Lite topbar), OperationsAnalyticsBento.tsx (5 KPI Grid + Perlu tindakan + Aktivitas terbaru), LoginForm.tsx, dan ExecutorHome.tsx terintegrasi penuh."
+)
+
 # Write CSV
 csv_out.parent.mkdir(parents=True, exist_ok=True)
 with csv_out.open("w", encoding="utf-8", newline="") as f:
