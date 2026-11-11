@@ -19,7 +19,6 @@ import {
   JarivisExecutionTrendCard,
   JarivisGreetingBanner,
   JarivisIdleAlertBanner,
-  JarivisLeadsFunnelCard,
   JarivisPeriodPills,
   JarivisRadialMetricCard,
   JarivisServiceCategoryCard,
@@ -375,10 +374,10 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
       },
       {
         id: 'new_customers',
-        title: 'PELANGGAN BARU',
-        value: computed.business.newCustomersOrQuotationsCount,
+        title: 'LOKASI PROYEK TERDAFTAR',
+        value: projects.length,
         comparisonText: `0% ${suffix}`,
-        onClick: onOpenQuotationsTab || quotationSummary?.onOpenQuotations,
+        onClick: onOpenCustomersTab,
       },
       {
         id: 'inactive_customers',
@@ -403,11 +402,10 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
   }, [
     computed.business,
     computed.performanceTeam.comparisonSuffix,
+    projects.length,
     onOpenCustomersTab,
     onOpenProjectsTab,
     onOpenReportsTab,
-    onOpenQuotationsTab,
-    quotationSummary?.onOpenQuotations,
   ]);
 
   if (isLoading && !summary) {
@@ -557,7 +555,7 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
           {/* Ringkasan Eksekutif 5 Kartu KPI & Panel Prioritas Bergaya RedesignFieldworkGuciMasLite */}
           <div className="kpi-grid">
             {[
-              { label: 'Draft', code: 'DRAFT', count: reports.filter(r => r.status === 'DRAFT').length + (quotationSummary?.draftCount || 0), sub: 'Draft SPK & Penawaran', action: () => onOpenProjectsTab?.() },
+              { label: 'Draft', code: 'DRAFT', count: reports.filter(r => r.status === 'DRAFT').length, sub: 'Draft laporan kerja', action: () => onOpenReportsTab?.() },
               { label: 'Siap Dikerjakan', code: 'READY', count: reports.filter(r => r.status === 'READY').length, sub: 'Menunggu check-in teknisi', action: () => onOpenProjectsTab?.() },
               { label: 'Sedang Berlangsung', code: 'WORKING', count: summary.workingJobs || reports.filter(r => r.status === 'WORKING').length, sub: 'Aktif di lapangan', action: () => onOpenReportsTab?.() },
               { label: 'Selesai', code: 'COMPLETED', count: summary.completedJobs || reports.filter(r => r.status === 'COMPLETED' || r.status === 'REVIEWED').length, sub: 'Laporan selesai tercatat', action: () => onOpenReportsTab?.() },
@@ -714,14 +712,12 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
             </div>
           </div>
 
-          {/* Idle Workforce / Pending Quotation Alert Banner */}
+          {/* Idle Workforce Alert Banner */}
           <JarivisIdleAlertBanner
             idleStaffCount={computed.operationCenter.idleStaffCount}
-            draftQuotationsCount={quotationSummary?.draftCount ?? 0}
+            draftQuotationsCount={0}
             onReviewStaff={() => setIdleModalOpen(true)}
-            onReviewQuotations={() =>
-              (onOpenQuotationsTab || quotationSummary?.onOpenQuotations)?.()
-            }
+            onReviewQuotations={() => onOpenReportsTab?.()}
           />
 
           {/* Bottom Section 1: BEBAN KERJA SAAT INI & ANTREAN VERIFIKASI */}
@@ -1443,29 +1439,15 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          TAB 4: BISNIS (`?tab=business`)
+          TAB 4: PELANGGAN & KONTRAK (`?tab=business`)
          ═══════════════════════════════════════════════════════════════════════ */}
       {activeSubTab === 'business' && (
         <div className="space-y-4">
-          {/* Section 1: 8-Card Business Performance Grid (`Ringkasan Performa`) */}
+          {/* Section 1: 8-Card Customer & Contract Performance Grid (`Ringkasan Performa`) */}
           <JarivisBusinessKpiGrid
             items={businessKpiItems}
             selectedPeriod={selectedPeriod}
             onSelectPeriod={setSelectedPeriod}
-          />
-
-          {/* Section 2: Leads & Quotation Funnel (`Ringkasan Leads`) */}
-          <JarivisLeadsFunnelCard
-            newLeadsCount={computed.business.funnel.newLeadsCount}
-            contactedOrApprovedCount={computed.business.funnel.contactedOrApprovedCount}
-            visitsOrDealCount={computed.business.funnel.visitsOrDealCount}
-            totalEstimatedRevenueIdr={computed.business.funnel.totalEstimatedRevenueIdr}
-            totalLeadsCount={computed.business.funnel.totalLeadsCount}
-            selectedPeriod={selectedPeriod}
-            onSelectPeriod={setSelectedPeriod}
-            onOpenQuotations={() =>
-              (onOpenQuotationsTab || quotationSummary?.onOpenQuotations)?.()
-            }
           />
 
           {/* Section 3: Pembaruan Kontrak (90/60/30 Hari & Kedaluwarsa) + Pelanggan Tanpa Aktivitas */}

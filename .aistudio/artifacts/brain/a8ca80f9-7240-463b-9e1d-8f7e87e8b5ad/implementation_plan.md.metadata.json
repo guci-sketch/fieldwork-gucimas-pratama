@@ -1,6 +1,6 @@
 {
-  "summary":  "Implementation plan for simplifying Fieldwork into a focused 2-role system (Admin Operasional & Teknisi Lapangan), fixing sidebar brand contrast, aligning the Ringkasan Performa dashboard grid, removing decorative hashes/dashes across the system, and enforcing a minimal icon aesthetic.",
-  "updatedAt":  "2026-11-11T01:34:13.746083189Z",
+  "summary":  "Rencana implementasi untuk memfokuskan seluruh sistem hanya pada Laporan Kerja Digital dan Data Pelanggan/Penugasan Proyek untuk 2 Role Utama (Admin Operasional & Teknisi Lapangan), serta menghapus modul Penawaran Harga (PH), Gudang Obat, dan Keuangan/Cashflow.",
+  "updatedAt":  "2026-11-11T03:08:42.920722489Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

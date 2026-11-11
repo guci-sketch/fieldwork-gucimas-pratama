@@ -617,15 +617,12 @@ export function computeJarivisDashboardMetrics(params: {
     }
   }
 
-  // Service category mix (from app.jarivis.com Beranda)
+  // Service category mix (Laporan Kerja Digital)
   const completedReportsList = reports.filter(
     r => r.status === 'COMPLETED' || r.status === 'REVIEWED'
   );
   const countByService = (types: ServiceType[]) =>
     completedReportsList.filter(r => types.includes(r.project?.serviceType)).length;
-
-  const surveyTermiteCount = quotations.filter(q => q.kategori === 'AR').length;
-  const surveyPestCount = quotations.filter(q => q.kategori === 'PCO').length;
 
   const serviceSlices: JarivisServiceCategorySlice[] = [
     {
@@ -658,27 +655,12 @@ export function computeJarivisDashboardMetrics(params: {
         'DISINFECTION',
       ]),
     },
-    {
-      id: 'survey_ar',
-      label: 'Survey Termite Control',
-      color: '#64748b',
-      count: surveyTermiteCount,
-    },
-    {
-      id: 'survey_pco',
-      label: 'Survey Pest Control',
-      color: '#38bdf8',
-      count: surveyPestCount,
-    },
   ];
 
-  // Business Tab Metrics (8 KPI Cards + Leads/Quotation Funnel)
+  // Pelanggan & Kontrak Tab Metrics
   const uniqueClientNames = new Set<string>();
   for (const p of projects) {
     if (p.clientName) uniqueClientNames.add(p.clientName.trim().toLowerCase());
-  }
-  for (const q of quotations) {
-    if (q.kepadaNama) uniqueClientNames.add(q.kepadaNama.trim().toLowerCase());
   }
   const activeCustomersCount = Math.max(uniqueClientNames.size, projects.length);
 

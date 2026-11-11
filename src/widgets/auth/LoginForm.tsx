@@ -235,13 +235,13 @@ export function LoginPage() {
 
                 <div className="max-w-xl relative z-10 my-auto">
                     <span className="text-xs font-bold tracking-[0.12em] text-[#cfe0d5] uppercase block">
-                        OPERASIONAL LAPANGAN &amp; PENAWARAN
+                        SISTEM LAPORAN KERJA DIGITAL &amp; PELANGGAN
                     </span>
                     <h1 className="text-4xl xl:text-[42px] font-bold leading-[1.15] tracking-[-0.035em] my-4 text-white">
                         Pekerjaan lapangan yang lebih jelas, dari penugasan hingga laporan.
                     </h1>
                     <p className="text-base leading-[1.7] text-[#dbe8df] max-w-[530px]">
-                        Satu ruang kerja yang membantu tim fokus pada tindakan berikutnya, menjaga bukti pekerjaan tetap dapat ditelusuri, dan menyusun laporan Pest Control maupun Anti Rayap secara presisi.
+                        Satu ruang kerja terfokus untuk mengelola data lokasi pelanggan, memvalidasi kehadiran GPS teknisi, mendokumentasikan tindakan lapangan, dan menyusun Laporan Kerja Digital Pest Control maupun Anti Rayap secara presisi.
                     </p>
                 </div>
 

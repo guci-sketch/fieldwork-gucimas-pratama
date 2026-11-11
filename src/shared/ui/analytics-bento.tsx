@@ -82,7 +82,7 @@ export const JARIVIS_SUB_TABS: { id: JarivisDashboardTabId; label: string; eyebr
   { id: 'operationCenter', label: 'Operation Center', eyebrow: 'GUCI EMAS OPERATION CENTER' },
   { id: 'liveMap', label: 'Live Map', eyebrow: 'GUCI EMAS LIVE MAP' },
   { id: 'performanceTeam', label: 'Performance Team', eyebrow: 'GUCI EMAS PERFORMANCE TEAM' },
-  { id: 'business', label: 'Bisnis', eyebrow: 'GUCI EMAS BUSINESS' },
+  { id: 'business', label: 'Pelanggan & Kontrak', eyebrow: 'GUCI EMAS PELANGGAN & KONTRAK' },
 ];
 
 export const JARIVIS_PERIOD_OPTIONS: { id: JarivisPeriodKey; label: string }[] = [

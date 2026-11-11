@@ -580,14 +580,6 @@ export const ExecutorHome: React.FC = () => {
                 <p>{formatScheduleDateId(new Date().toISOString())}</p>
               </div>
               <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateProject(true)}
-                  title="Buat Tugas Baru"
-                  className="px-2.5 py-1.5 rounded-lg bg-[#eff3f0] hover:bg-[#e8f1eb] text-[#245c45] text-xs font-semibold flex items-center gap-1 cursor-pointer"
-                >
-                  <Plus size={15} /> Baru
-                </button>
                 <button type="button" onClick={loadData} title="Muat Ulang Data">
                   <RefreshCw size={18} />
                 </button>
@@ -677,10 +669,11 @@ export const ExecutorHome: React.FC = () => {
               {!isLoading && !loadError && !activeTaskReport && (
                 <article className="active-task text-center py-6">
                   <div className="task-accent" />
-                  <h2>Belum ada tugas aktif</h2>
-                  <p className="mb-4">Tambahkan penugasan lapangan baru untuk memulai check-in.</p>
-                  <button type="button" className="btn primary full" onClick={() => setShowCreateProject(true)}>
-                    <Plus size={17} /> Buat Penugasan Baru
+                  <h2>Belum ada laporan kerja aktif</h2>
+                  <p className="mb-4">Pilih lokasi pelanggan pada daftar tugas untuk memulai Check-In GPS dan membuat Laporan Kerja Digital.</p>
+                  <button type="button" className="btn primary full" onClick={() => setPage('jobs')}>
+                    Lihat Daftar Lokasi Tugas
+                    <ArrowRight size={17} />
                   </button>
                 </article>
               )}
@@ -750,10 +743,10 @@ export const ExecutorHome: React.FC = () => {
           <>
             <header className="tech-header">
               <LiteBrand compact />
-              <strong>Tugas &amp; Proyek</strong>
+              <strong>Lokasi &amp; Laporan Kerja</strong>
               <span>
-                <button type="button" onClick={() => setShowCreateProject(true)} aria-label="Buat Tugas Baru">
-                  <Plus size={20} />
+                <button type="button" onClick={loadData} aria-label="Muat Ulang Daftar Tugas">
+                  <RefreshCw size={18} />
                 </button>
               </span>
             </header>

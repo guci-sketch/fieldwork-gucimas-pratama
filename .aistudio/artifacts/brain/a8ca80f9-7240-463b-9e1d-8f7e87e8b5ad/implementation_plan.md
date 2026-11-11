@@ -1,127 +1,157 @@
-# Penyederhanaan Sistem 2 Peran, Perbaikan Kontras Brand & Konsistensi UI Minimalis
+# Pemfokusan Sistem pada Laporan Kerja Digital & Data Pelanggan
 
-Rencana ini menyederhanakan aplikasi Fieldwork menjadi sistem operasional terfokus untuk dua peran utama (**Admin Operasional** dan **Teknisi Lapangan**), memperbaiki keterbacaan identitas **Fieldwork** pada sidebar hijau tua, menata keseimbangan grid kartu **Ringkasan Performa**, serta membersihkan simbol pagar (`#`), tanda garis pisah panjang (`—`), dan ikon dekoratif berlebih di seluruh antarmuka.
+Rencana ini menyederhanakan sistem Fieldwork Guci Emas Pratama agar berfokus sepenuhnya pada pembuatan, eksekusi, dan verifikasi **Laporan Kerja Digital** beserta **Data Pelanggan & Lokasi Penugasan**, dengan menghapus seluruh modul komersial dan gudang (Penawaran Harga/PH, Gudang & Bahan Kimia, serta Keuangan/Tagihan/Cashflow).
 
 ---
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> Seluruh preferensi telah dikonfirmasi pada tahap klarifikasi dan menjadi landasan utama eksekusi tanpa memutus kompatibilitas database yang berjalan.
+> Keputusan berikut telah dikonfirmasi melalui klarifikasi interaktif sebelumnya dan menjadi dasar perubahan sistem:
 
-- **Confirmed Decision 1 — Fokus Penuh pada 2 Role Utama (`Admin Operasional` & `Teknisi Lapangan`)**: Menghapus tampilan serta opsi peran lain (Direktur/Superadmin, Marketing, Inventory/Gudang, Master Super Admin) dari seluruh antarmuka, formulir pembuatan pengguna, undangan, panduan, dan filter. Akun di database yang sebelumnya memiliki label peran administratif atau divisi non-teknisi secara otomatis dipetakan menjadi **Admin Operasional** (`ADMIN`) agar tetap kompatibel dengan skema database bersama tanpa error.
-- **Confirmed Decision 2 — Pembersihan Simbol Pagar (`#`) & Tanda Garis Pisah Panjang (`—`)**: Menghilangkan seluruh badge simbol `#`, penomoran `#1 / #2 / #3` pada peringkat atau daftar item, serta tanda pisah panjang (`—`) atau simbol dekoratif (`≡`, `⊞`, `⊡`, `•`) pada teks antarmuka, menggantinya dengan tata letak tipografi bersih.
-- **Confirmed Decision 3 — Minimalisasi Ikon (Pertahankan Ikon Navigasi Sidebar Utama)**: Mempertahankan ikon fungsional hanya pada menu navigasi utama sidebar, serta menghapus ikon dekoratif pada kartu metrik, header panel, lencana status, dan tombol aksi agar tampilan terlihat rapi, tenang, dan profesional.
-- **Confirmed Decision 4 — Perbaikan Keterbacaan Nama "Fieldwork" & Konsistensi Kartu "Ringkasan Performa"**: Mengubah warna teks utama wordmark **Fieldwork** di header sidebar menjadi putih bersih dengan aksen hijau muda lembut (`#a9c9b4`) sehingga kontras tajam di atas latar `#173f30`, serta menyelaraskan tinggi kartu, tipografi Title Case, dan struktur baris pada **Ringkasan Performa**.
+- **Confirmed Decision 1 (Ruang Lingkup Menu Admin Operasional)**: Mempertahankan hanya menu yang berkaitan langsung dengan operasional Laporan Kerja Digital dan Pelanggan:
+  1. Dashboard Ringkasan & KPI Laporan Kerja
+  2. Hasil & Verifikasi Laporan Kerja Digital (+ Ekspor PDF)
+  3. Penugasan Kerja / Lokasi Proyek & Data Pelanggan
+  4. Lacak Peta & Perjalanan GPS Teknisi
+  5. Manajemen Akun Tim (Admin & Teknisi) + Pengaturan Kop PDF
+- **Confirmed Decision 2 (Penghapusan Modul Komersial & Gudang)**: Menghapus seluruh fitur dan navigasi **Penawaran Harga (PH)**, **Gudang & Bahan Kimia**, serta **Keuangan, Tagihan & Performa MoM**, termasuk metrik/funnel Penawaran di Dashboard.
+- **Confirmed Decision 3 (Alur Khusus Teknisi Lapangan)**: Tampilan Teknisi Lapangan difokuskan 100% pada eksekusi **Laporan Kerja Digital** (Check-in GPS, Foto Dokumentasi, Input Treatment, Tanda Tangan Klien, Check-out, dan Riwayat Laporan) tanpa tombol pembuatan proyek baru mandiri.
 
 ---
 
-## 1. Overview & Core Concept
+## A. Understanding (1. Overview & Core Concept)
 
-- **What It Does**: Menyajikan platform operasional dan dokumentasi lapangan yang ringkas, cepat dipindai, dan bebas distraksi visual bagi tim kantor maupun pelaksana lapangan.
+- **What It Does**: Sistem manajemen operasional lapangan khusus **Laporan Kerja Digital** dan **Data Pelanggan** untuk 2 peran utama (**Admin Operasional** dan **Teknisi Lapangan**).
 - **Target Audience / Persona**:
-  1. **Admin Operasional**: Mengelola penjadwalan SPK & proyek, memantau kehadiran GPS, memverifikasi laporan kerja & anomali, serta memantau ringkasan performa tim dari satu konsol terpadu.
-  2. **Teknisi Lapangan**: Menjalankan check-in GPS, mengambil dokumentasi foto ber-watermark, mengisi catatan treatment, dan melakukan check-out dari perangkat mobile.
-- **Key Value**: Menghilangkan kerumitan multi-role dari versi CMS penuh dan menghapus ornamen visual berlebih (ikon bertumpuk, simbol `#`, garis pisah `—`), menghasilkan antarmuka kelas enterprise yang tegas dan mudah digunakan.
+  - **Admin Operasional**: Mengelola data pelanggan & lokasi proyek, menjadwalkan penugasan kerja (SPK), memantau posisi GPS teknisi, memverifikasi hasil laporan kerja digital (termasuk temuan anomali GPS), mengunduh Berita Acara / Laporan Kerja PDF, serta mengelola akun tim dan kop surat PDF.
+  - **Teknisi Lapangan**: Menerima daftar penugasan lokasi pelanggan dan mengeksekusi alur pembuatan Laporan Kerja Digital dari awal hingga selesai di lapangan.
+- **Key Value**: Menghilangkan distraksi fitur ERP komersial (Penawaran PH, Gudang, Kas/Keuangan) sehingga antarmuka jauh lebih bersih, cepat, minimalis, dan terfokus pada kualitas pelaporan kerja lapangan.
 
 ---
 
-## 2. User Experience & Visual Design
+## B. Current Analysis
 
-- **Key User Flows**:
-  1. **Alur Masuk & Pemilihan Akun Demo**: Pengguna melihat halaman masuk yang bersih tanpa lencana atau ikon dekoratif, dengan 2 pilihan akun demo instan: **Admin Operasional** dan **Teknisi Lapangan**.
-  2. **Alur Navigasi Sidebar & Header**: Saat Admin Operasional membuka aplikasi, wordmark **Fieldwork** pada pojok kiri atas sidebar langsung terbaca jelas dengan kontras tinggi di atas latar hijau hutan (`#173f30`). Menu navigasi menampilkan modul-modul operasional yang relevan tanpa pemisahan hak akses Direktur/Marketing/Gudang.
-  3. **Alur Evaluasi Ringkasan Performa**: Pada tab **Performance Team**, ke-6 kartu radial dan kartu **Efisiensi Operasional** tampil sejajar dengan tinggi seragam (`h-full`), ukuran teks proporsional, label yang konsisten (*Rata-rata Waktu Mulai*, *Rata-rata Waktu Selesai*, *Rata-rata Durasi Tugas*), dan ruang kosong yang seimbang pada kartu tanpa sub-teks tren.
-  4. **Alur Manajemen Staf & Panduan**: Saat Admin menambahkan pengguna baru, membuat tautan undangan, atau membuka panduan penggunaan, pilihan peran hanya terdiri dari **Admin Operasional** dan **Teknisi Lapangan**.
+Berdasarkan investigasi menyeluruh terhadap kondisi sistem saat ini:
 
-- **Visual Identity & Theme**:
-  - *Aesthetic Direction*: Utilitarian Enterprise Minimalist — mengutamakan ketajaman tipografi, keseimbangan ruang putih, dan angka tabular tanpa dekorasi ikon atau simbol buatan.
-  - *Color Palette & Mood*:
-    - Kanvas Utama: Slate terang bersih (`--bg-primary: #f4f6f9`) dan permukaan kartu putih (`--bg-card: #ffffff`) dengan garis batas halus (`--border-subtle: #dde2eb`).
-    - Sidebar Navigasi: Hijau hutan gelap (`#173f30`) dengan teks wordmark putih (`#ffffff`) dan aksen sekunder hijau sage terang (`#a9c9b4`) untuk kontras optimal (WCAG AAA).
-    - Aksen Semantik: Biru operasional (`#2563eb`), Hijau selesai (`#10b981`), Kuning tunda (`#f59e0b`), dan Merah perhatian (`#ef4444`).
-  - *Typography & Hierarchy*:
-    - Menggunakan `Outfit` / `Inter` untuk judul dan navigasi dengan kontras bobot yang rapi (Regular 400 & Bold 700), dipadukan dengan `JetBrains Mono` (`tabular-nums`) untuk seluruh persentase, durasi, dan angka metrik.
-    - Menghapus penggunaan huruf kecil semua (*all-lowercase*) pada label metrik efisiensi dan menyeragamkannya ke *Title Case* atau *Sentence Case* yang konsisten.
-  - *Component Styling & Layout*:
-    - Kartu metrik di dalam grid 12 kolom menggunakan `h-full flex flex-col justify-between` dengan tinggi minimum seragam sehingga kolom ke-1, ke-2, ke-3, dan kartu **Efisiensi Operasional** di kolom ke-4 sejajar sempurna di bagian atas maupun bawah.
-    - Tombol aksi dan header seksi hanya menampilkan teks lugas tanpa imbuhan simbol `#`, `—`, `≡`, atau ikon di samping teks.
-
-- **Interactive Feedback & Motion**:
-  - Transisi antar-tab dan hover kartu berlangsung cepat ($\le 180\text{ms}$) menggunakan perubahan warna batas (`border-color`) dan latar halus tanpa animasi berlebih.
+1. **Navigasi & Halaman Admin Operasional**:
+   - Saat ini sidebar Admin masih menampilkan 10 menu dalam 4 grup, termasuk **Penawaran Harga (PH)**, **Gudang & Bahan Kimia**, dan **Keuangan, Tagihan & Performa**.
+   - Rute aplikasi masih menyediakan halaman pembuatan dan pengeditan Penawaran Harga secara langsung.
+2. **Dashboard Analitik Operasional**:
+   - Kartu KPI "Draft" saat ini masih menggabungkan jumlah draft Laporan Kerja dengan draft Surat Penawaran (PH), serta banner peringatan masih menghitung draft PH.
+   - Sub-tab ke-4 pada Dashboard (`Bisnis`) masih menampilkan kartu **Ringkasan Leads (Funnel Penawaran PH)** dan grafik proporsi layanan masih menyertakan kategori **Survey Termite Control** dan **Survey Pest Control** dari data Penawaran.
+3. **Antarmuka Teknisi Lapangan**:
+   - Halaman beranda dan daftar tugas Teknisi Lapangan masih menampilkan tombol **"+ Baru"** dan **"+ Buat Penugasan Baru"** untuk membuat proyek baru dari sisi teknisi, padahal penugasan lokasi pelanggan seharusnya dikelola dari data proyek/pelanggan dan teknisi fokus mengisi Laporan Kerja Digital.
+4. **Teks & Panduan Sistem**:
+   - Halaman login, placeholder pencarian header, dan buku panduan peran masih mencantumkan referensi ke pembuatan Surat Penawaran (PH) dan pengelolaan Gudang.
 
 ---
 
-## 3. Key Product Decisions & Trade-Offs
+## C. Root Cause / Key Findings
 
-- **Decision 1: Pemetaan Otomatis Peran Database ke 2 Peran Inti**
-  - *Chosen Approach*: Menyeragamkan seluruh logika otorisasi aplikasi ke dua peran: `ADMIN` (**Admin Operasional**) dan `TEKNISI_LAPANGAN` (**Teknisi Lapangan**). Apabila database mengembalikan nilai peran warisan dari CMS penuh (seperti `SUPERADMIN`, `MARKETING`, `INVENTORY`, atau `MASTER_SUPER_ADMIN`), lapisan pemetaan profil secara transparan memetakannya ke `ADMIN`.
-  - *Why*: Menjamin kompatibilitas 100% dengan tabel dan enum PostgreSQL/Supabase yang sudah ada tanpa perlu mengubah isi tabel pengguna eksisting, sekaligus memastikan antarmuka murni hanya mengenal 2 peran.
-  - *Alternatives Considered*: Mengubah enum PostgreSQL secara langsung — berisiko merusak kompatibilitas dengan aplikasi CMS utama yang berbagi database yang sama.
-
-- **Decision 2: Grid Simetris pada Ringkasan Performa (Image 2)**
-  - *Chosen Approach*: Menetapkan tinggi penuh (`flex-1 h-full min-h-[138px]`) pada setiap `JarivisRadialMetricCard` di dalam kolom vertikal serta menambahkan baris keterangan pembanding yang konsisten pada kartu **Rata-rata Tugas Ditugaskan per Anggota** dan **Rata-rata Tugas Selesai per Anggota**, sekaligus merapikan kartu **Efisiensi Operasional** (label *Title Case*, penghapusan garis dekoratif kosong di sisi kanan, dan format durasi yang jelas).
-  - *Why*: Pada Image 2 terlihat kolom ke-3 tampak menggantung (lebih pendek dari kolom ke-1, ke-2, dan ke-4) karena dua kartu di kolom ke-3 tidak memiliki baris footer tren, dan kartu **Efisiensi Operasional** memiliki label huruf kecil semua serta garis kosong di kanan yang tampak seperti elemen belum selesai.
-
-- **Decision 3: Disiplin Ikon Minimalis & Penghapusan Simbol Hash/Dash**
-  - *Chosen Approach*: Mempertahankan ikon hanya pada item navigasi utama sidebar untuk orientasi spasial cepat, sementara seluruh tombol aksi (`Buat Akun`, `Salin Link`, `Muat Ulang`, `Export`, dll.), header seksi, kartu KPI, dan daftar peringkat menggunakan tipografi murni dan badge angka bersih (`1`, `2`, `3` tanpa `#`).
-  - *Why*: Mengurangi kebisingan visual (*visual clutter*) sehingga perhatian pengguna langsung tertuju pada data operasional dan tindakan utama.
+- Sistem ini awalnya diimpor dari basis kode CMS penuh yang menggabungkan modul Sales/Quotation, Inventory Gudang, Finance/Cashflow, dan Fieldwork dalam satu aplikasi.
+- Karena aplikasi ini dikhususkan sebagai sistem **Laporan Kerja Digital & Pelanggan** dengan 2 role utama, keberadaan menu dan widget Penawaran (PH), Gudang, dan Keuangan menimbulkan ketidakfokuskan alur kerja dan membebani navigasi pengguna.
 
 ---
 
-## 4. Technical Architecture & Data Strategy *(Technical Reference)*
+## D. Proposed Solution (2. User Experience & Visual Design)
 
-- **Architecture & Component Diagram**:
+### 1. Penyederhanaan Navigasi Admin Operasional
+Menyusun ulang sidebar Admin Operasional menjadi **2 grup utama yang ringkas dan fokus**:
+- **Grup 1 — Laporan Kerja & Pelanggan**:
+  - **Dashboard Laporan Kerja**: Ringkasan KPI laporan kerja, efisiensi waktu operasional, tren laporan selesai, serta ringkasan pelanggan & kontrak garansi.
+  - **Laporan Kerja Digital**: Daftar hasil laporan kerja lapangan, filter verifikasi anomali GPS, pratinjau foto & tanda tangan, serta unduh PDF.
+  - **Penugasan & Lokasi Proyek**: Pengelolaan jadwal penugasan kerja (SPK) dan titik koordinat GPS lokasi proyek pelanggan.
+  - **Data Pelanggan & Garansi**: Direktori pelanggan, riwayat pekerjaan per lokasi, dan masa berlaku garansi/kontrak.
+  - **Lacak Peta & GPS Teknisi**: Pemantauan titik lokasi aktif dan rute perjalanan GPS teknisi di lapangan.
+- **Grup 2 — Tim & Pengaturan**:
+  - **Manajemen Tim & Akun**: Persetujuan dan pengelolaan akun Admin Operasional & Teknisi Lapangan.
+  - **Pengaturan Kop PDF & Audit**: Kustomisasi template/kop dokumen PDF Laporan Kerja, batas toleransi radius GPS, dan log aktivitas.
+
+### 2. Pembersihan Dashboard dari Elemen Penawaran (PH)
+- Kartu KPI **Draft** hanya menghitung **Draft Laporan Kerja Digital** (tanpa mencampur draft Penawaran).
+- Menghapus kartu **Ringkasan Leads (Funnel Penawaran)** dan mengganti sub-tab `Bisnis` menjadi **`Pelanggan & Kontrak`** yang berfokus pada pertumbuhan pelanggan aktif, jadwal perpanjangan garansi/kontrak, dan riwayat kunjungan layanan.
+- Diagram **Proporsi Kategori Layanan** hanya menampilkan layanan dari **Laporan Kerja Digital** (`Work Report Termite`, `Fumigasi`, `Rodent Control`, `Work Report Pest Control`) tanpa irisan data survei penawaran.
+
+### 3. Alur Murni Laporan Kerja Digital pada Teknisi Lapangan
+- Menghapus tombol pembuatan proyek mandiri (`+ Baru` / `+ Buat Penugasan Baru`) dari layar Teknisi Lapangan.
+- Menyajikan alur kerja bertahap yang fokus pada:
+  1. Memilih lokasi pelanggan yang ditugaskan.
+  2. **Check-in GPS** di lokasi pelanggan.
+  3. Mengambil **Foto Dokumentasi** ber-watermark GPS & waktu.
+  4. Mengisi **Form Treatment / Tindakan Lapangan**.
+  5. Mengambil **Tanda Tangan Digital Pelanggan & Teknisi** serta **Check-out**.
+  6. Melihat **Riwayat Laporan Kerja Digital** yang telah diselesaikan.
+
+---
+
+## E. Planned Changes (3. Key Product Decisions & Trade-Offs)
+
+- **Decision 1: Menghapus Rute & Menu Modul Non-Laporan Kerja di Level UI & Router**
+  - *Chosen Approach*: Menghapus rute pembuatan/edit Penawaran serta menghapus menu Penawaran Harga (PH), Gudang & Bahan Kimia, dan Keuangan/Tagihan dari daftar menu Admin Operasional.
+  - *Why*: Memastikan pengguna tidak pernah tersesat ke fitur di luar ruang lingkup Laporan Kerja Digital & Pelanggan, sekaligus menjaga performa pemuatan halaman.
+  - *Alternatives Considered*: Menyembunyikan menu dengan status "Coming Soon" — ditolak karena memenuhi sidebar dengan menu yang tidak relevan.
+- **Decision 2: Mempertahankan Kompatibilitas Skema Database Bersama**
+  - *Chosen Approach*: Tidak menghapus tabel database di backend agar tetap kompatibel dengan ekosistem database utama, namun mengisolasi aplikasi frontend ini agar 100% hanya mengoperasikan alur Laporan Kerja Digital, Pelanggan, Lokasi Proyek/Penugasan, dan Tim.
+  - *Why*: Menjaga integritas data bersama tanpa risiko merusak struktur tabel yang ada.
+
+---
+
+## F. Technical Architecture & Data Strategy (4. Technical Reference)
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│                        Database & Auth Session                           │
-│   (Shared PostgreSQL / Supabase — Existing Enum & User Records Intact)   │
-└────────────────────────────────────┬─────────────────────────────────────┘
-                                     │
-                                     ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                 Role Normalization Layer (2-Role Mapper)                 │
-│  • TEKNISI_LAPANGAN  ──► Teknisi Lapangan (Mobile Field Execution View)  │
-│  • ADMIN / Legacy    ──► Admin Operasional (Unified Operations Console)  │
-└───────────────┬──────────────────────────────────────────┬───────────────┘
-                │                                          │
-                ▼                                          ▼
-┌───────────────────────────────────────┐  ┌───────────────────────────────┐
-│      Admin Operasional Console        │  │    Teknisi Lapangan View      │
-│  ┌─────────────────────────────────┐  │  │  • Tugas Aktif & Check-In GPS │
-│  │ Sidebar (#173f30 Forest Green)  │  │  │  • Dokumentasi Foto & Dosis   │
-│  │  • Wordmark: Fieldwork (Putih   │  │  │  • Tanda Tangan & Check-Out   │
-│  │    & Sage #a9c9b4, Kontras 100%)│  │  │  • Teks Bersih Tanpa Hash/#   │
-│  │  • Ikon Navigasi Menu Utama     │  │  └───────────────────────────────┘
-│  └─────────────────────────────────┘  │
-│  ┌─────────────────────────────────┐  │
-│  │ Ringkasan Performa (Bento Grid) │  │
-│  │  • 4 Kolom Sejajar (Equal H)    │  │
-│  │  • 6 Kartu Radial + Footer Tren │  │
-│  │  • Kartu Efisiensi Operasional  │  │
-│  │    (Title Case & Layout Rapi)   │  │
-│  └─────────────────────────────────┘  │
-│  ┌─────────────────────────────────┐  │
-│  │ Manajemen Staf & Panduan Role   │  │
-│  │  • Hanya 2 Pilihan Role         │  │
-│  │  • Tombol & Kartu Minim Ikon    │  │
-│  └─────────────────────────────────┘  │
-└───────────────────────────────────────┘
+│                 SISTEM LAPORAN KERJA DIGITAL & PELANGGAN                 │
+├────────────────────────────────────┬─────────────────────────────────────┤
+│         ADMIN OPERASIONAL          │          TEKNISI LAPANGAN           │
+│                                    │                                     │
+│  ┌──────────────────────────────┐  │  ┌───────────────────────────────┐  │
+│  │ 1. Dashboard Laporan Kerja   │  │  │ 1. Daftar Penugasan Lokasi    │  │
+│  │    - KPI & Efisiensi Kerja   │  │  │    Pelanggan Hari Ini         │  │
+│  │    - Tren & Kategori Layanan │  │  └───────────────┬───────────────┘  │
+│  │    - Pelanggan & Garansi     │  │                  ▼                  │
+│  ├──────────────────────────────┤  │  ┌───────────────────────────────┐  │
+│  │ 2. Laporan Kerja Digital     │  │  │ 2. Eksekusi Laporan Digital   │  │
+│  │    - Verifikasi & Anomali    │  │  │    - Check-in Koordinat GPS   │  │
+│  │    - Ekspor Laporan PDF      │  │  │    - Foto Dokumentasi Kerja   │  │
+│  ├──────────────────────────────┤  │  │    - Detail Treatment & Hama  │  │
+│  │ 3. Penugasan & Lokasi Proyek │  │  │    - Tanda Tangan & Check-out │  │
+│  ├──────────────────────────────┤  │  └───────────────┬───────────────┘  │
+│  │ 4. Data Pelanggan & Garansi  │  │                  ▼                  │
+│  ├──────────────────────────────┤  │  ┌───────────────────────────────┐  │
+│  │ 5. Lacak Peta & GPS Teknisi  │  │  │ 3. Riwayat Laporan Kerja      │  │
+│  ├──────────────────────────────┤  │  │    & Sinkronisasi Offline     │  │
+│  │ 6. Manajemen Tim & Kop PDF   │  │  └───────────────────────────────┘  │
+│  └──────────────────────────────┘  │                                     │
+└────────────────────────────────────┴─────────────────────────────────────┘
 ```
 
-- **Data Model & State**:
-  - **Normalisasi Peran (`UserRole`)**: Seluruh pengecekan hak akses di sisi klien disederhanakan menjadi `ADMIN` (Admin Operasional) dan `TEKNISI_LAPANGAN` (Teknisi Lapangan). Semua fitur operasional di konsol Admin terbuka penuh bagi `ADMIN` tanpa pemisahan `isDirector`, `isMarketingUser`, atau `INVENTORY`.
-  - **Identitas Brand Sidebar**: Komponen header sidebar menggunakan kelas warna eksplisit `text-white` untuk kata `Field` dan `text-[#a9c9b4]` untuk kata `work`, serta memastikan aturan CSS container sidebar tidak menimpa kontras teks judul.
+### Interactive Component & State Mapping
+- **Router & Navigasi Utama**: Hanya merender rute otentikasi, workspace utama (`AdminDashboard` untuk Admin Operasional, `FieldLayout` untuk Teknisi Lapangan), dan profil pengguna.
+- **State Dashboard Admin**: Menghitung seluruh indikator KPI murni dari koleksi `WorkReport`, `Project`, `Customer`, dan `User` tanpa memanggil atau menggabungkan state `QuotationSummary`.
+- **State Eksekusi Teknisi**: Berfokus pada transisi status sesi kunjungan aktif (`activeVisit`: Check-in -> Dokumentasi Foto -> Form Treatment -> Tanda Tangan -> Submit `WorkReport`).
 
-- **Interactive Component & State Mapping**:
-  - **Halaman Login & Aktivasi Undangan**: Menampilkan 2 tombol akun demo (`Admin Operasional` & `Teknisi Lapangan`) tanpa ikon kilau/dekoratif, serta memformat teks tampilan peran undangan hanya ke 2 peran tersebut.
-  - **Grid Ringkasan Performa**:
-    - Menyusun 6 `JarivisRadialMetricCard` dengan tinggi penuh (`flex-1`) dan struktur 3 bagian yang konsisten (Judul, Ring + Angka Utama, dan Baris Sub-keterangan/Tren) sehingga tinggi kartu di kolom 1, 2, dan 3 identik dengan kartu `JarivisEfficiencyCard` di kolom 4.
-    - Memperbarui `JarivisEfficiencyCard` agar menggunakan label *Rata-rata Waktu Mulai*, *Rata-rata Waktu Selesai*, dan *Rata-rata Total Durasi* dengan tata letak bersih tanpa garis placeholder kosong di sisi kanan.
-  - **Pembersihan Simbol `#` dan `—` Menyeluruh**:
-    - Menghapus lingkaran `#` pada header *Beban Kerja Saat Ini*.
-    - Mengubah lencana peringkat `#1`, `#2`, `#3` pada *Leaderboard Anggota Terbaik* menjadi angka bersih `1`, `2`, `3`.
-    - Mengubah label seperti `Item Pekerjaan #1` atau `DOKUMENTASI PROGRES #1` menjadi `Item Pekerjaan 1` dan `Dokumentasi Progres 1`.
-    - Mengganti tanda pisah panjang (`—`) pada judul halaman, toast, log audit, dan keterangan menjadi pemisah spasi atau titik dua yang bersih.
-    - Menghapus ikon dekoratif pada tombol dan header kartu di seluruh modul sambil tetap menjaga ikon menu utama di sidebar.
+---
+
+## G. Risk & Impact Analysis
+
+- **Potensi Risiko**: Penghapusan pemanggilan ringkasan penawaran (`quotationSummary`) pada komponen Bento Dashboard harus memastikan tidak ada properti yang menjadi `undefined` saat merender sub-tab laporan dan pelanggan.
+- **Mitigasi**: Menyediakan nilai default yang bersih pada komponen analitik serta menghapus komponen funnel Penawaran dari tab pelanggan sehingga seluruh kartu menggunakan data `WorkReport` dan `Customer`.
+- **Regresi Terhadap Fitur Eksisting**: Fitur pembuatan Laporan Kerja Digital, ekspor PDF Laporan Kerja, pemantauan anomali GPS, manajemen lokasi proyek/SPK, dan manajemen data pelanggan tetap berjalan utuh 100%.
+
+---
+
+## H. Validation Plan
+
+1. **Verifikasi Kompilasi & Statik (`compile_applet` & `lint_applet`)**: Memastikan tidak ada error TypeScript, import yang tidak terpakai, atau referensi variabel yang hilang.
+2. **Verifikasi Antarmuka Admin Operasional**:
+   - Memastikan sidebar hanya menampilkan menu Laporan Kerja Digital, Penugasan & Lokasi Proyek, Data Pelanggan, Lacak Peta GPS, serta Manajemen Tim & Kop PDF (tanpa menu Penawaran PH, Gudang, dan Keuangan).
+   - Memastikan Dashboard tidak lagi menampilkan Funnel Leads/Penawaran atau irisan Survey Penawaran.
+3. **Verifikasi Antarmuka Teknisi Lapangan**:
+   - Memastikan tampilan teknisi hanya menyajikan alur pengerjaan Laporan Kerja Digital (Check-in, Foto, Treatment, TTD, Riwayat) tanpa tombol pembuatan proyek baru.
+
+---
+
+## I. Approval Checkpoint
+
+> **STATUS: WAITING FOR APPROVAL — Tidak ada perubahan yang akan dilakukan sebelum mendapatkan persetujuan eksplisit dari user.**

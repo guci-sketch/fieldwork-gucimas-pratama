@@ -12,7 +12,6 @@ import {
   DEFAULT_FILTERS,
   KPIStats,
   WorkReportStatus,
-  Quotation,
 } from '@/entities/types';
 import {
   fetchAdminReports,
@@ -36,7 +35,6 @@ import {
   purgeOldPhotos,
   PhotoPurgePreview,
 } from '@/shared/api/admin';
-import { getQuotations } from '@/shared/api/quotationService';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -102,17 +100,11 @@ import { TemplateSettingsPanel } from '@/widgets/admin/TemplateSettingsPanel';
 import { MonthlyRecapBuilderModal } from '@/widgets/admin/MonthlyRecapBuilderModal';
 import { canGenerateMonthlyRecap } from '@/shared/lib/permenkesRecapEngine';
 import { CompanyPicker } from '@/widgets/admin/CompanyPicker';
-import { OperationsAnalyticsBento, ExecutiveQuotationSummary } from '@/widgets/admin/OperationsAnalyticsBento';
+import { OperationsAnalyticsBento } from '@/widgets/admin/OperationsAnalyticsBento';
 import { isDirectorUser } from '@/shared/lib/roles';
 import { useAuthStore } from '@/app/store/authStore';
 import { useTheme } from '@/shared/hooks/useTheme';
-import { InventoryPage } from '../../pages/inventory/InventoryPage';
-import { KontrolRayapPage } from '../../pages/customers/KontrolRayapPage';
-import { QuotationPage } from '../../pages/quotation/QuotationPage';
 import { CustomersPage } from '../../pages/customers/CustomersPage';
-import { TrackingPage } from '../../pages/tracking/TrackingPage';
-import { CashflowPage } from '../../pages/cashflow/CashflowPage';
-import { PerformaPage } from '../../pages/performance/PerformaPage';
 import { SPKPage } from '../../pages/spk/SPKPage';
 import { CompaniesPage } from '../../pages/super-admin/CompaniesPage';
 import { Header } from '../common/Header';
@@ -185,15 +177,9 @@ export const AdminDashboard: React.FC = () => {
   const isDirector = isDirectorUser(user);
   const activeCompanyId = useAuthStore(st => st.activeCompanyId) || user?.companyId || null;
 
-  // Tab awal: SUPERADMIN & ADMIN langsung membuka Dashboard Utama ('dashboard') agar ringkasan langsung terlihat
+  // Tab awal: langsung membuka Dashboard Laporan Kerja ('dashboard')
   const [activeTab, setActiveTab] = useState<Tab>(
-    user?.role === 'MASTER_SUPER_ADMIN'
-      ? 'saas-companies'
-      : user?.role === 'INVENTORY'
-      ? 'inventory'
-      : user?.role === 'SUPERADMIN' || user?.role === 'ADMIN'
-      ? 'dashboard'
-      : 'quotation'
+    user?.role === 'MASTER_SUPER_ADMIN' ? 'saas-companies' : 'dashboard'
   );
 
   useEffect(() => {
@@ -233,8 +219,6 @@ export const AdminDashboard: React.FC = () => {
   const [reports, setReports] = useState<WorkReportListItem[]>([]);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportsError, setReportsError] = useState<string | null>(null);
-
-  const [quotationsList, setQuotationsList] = useState<Quotation[]>([]);
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectSearch, setProjectSearch] = useState('');
@@ -388,12 +372,10 @@ export const AdminDashboard: React.FC = () => {
     setLoadError(null);
     setStaleRefreshError(null);
     try {
-      const targetCompany = (isSuper ? activeCompanyId : user?.companyId) ?? '';
-      const [summary, projectRes, executorList, quos, latestLocs] = await Promise.all([
+      const [summary, projectRes, executorList, latestLocs] = await Promise.all([
         fetchAdminSummary(),
         fetchAdminProjects({ limit: 24, page: 1 }),
         fetchExecutors(),
-        targetCompany ? getQuotations({ companyId: targetCompany }).catch(() => []) : Promise.resolve([]),
         fetchLatestLocations().catch(() => []),
       ]);
       setSummaryData(summary);
@@ -401,7 +383,6 @@ export const AdminDashboard: React.FC = () => {
       setProjectTotalPages(projectRes.totalPages || 1);
       setProjectTotalCount(projectRes.totalCount || projectRes.projects.length);
       setExecutors(executorList);
-      setQuotationsList(quos);
       setUserLocations(latestLocs);
       await loadReports();
     } catch (err) {
@@ -413,12 +394,11 @@ export const AdminDashboard: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isAdmin, isSuper, activeCompanyId, user?.companyId, loadReports]);
+  }, [isAdmin, isSuper, activeCompanyId, loadReports]);
 
   // Reset state saat SUPERADMIN berpindah perusahaan agar data perusahaan lama tidak pernah ditampilkan sebagai data baru
   useEffect(() => {
     setSummaryData(null);
-    setQuotationsList([]);
     setReports([]);
     setProjects([]);
     setExecutors([]);
@@ -437,14 +417,11 @@ export const AdminDashboard: React.FC = () => {
     setIsRefreshingSummary(true);
     setStaleRefreshError(null);
     try {
-      const targetCompany = (isSuper ? activeCompanyId : user?.companyId) ?? '';
-      const [summary, quos] = await Promise.all([
+      const [summary] = await Promise.all([
         fetchAdminSummary(),
-        targetCompany ? getQuotations({ companyId: targetCompany }).catch(() => quotationsList) : Promise.resolve([]),
         loadReports(),
       ]);
       setSummaryData(summary);
-      setQuotationsList(quos);
       setLoadError(null);
     } catch (err) {
       const msg =
@@ -459,22 +436,7 @@ export const AdminDashboard: React.FC = () => {
     } finally {
       setIsRefreshingSummary(false);
     }
-  }, [isAdmin, isSuper, activeCompanyId, user?.companyId, loadReports, summaryData, quotationsList]);
-
-  const quotationSummary = useMemo<ExecutiveQuotationSummary | null>(() => {
-    if (!isAdmin) return null;
-    const totalQuotations = quotationsList.length;
-    const draftCount = quotationsList.filter(q => q.status === 'draft' || q.status === 'pending').length;
-    const approvedCount = quotationsList.filter(q => q.status === 'approved' || q.status === 'sent_to_client').length;
-    const dealCount = quotationsList.filter(q => q.status === 'deal').length;
-    return {
-      totalQuotations,
-      draftCount,
-      approvedCount,
-      dealCount,
-      onOpenQuotations: () => setActiveTab('quotation'),
-    };
-  }, [isAdmin, quotationsList]);
+  }, [isAdmin, isSuper, activeCompanyId, loadReports, summaryData]);
 
   useEffect(() => {
     if (!isAdmin || (isSuper && !activeCompanyId)) return;
@@ -759,8 +721,7 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Menu terkonsolidasi menjadi 10 modul utama yang fokus (tanpa duplikasi halaman di sidebar)
-  // dengan tetap mendukung penuh seluruh alias activeTab lama dan grup standar.
+  // Menu terfokus khusus pada Laporan Kerja Digital & Pelanggan untuk 2 Role Utama
   const ALL_ITEMS: {
     id: Tab;
     label: string;
@@ -772,50 +733,21 @@ export const AdminDashboard: React.FC = () => {
     roles: string[];
     keywords?: string[];
   }[] = [
-    // GRUP 1: PENAWARAN & PELANGGAN
+    // GRUP 1: LAPORAN KERJA & PELANGGAN
     {
       id: 'dashboard',
-      label: 'Dashboard Operasional',
+      label: 'Dashboard Laporan Kerja',
       shortLabel: 'Dashboard',
-      group: '1. PENAWARAN & PELANGGAN',
+      group: '1. LAPORAN KERJA & PELANGGAN',
       icon: <LayoutDashboard size={16} />,
       roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
-      keywords: ['operation center', 'live map', 'performance team', 'bisnis', 'kpi'],
-    },
-    {
-      id: 'quotation',
-      label: 'Penawaran Harga (PH)',
-      shortLabel: 'Penawaran (PH)',
-      group: '1. PENAWARAN & PELANGGAN',
-      icon: <FileText size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
-      keywords: ['surat penawaran', 'ph', 'nomor surat', 'pipeline', 'approval'],
-    },
-    {
-      id: 'customers',
-      label: 'Pelanggan & Garansi Rayap',
-      shortLabel: 'Pelanggan & Garansi',
-      group: '1. PENAWARAN & PELANGGAN',
-      icon: <Users size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
-      keywords: ['pelanggan', 'klien', 'kontrol rayap', 'garansi', 'pin point', 'kontrak'],
-    },
-
-    // GRUP 2: PEKERJAAN LAPANGAN
-    {
-      id: 'spk-cms',
-      label: 'Penugasan SPK & Lokasi Proyek',
-      shortLabel: 'SPK & Proyek',
-      group: '2. PEKERJAAN LAPANGAN',
-      icon: <Briefcase size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
-      keywords: ['spk', 'perintah kerja', 'proyek', 'kalender tugas', 'heatmap', 'radius', 'tipe tugas'],
+      keywords: ['operation center', 'live map', 'performance team', 'pelanggan', 'kpi'],
     },
     {
       id: 'reports',
-      label: 'Hasil & Verifikasi Kerja',
-      shortLabel: 'Hasil & Verifikasi',
-      group: '2. PEKERJAAN LAPANGAN',
+      label: 'Laporan Kerja Digital',
+      shortLabel: 'Laporan Kerja',
+      group: '1. LAPORAN KERJA & PELANGGAN',
       icon: kpi.flaggedJobs > 0 ? <ShieldAlert size={16} /> : <CheckCircle2 size={16} />,
       danger: kpi.flaggedJobs > 0,
       badge: kpi.flaggedJobs > 0 ? kpi.flaggedJobs : undefined,
@@ -823,50 +755,48 @@ export const AdminDashboard: React.FC = () => {
       keywords: ['laporan kerja', 'anomali', 'perlu dicek', 'verifikasi', 'task monitoring', 'pdf'],
     },
     {
+      id: 'spk-cms',
+      label: 'Penugasan & Lokasi Proyek',
+      shortLabel: 'Penugasan & Proyek',
+      group: '1. LAPORAN KERJA & PELANGGAN',
+      icon: <Briefcase size={16} />,
+      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
+      keywords: ['spk', 'perintah kerja', 'proyek', 'kalender tugas', 'heatmap', 'radius', 'tipe tugas'],
+    },
+    {
+      id: 'customers',
+      label: 'Data Pelanggan & Garansi',
+      shortLabel: 'Data Pelanggan',
+      group: '1. LAPORAN KERJA & PELANGGAN',
+      icon: <Users size={16} />,
+      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
+      keywords: ['pelanggan', 'klien', 'kontrol rayap', 'garansi', 'pin point', 'kontrak'],
+    },
+    {
       id: 'tracking',
-      label: 'Lacak Peta & Perjalanan',
-      shortLabel: 'Peta & Rute',
-      group: '2. PEKERJAAN LAPANGAN',
+      label: 'Lacak Peta & GPS Teknisi',
+      shortLabel: 'Peta & GPS',
+      group: '1. LAPORAN KERJA & PELANGGAN',
       icon: <MapPin size={16} />,
       roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
       keywords: ['lokasi teknisi', 'gps', 'perjalanan', 'journey', 'peta'],
     },
 
-    // GRUP 3: STOK OBAT & KEUANGAN
-    {
-      id: 'inventory',
-      label: 'Gudang & Bahan Kimia',
-      shortLabel: 'Gudang & Kimia',
-      group: '3. STOK OBAT & KEUANGAN',
-      icon: <Package size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
-      keywords: ['stok obat', 'gudang', 'tren bahan kimia', 'untung rugi', 'alokasi proyek'],
-    },
-    {
-      id: 'order-tracking',
-      label: 'Keuangan, Tagihan & Performa',
-      shortLabel: 'Keuangan & MoM',
-      group: '3. STOK OBAT & KEUANGAN',
-      icon: <SlidersHorizontal size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
-      keywords: ['tagihan', 'cicilan', 'termin', 'cashflow', 'pemasukan', 'performa mom'],
-    },
-
-    // GRUP 4: PENGATURAN
+    // GRUP 2: TIM & PENGATURAN
     {
       id: 'approval',
-      label: 'Tim, Kinerja & Akun Staf',
-      shortLabel: 'Tim & Akun Staf',
-      group: '4. PENGATURAN',
+      label: 'Manajemen Tim & Akun',
+      shortLabel: 'Tim & Akun',
+      group: '2. TIM & PENGATURAN',
       icon: <UserCheck size={16} />,
       roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
       keywords: ['anggota', 'staf', 'kinerja teknisi', 'target kunjungan', 'undangan', 'live tracking'],
     },
     {
       id: 'templates',
-      label: 'Pengaturan, Kop & Audit Sistem',
-      shortLabel: 'Pengaturan & Audit',
-      group: '4. PENGATURAN',
+      label: 'Pengaturan Kop PDF & Audit',
+      shortLabel: 'Kop PDF & Audit',
+      group: '2. TIM & PENGATURAN',
       icon: <Settings2 size={16} />,
       roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
       keywords: ['kop surat', 'ttd direktur', 'aturan poin', 'risiko', 'retensi foto', 'audit', 'profil', 'tema'],
@@ -878,7 +808,6 @@ export const AdminDashboard: React.FC = () => {
     if (activeTab === 'kontrol-rayap') return 'customers';
     if (activeTab === 'projects') return 'spk-cms';
     if (activeTab === 'anomalies') return 'reports';
-    if (activeTab === 'cashflow' || activeTab === 'performa') return 'order-tracking';
     if (activeTab === 'executors') return 'approval';
     if ((activeTab === 'risk-config' || activeTab === 'audit' || activeTab === 'profile') && isAdmin) {
       return 'templates';
@@ -1011,15 +940,13 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Tab Dashboard: Fokus HANYA pada Data & Visual Penting (Tanpa Tabel Panjang yang Menumpuk di Bawah) */}
+        {/* Tab Dashboard: Fokus HANYA pada Data & Visual Penting */}
         {activeTab === 'dashboard' && (
           <OperationsAnalyticsBento
             summary={summaryData}
-            quotationSummary={quotationSummary}
             reports={reports}
             projects={projects}
             executors={executors}
-            quotations={quotationsList}
             userLocations={userLocations}
             companyDisplayName={user?.name || 'Gucimas Pratama'}
             isLoading={isLoading}
@@ -1047,10 +974,6 @@ export const AdminDashboard: React.FC = () => {
             onOpenProjectsTab={() => {
               setCameFromDashboard(true);
               setActiveTab('projects');
-            }}
-            onOpenQuotationsTab={() => {
-              setCameFromDashboard(true);
-              setActiveTab('quotation');
             }}
             onOpenCustomersTab={() => {
               setCameFromDashboard(true);
@@ -2903,55 +2826,9 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               )}
 
-              {activeTab === 'quotation' && <QuotationPage />}
               {(activeTab === 'customers' || activeTab === 'kontrol-rayap') && (
                 <CustomersPage initialSubTab={activeTab === 'kontrol-rayap' ? 'garansi' : 'master'} />
               )}
-              {(activeTab === 'order-tracking' || activeTab === 'cashflow' || activeTab === 'performa') && (
-                <div className="space-y-5">
-                  <div className="flex flex-wrap items-center gap-1.5 bg-[var(--bg-card)] p-2 rounded-2xl border border-[var(--border-subtle)]">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('order-tracking')}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-                        activeTab === 'order-tracking'
-                          ? 'bg-[var(--accent)] text-white shadow-2xs'
-                          : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
-                      }`}
-                    >
-                      Tagihan &amp; Cicilan Klien
-                    </button>
-                    {isAdmin && (
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('cashflow')}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-                          activeTab === 'cashflow'
-                            ? 'bg-[var(--accent)] text-white shadow-2xs'
-                            : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
-                        }`}
-                      >
-                        Laporan Pemasukan &amp; Cashflow
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('performa')}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-                        activeTab === 'performa'
-                          ? 'bg-[var(--accent)] text-white shadow-2xs'
-                          : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
-                      }`}
-                    >
-                      Performa MoM &amp; Capaian Target
-                    </button>
-                  </div>
-                  {activeTab === 'order-tracking' && <TrackingPage />}
-                  {activeTab === 'cashflow' && <CashflowPage />}
-                  {activeTab === 'performa' && <PerformaPage />}
-                </div>
-              )}
-              {activeTab === 'inventory' && <InventoryPage />}
               {activeTab === 'saas-companies' && isMasterSuper && <CompaniesPage />}
 
               {(activeTab === 'templates' || activeTab === 'risk-config' || activeTab === 'audit' || (activeTab === 'profile' && isAdmin)) && (
@@ -3804,7 +3681,6 @@ export const AdminDashboard: React.FC = () => {
           availableCustomers={Array.from(
             new Set([
               ...projects.map(p => p.clientName).filter(Boolean),
-              ...quotationsList.map(q => q.kepadaNama).filter(Boolean),
             ])
           )}
           reports={selectedReport ? [selectedReport] : []}

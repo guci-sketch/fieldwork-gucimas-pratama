@@ -364,7 +364,7 @@ export const Header: React.FC<HeaderProps> = ({
                 value={jumpQuery}
                 onChange={e => setJumpQuery(e.target.value)}
                 aria-label="Ketik nama menu"
-                placeholder="Cari menu (contoh: Dashboard, Penawaran, Gudang, SPK)..."
+                placeholder="Cari menu (contoh: Dashboard, Laporan Kerja, Pelanggan, Peta GPS)..."
                 className="w-full bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
               />
               <button
