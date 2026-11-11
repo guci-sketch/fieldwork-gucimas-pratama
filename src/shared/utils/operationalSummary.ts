@@ -380,8 +380,8 @@ function getPeriodDayWindow(period: JarivisPeriodKey): { days: number; label: st
 }
 
 function formatMinutesLabel(minutes: number): string {
-  if (!Number.isFinite(minutes) || minutes <= 0) return '0s';
-  if (minutes < 60) return `${Math.round(minutes)}m`;
+  if (!Number.isFinite(minutes) || minutes <= 0) return '0 mnt';
+  if (minutes < 60) return `${Math.round(minutes)} mnt`;
   const h = Math.floor(minutes / 60);
   const m = Math.round(minutes % 60);
   return m > 0 ? `${h}j ${m}m` : `${h}j`;
@@ -410,7 +410,7 @@ function computeAverageClockTime(timestamps: (string | null | undefined)[]): str
       // ignore invalid format
     }
   }
-  if (validMinutes.length === 0) return '0s';
+  if (validMinutes.length === 0) return '--:--';
   const avg = Math.round(validMinutes.reduce((a, b) => a + b, 0) / validMinutes.length);
   const hh = String(Math.floor(avg / 60)).padStart(2, '0');
   const mm = String(avg % 60).padStart(2, '0');

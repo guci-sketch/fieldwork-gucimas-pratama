@@ -606,7 +606,7 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                             {rep.status === 'FLAGGED' ? 'Perlu Ditinjau' : 'Sedang Berlangsung'}
                           </span>
                         </div>
-                        <p>{rep.project.projectName} · {rep.executor.name}</p>
+                        <p>{rep.project.name} · {rep.executor.name}</p>
                         <small>{rep.project.address}</small>
                       </div>
                       <span className="text-[var(--secondary)] font-bold">›</span>
@@ -638,7 +638,7 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                         <strong>
                           {rep.status === 'COMPLETED' ? 'Pekerjaan selesai dicatat' : rep.status === 'WORKING' ? 'Check-in berhasil dicatat' : rep.status === 'FLAGGED' ? 'Laporan ditandai sistem' : 'Penugasan siap dikerjakan'}
                         </strong>
-                        <small>{rep.executor.name} · {rep.project.projectName}</small>
+                        <small>{rep.executor.name} · {rep.project.name}</small>
                       </span>
                       <time>{timeStr}</time>
                     </div>
@@ -728,9 +728,6 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
           <div className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-2xl p-4 sm:p-5 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
-                <span className="w-7 h-7 rounded-full bg-[#3b82f6]/20 border border-[#3b82f6]/40 text-[#60a5fa] text-xs font-bold flex items-center justify-center shrink-0">
-                  #
-                </span>
                 <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-[var(--text-primary)]">
                   BEBAN KERJA SAAT INI
                 </h3>
@@ -749,17 +746,14 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                   }
                   className="px-3 py-1.5 rounded-lg bg-[#1e3a8a]/50 hover:bg-[#1e3a8a]/70 border border-[#3b82f6]/40 text-[#93c5fd] text-xs font-semibold transition-colors cursor-pointer"
                 >
-                  {workloadSort === 'mostRemaining' ? '≡ Sisa Terbanyak' : '≡ Risiko Tertinggi'}
+                  {workloadSort === 'mostRemaining' ? 'Urutkan: Sisa Terbanyak' : 'Urutkan: Risiko Tertinggi'}
                 </button>
               </div>
             </div>
 
             {(summary.priorityReports ?? []).length === 0 && reports.length === 0 ? (
               <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl py-10 px-4 text-center space-y-2">
-                <div className="w-14 h-14 rounded-2xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] mx-auto flex items-center justify-center text-lg font-bold text-[#3b82f6]">
-                  ✓
-                </div>
-                <p className="text-sm font-bold text-[var(--text-primary)] pt-1">
+                <p className="text-sm font-bold text-[var(--text-primary)]">
                   Belum ada antrean beban kerja tertunda pada tanggal ini
                 </p>
                 <p className="text-xs text-[var(--text-secondary)] max-w-md mx-auto">
@@ -895,7 +889,7 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                               : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
                           }`}
                         >
-                          #{idx + 1}
+                          {idx + 1}
                         </span>
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-[var(--text-primary)] truncate">{m.name}</p>
@@ -929,8 +923,6 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                 title: 'Anggota Aktif',
                 count: computed.liveMap.activeMembersCount,
                 sub: 'Anggota clock in',
-                badgeBg: 'bg-[#3b82f6]/15 text-[#60a5fa] border-[#3b82f6]/30',
-                symbol: '⊞',
                 onClick: onOpenExecutorsTab,
               },
               {
@@ -938,8 +930,6 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                 title: 'Anggota Idle',
                 count: computed.liveMap.idleMembersCount,
                 sub: 'Clock in, tanpa tugas',
-                badgeBg: 'bg-[#64748b]/15 text-[#94a3b8] border-[#64748b]/30',
-                symbol: '⊡',
                 onClick: () => setIdleModalOpen(true),
               },
               {
@@ -947,8 +937,6 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                 title: 'Kunjungan Aktif',
                 count: computed.liveMap.activeVisitsCount,
                 sub: 'On-site, belum selesai',
-                badgeBg: 'bg-[#10b981]/15 text-[#34d399] border-[#10b981]/30',
-                symbol: '✓',
                 onClick: onOpenReportsTab,
               },
               {
@@ -956,8 +944,6 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                 title: 'Anggota Belum Selesai',
                 count: computed.liveMap.unfinishedMembersCount,
                 sub: 'Tugas Belum Selesai',
-                badgeBg: 'bg-[#ef4444]/15 text-[#f87171] border-[#ef4444]/30',
-                symbol: '!',
                 onClick: onOpenReportsTab,
               },
               {
@@ -965,8 +951,6 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                 title: 'Anggota Selesai',
                 count: computed.liveMap.completedMembersCount,
                 sub: 'Semua tugas selesai',
-                badgeBg: 'bg-[#10b981]/15 text-[#34d399] border-[#10b981]/30',
-                symbol: '✓',
                 onClick: onOpenReportsTab,
               },
             ].map(card => (
@@ -974,24 +958,16 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                 key={card.id}
                 className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-4 flex flex-col justify-between gap-3"
               >
-                <div className="flex items-start gap-3">
-                  <span
-                    className={`w-8 h-8 rounded-lg border text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 ${card.badgeBg}`}
-                    aria-hidden="true"
-                  >
-                    {card.symbol}
+                <div className="min-w-0">
+                  <span className="text-xs font-bold text-[var(--text-primary)] block truncate">
+                    {card.title}
                   </span>
-                  <div className="min-w-0">
-                    <span className="text-xs font-bold text-[var(--text-primary)] block truncate">
-                      {card.title}
-                    </span>
-                    <strong className="text-xl font-bold font-mono tabular-nums text-[var(--text-primary)] block mt-0.5">
-                      {formatNumberId(card.count)}
-                    </strong>
-                    <span className="text-[11px] text-[var(--text-secondary)] block truncate">
-                      {card.sub}
-                    </span>
-                  </div>
+                  <strong className="text-xl font-bold font-mono tabular-nums text-[var(--text-primary)] block mt-1">
+                    {formatNumberId(card.count)}
+                  </strong>
+                  <span className="text-[11px] text-[var(--text-secondary)] block truncate mt-0.5">
+                    {card.sub}
+                  </span>
                 </div>
                 <div className="text-right">
                   <button
@@ -1359,6 +1335,8 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                   primaryText={formatDecimalId(computed.performanceTeam.avgAssignedPerMember)}
                   primaryTone="rose"
                   subText="Tugas per anggota"
+                  trendText={`0% ${computed.performanceTeam.comparisonSuffix}`}
+                  trendPositive={true}
                 />
                 <JarivisRadialMetricCard
                   title="RATA-RATA TUGAS SELESAI PER ANGGOTA"
@@ -1367,6 +1345,8 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                   primaryText={formatDecimalId(computed.performanceTeam.avgCompletedPerMember)}
                   primaryTone="teal"
                   subText="Tugas per anggota"
+                  trendText={`0% ${computed.performanceTeam.comparisonSuffix}`}
+                  trendPositive={true}
                 />
               </div>
 

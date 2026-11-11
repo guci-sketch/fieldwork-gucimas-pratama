@@ -861,7 +861,7 @@ export const ExecutorHome: React.FC = () => {
             const statusStr = repObj?.status || 'READY';
             const schedStr = `${formatShortDateId(repObj?.createdAt || projObj?.createdAt)} · ${(repObj?.scheduledStartTime || '09.00').replace(':', '.')}`;
             const notesText =
-              repObj?.workNotes ||
+              repObj?.reviewNotes ||
               (repObj?.targetFocus?.length ? `Fokus target: ${repObj.targetFocus.join(', ')}. ` : '') +
               'Temui penanggung jawab lokasi sebelum memulai pekerjaan. Dokumentasikan kondisi awal dan hasil.';
 

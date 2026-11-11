@@ -45,11 +45,12 @@ interface HeaderProps {
 }
 
 const ROLE_BADGE_LABELS: Record<string, string> = {
-  SUPERADMIN: 'Direktur',
-  ADMIN: 'Admin',
-  TEKNISI_LAPANGAN: 'Teknisi',
-  MARKETING: 'Marketing',
-  INVENTORY: 'Gudang',
+  SUPERADMIN: 'Admin Operasional',
+  ADMIN: 'Admin Operasional',
+  TEKNISI_LAPANGAN: 'Teknisi Lapangan',
+  MARKETING: 'Admin Operasional',
+  INVENTORY: 'Admin Operasional',
+  MASTER_SUPER_ADMIN: 'Admin Operasional',
 };
 
 export const Header: React.FC<HeaderProps> = ({

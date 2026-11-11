@@ -761,7 +761,6 @@ export const AdminDashboard: React.FC = () => {
 
   // Menu terkonsolidasi menjadi 10 modul utama yang fokus (tanpa duplikasi halaman di sidebar)
   // dengan tetap mendukung penuh seluruh alias activeTab lama dan grup standar.
-  const isMarketingUser = user?.role === 'MARKETING';
   const ALL_ITEMS: {
     id: Tab;
     label: string;
@@ -773,50 +772,39 @@ export const AdminDashboard: React.FC = () => {
     roles: string[];
     keywords?: string[];
   }[] = [
-    // KHUSUS MASTER SUPER ADMIN
-    {
-      id: 'saas-companies',
-      label: 'Kelola Perusahaan & Token Superadmin',
-      shortLabel: 'Perusahaan SaaS',
-      group: 'KONSOL PLATFORM SAAS',
-      icon: <ShieldCheck size={16} />,
-      roles: ['MASTER_SUPER_ADMIN'],
-      keywords: ['perusahaan', 'tenant', 'token', 'saas'],
-    },
-
-    // GRUP 1: PENAWARAN & PELANGGAN (3 Item Terkonsolidasi)
+    // GRUP 1: PENAWARAN & PELANGGAN
     {
       id: 'dashboard',
-      label: isDirector ? 'Dashboard Utama & KPI' : 'Dashboard Ringkasan',
+      label: 'Dashboard Operasional',
       shortLabel: 'Dashboard',
       group: '1. PENAWARAN & PELANGGAN',
       icon: <LayoutDashboard size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN'],
+      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
       keywords: ['operation center', 'live map', 'performance team', 'bisnis', 'kpi'],
     },
     {
       id: 'quotation',
-      label: isDirector ? 'Approval & Pantau Penawaran' : 'Buat & Cek Penawaran (PH)',
-      shortLabel: isDirector ? 'Approval PH' : 'Penawaran',
+      label: 'Penawaran Harga (PH)',
+      shortLabel: 'Penawaran (PH)',
       group: '1. PENAWARAN & PELANGGAN',
       icon: <FileText size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING'],
+      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
       keywords: ['surat penawaran', 'ph', 'nomor surat', 'pipeline', 'approval'],
     },
     {
       id: 'customers',
-      label: 'Pelanggan, Peta & Garansi Rayap',
+      label: 'Pelanggan & Garansi Rayap',
       shortLabel: 'Pelanggan & Garansi',
       group: '1. PENAWARAN & PELANGGAN',
       icon: <Users size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING'],
+      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
       keywords: ['pelanggan', 'klien', 'kontrol rayap', 'garansi', 'pin point', 'kontrak'],
     },
 
-    // GRUP 2: PEKERJAAN LAPANGAN (3 Item Terkonsolidasi)
+    // GRUP 2: PEKERJAAN LAPANGAN
     {
       id: 'spk-cms',
-      label: user?.role === 'INVENTORY' ? 'Lokasi & Daftar Proyek' : 'Penugasan SPK & Lokasi Proyek',
+      label: 'Penugasan SPK & Lokasi Proyek',
       shortLabel: 'SPK & Proyek',
       group: '2. PEKERJAAN LAPANGAN',
       icon: <Briefcase size={16} />,
@@ -826,12 +814,12 @@ export const AdminDashboard: React.FC = () => {
     {
       id: 'reports',
       label: 'Hasil & Verifikasi Kerja',
-      shortLabel: 'Hasil & Anomali',
+      shortLabel: 'Hasil & Verifikasi',
       group: '2. PEKERJAAN LAPANGAN',
       icon: kpi.flaggedJobs > 0 ? <ShieldAlert size={16} /> : <CheckCircle2 size={16} />,
       danger: kpi.flaggedJobs > 0,
       badge: kpi.flaggedJobs > 0 ? kpi.flaggedJobs : undefined,
-      roles: ['SUPERADMIN', 'ADMIN'],
+      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
       keywords: ['laporan kerja', 'anomali', 'perlu dicek', 'verifikasi', 'task monitoring', 'pdf'],
     },
     {
@@ -840,38 +828,38 @@ export const AdminDashboard: React.FC = () => {
       shortLabel: 'Peta & Rute',
       group: '2. PEKERJAAN LAPANGAN',
       icon: <MapPin size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN'],
+      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
       keywords: ['lokasi teknisi', 'gps', 'perjalanan', 'journey', 'peta'],
     },
 
-    // GRUP 3: STOK OBAT & KEUANGAN (2 Item Terkonsolidasi)
+    // GRUP 3: STOK OBAT & KEUANGAN
     {
       id: 'inventory',
-      label: isDirector ? 'Gudang, Tren Kimia & Untung Rugi' : 'Gudang, Alokasi & Tren Kimia',
+      label: 'Gudang & Bahan Kimia',
       shortLabel: 'Gudang & Kimia',
       group: '3. STOK OBAT & KEUANGAN',
       icon: <Package size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN', 'INVENTORY'],
+      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
       keywords: ['stok obat', 'gudang', 'tren bahan kimia', 'untung rugi', 'alokasi proyek'],
     },
     {
       id: 'order-tracking',
-      label: isMarketingUser ? 'Tagihan & Performa (MoM)' : 'Keuangan, Tagihan & Performa',
+      label: 'Keuangan, Tagihan & Performa',
       shortLabel: 'Keuangan & MoM',
       group: '3. STOK OBAT & KEUANGAN',
       icon: <SlidersHorizontal size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING'],
+      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
       keywords: ['tagihan', 'cicilan', 'termin', 'cashflow', 'pemasukan', 'performa mom'],
     },
 
-    // GRUP 4: PENGATURAN (2 Item Terkonsolidasi untuk Admin/Direktur, 1 Item Profil untuk Role Lain)
+    // GRUP 4: PENGATURAN
     {
       id: 'approval',
       label: 'Tim, Kinerja & Akun Staf',
       shortLabel: 'Tim & Akun Staf',
       group: '4. PENGATURAN',
       icon: <UserCheck size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN'],
+      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
       keywords: ['anggota', 'staf', 'kinerja teknisi', 'target kunjungan', 'undangan', 'live tracking'],
     },
     {
@@ -880,17 +868,8 @@ export const AdminDashboard: React.FC = () => {
       shortLabel: 'Pengaturan & Audit',
       group: '4. PENGATURAN',
       icon: <Settings2 size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN'],
+      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
       keywords: ['kop surat', 'ttd direktur', 'aturan poin', 'risiko', 'retensi foto', 'audit', 'profil', 'tema'],
-    },
-    {
-      id: 'profile',
-      label: 'Profil & Tema Saya',
-      shortLabel: 'Profil',
-      group: isMasterSuper ? 'KONSOL PLATFORM SAAS' : '4. PENGATURAN',
-      icon: <Palette size={16} />,
-      roles: ['MASTER_SUPER_ADMIN', 'MARKETING', 'INVENTORY'],
-      keywords: ['profil', 'tema', 'password', 'gelap', 'terang'],
     },
   ];
 
@@ -971,10 +950,10 @@ export const AdminDashboard: React.FC = () => {
       dynamicIslandItems={showFloatingBottom ? [] : []}
       sidebarHeader={
         <div>
-          <h2 className="text-xs font-black tracking-tight text-[var(--text-primary)] leading-tight mb-0.5">
-            Field<span className="text-[var(--accent-text)]">work</span>
+          <h2 className="text-sm font-black tracking-tight text-white leading-tight mb-0.5">
+            Field<span className="text-[#a9c9b4]">work</span>
           </h2>
-          <p className="text-[11px] text-[var(--text-muted)]">
+          <p className="text-[11px] text-[#c9d8cf]">
             {new Date().toLocaleDateString('id-ID', {
               weekday: 'long',
               day: 'numeric',
@@ -982,7 +961,6 @@ export const AdminDashboard: React.FC = () => {
               year: 'numeric',
             })}
           </p>
-          {isSuper && <CompanyPicker />}
         </div>
       }
     >
@@ -2520,24 +2498,17 @@ export const AdminDashboard: React.FC = () => {
                   {/* Header Halaman */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--border-subtle)]">
                     <div>
-                      <h3 className="text-base sm:text-lg font-extrabold text-[var(--text-primary)] flex items-center gap-2">
-                        <UserCheck size={20} className="text-[var(--accent)]" />
+                      <h3 className="text-base sm:text-lg font-extrabold text-[var(--text-primary)]">
                         Manajemen Akun Staf Perusahaan
                       </h3>
                       <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                        Direktur dan Admin dapat menambahkan staf baru atau membuat link undangan resmi.
+                        Kelola akses untuk 2 peran utama: Admin Operasional dan Teknisi Lapangan.
                       </p>
                     </div>
                     <div className="self-start sm:self-center">
-                      {isDirector ? (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 font-bold text-xs">
-                          👑 Otoritas Penuh Direktur
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 font-bold text-xs">
-                          Mode Admin (Akun Admin Lain Dilindungi)
-                        </span>
-                      )}
+                      <span className="inline-flex items-center px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 font-bold text-xs">
+                        Admin Operasional
+                      </span>
                     </div>
                   </div>
 
@@ -2548,8 +2519,8 @@ export const AdminDashboard: React.FC = () => {
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <h4 className="font-extrabold text-sm text-[var(--text-primary)] flex items-center gap-2">
-                          <Plus size={16} className="text-[var(--accent)]" /> Tambah Pengguna Langsung
+                        <h4 className="font-extrabold text-sm text-[var(--text-primary)]">
+                          Tambah Pengguna Langsung
                         </h4>
                         <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                           Akun langsung aktif dan dapat langsung digunakan untuk login.
@@ -2611,9 +2582,7 @@ export const AdminDashboard: React.FC = () => {
                           onChange={e => setNewUser({ ...newUser, role: e.target.value as AdminUser['role'] })}
                           className="w-full px-3.5 py-2.5 min-h-[44px] text-xs sm:text-sm rounded-xl border border-[var(--border)] bg-white text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--accent)]"
                         >
-                          <option value="TEKNISI_LAPANGAN">Teknisi Lapangan (PWA Mobile)</option>
-                          <option value="MARKETING">Marketing / Surveyor</option>
-                          <option value="INVENTORY">Inventory / Staf Gudang</option>
+                          <option value="TEKNISI_LAPANGAN">Teknisi Lapangan</option>
                           <option value="ADMIN">Admin Operasional</option>
                         </select>
                       </div>
@@ -2622,9 +2591,8 @@ export const AdminDashboard: React.FC = () => {
                         <button
                           type="submit"
                           disabled={creatingUser}
-                          className="w-full min-h-[44px] px-5 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs sm:text-sm font-bold rounded-xl disabled:opacity-50 transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+                          className="w-full min-h-[44px] px-5 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs sm:text-sm font-bold rounded-xl disabled:opacity-50 transition-all shadow-xs flex items-center justify-center cursor-pointer"
                         >
-                          <Plus size={15} />
                           {creatingUser ? 'Membuat...' : 'Buat Akun Sekarang'}
                         </button>
                       </div>
@@ -2635,8 +2603,7 @@ export const AdminDashboard: React.FC = () => {
                   <div className="clean-card p-5 sm:p-6 bg-emerald-50/30 border border-emerald-200/80 space-y-3.5">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div>
-                        <h4 className="font-extrabold text-sm text-emerald-950 flex items-center gap-2">
-                          <CheckCircle2 size={16} className="text-[var(--accent)]" />
+                        <h4 className="font-extrabold text-sm text-emerald-950">
                           Buat Link Undangan Mandiri (Berlaku 7 Hari)
                         </h4>
                         <p className="text-xs text-emerald-800 mt-0.5">
@@ -2652,17 +2619,14 @@ export const AdminDashboard: React.FC = () => {
                         className="px-3.5 py-2 min-h-[44px] text-xs sm:text-sm font-semibold rounded-xl border border-emerald-300 bg-white text-[var(--text-primary)]"
                       >
                         <option value="TEKNISI_LAPANGAN">Undangan: Teknisi Lapangan</option>
-                        <option value="MARKETING">Undangan: Marketing</option>
-                        <option value="INVENTORY">Undangan: Inventory / Gudang</option>
-                        <option value="ADMIN">Undangan: Admin Perusahaan</option>
+                        <option value="ADMIN">Undangan: Admin Operasional</option>
                       </select>
                       <button
                         type="button"
                         onClick={() => handleGenerateInvite(inviteRole)}
                         disabled={isGeneratingInvite}
-                        className="min-h-[44px] px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition-colors disabled:opacity-50 cursor-pointer shadow-xs flex items-center gap-1.5"
+                        className="min-h-[44px] px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
                       >
-                        <Plus size={14} />
                         {isGeneratingInvite ? 'Membuat...' : 'Buat Tautan Undangan'}
                       </button>
                     </div>
@@ -2790,22 +2754,12 @@ export const AdminDashboard: React.FC = () => {
                                     </span>
                                     <span
                                       className={`text-[10.5px] font-bold px-2.5 py-0.5 rounded-full border ${
-                                        u.role === 'ADMIN'
-                                          ? 'bg-purple-50 text-purple-800 border-purple-200'
-                                          : u.role === 'MARKETING'
-                                          ? 'bg-blue-50 text-blue-800 border-blue-200'
-                                          : u.role === 'INVENTORY'
-                                          ? 'bg-amber-50 text-amber-800 border-amber-200'
-                                          : 'bg-teal-50 text-teal-800 border-teal-200'
+                                        u.role === 'TEKNISI_LAPANGAN'
+                                          ? 'bg-teal-50 text-teal-800 border-teal-200'
+                                          : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                                       }`}
                                     >
-                                      {u.role === 'ADMIN'
-                                        ? 'ADMIN'
-                                        : u.role === 'MARKETING'
-                                        ? 'MARKETING'
-                                        : u.role === 'INVENTORY'
-                                        ? 'GUDANG'
-                                        : 'TEKNISI'}
+                                      {u.role === 'TEKNISI_LAPANGAN' ? 'TEKNISI LAPANGAN' : 'ADMIN OPERASIONAL'}
                                     </span>
                                     {isSelf && (
                                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
@@ -2816,14 +2770,13 @@ export const AdminDashboard: React.FC = () => {
 
                                   <div className="text-xs text-[var(--text-secondary)] font-mono flex items-center gap-2 flex-wrap">
                                     <span>{u.email}</span>
-                                    {u.nip && <span>• NIP: {u.nip}</span>}
-                                    {u.phone && <span>• WA: {u.phone}</span>}
+                                    {u.nip && <span>· NIP: {u.nip}</span>}
+                                    {u.phone && <span>· WA: {u.phone}</span>}
                                   </div>
 
-                                  {/* Indikator Perangkat, Versi Aplikasi, Geofence, Face ID & Live Tracking (Screenshot 10: Master Anggota) */}
                                   <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[10.5px]">
                                     <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
-                                      📱 Perangkat: {u.is_active ? 'PWA Mobile Aktif (v2.10.1)' : 'Offline'}
+                                      Perangkat: {u.is_active ? 'PWA Mobile Aktif (v2.10.1)' : 'Offline'}
                                     </span>
                                     <button
                                       type="button"
@@ -2843,10 +2796,10 @@ export const AdminDashboard: React.FC = () => {
                                       Geofence: {(memberGeofenceMap[u.id] ?? true) ? 'Aktif' : 'Fleksibel'}
                                     </button>
                                     <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
-                                      🛰️ Live Tracking: {liveTrackingEnabled ? 'ON' : 'OFF'}
+                                      Live Tracking: {liveTrackingEnabled ? 'ON' : 'OFF'}
                                     </span>
-                                    <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
-                                      🔐 Akses Menu: Role {u.role}
+                                    <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold">
+                                      Peran: {u.role === 'TEKNISI_LAPANGAN' ? 'Teknisi Lapangan' : 'Admin Operasional'}
                                     </span>
                                   </div>
 
@@ -2966,7 +2919,7 @@ export const AdminDashboard: React.FC = () => {
                           : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
                       }`}
                     >
-                      💳 Tagihan &amp; Cicilan Klien
+                      Tagihan &amp; Cicilan Klien
                     </button>
                     {isAdmin && (
                       <button
@@ -2978,7 +2931,7 @@ export const AdminDashboard: React.FC = () => {
                             : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
                         }`}
                       >
-                        💰 Laporan Pemasukan &amp; Cashflow
+                        Laporan Pemasukan &amp; Cashflow
                       </button>
                     )}
                     <button
@@ -2990,7 +2943,7 @@ export const AdminDashboard: React.FC = () => {
                           : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
                       }`}
                     >
-                      📈 Performa MoM &amp; Capaian Target
+                      Performa MoM &amp; Capaian Target
                     </button>
                   </div>
                   {activeTab === 'order-tracking' && <TrackingPage />}
@@ -3014,7 +2967,7 @@ export const AdminDashboard: React.FC = () => {
                             : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
                         }`}
                       >
-                        📄 Kop Surat &amp; TTD Direktur
+                        Kop Surat &amp; TTD Direktur
                       </button>
                       <button
                         type="button"
@@ -3025,7 +2978,7 @@ export const AdminDashboard: React.FC = () => {
                             : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
                         }`}
                       >
-                        ⚖️ Aturan Poin Kehadiran &amp; Retensi Foto
+                        Aturan Poin Kehadiran &amp; Retensi Foto
                       </button>
                       <button
                         type="button"
@@ -3049,7 +3002,7 @@ export const AdminDashboard: React.FC = () => {
                         : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
                     }`}
                   >
-                    👤 Profil &amp; Tema Saya
+                    Profil &amp; Tema Saya
                   </button>
                 </div>
               )}
@@ -3090,7 +3043,7 @@ export const AdminDashboard: React.FC = () => {
                     <div>
                       <span className="block text-xs font-semibold text-[var(--text-muted)]">Peran</span>
                       <span className="inline-block font-semibold bg-[var(--status-working-bg)] text-[var(--status-working-text)] px-2.5 py-0.5 rounded text-xs border border-[var(--status-working-border)] mt-0.5">
-                        {user.role}
+                        {user.role === 'TEKNISI_LAPANGAN' ? 'Teknisi Lapangan' : 'Admin Operasional'}
                       </span>
                     </div>
                   </div>
@@ -3328,7 +3281,7 @@ export const AdminDashboard: React.FC = () => {
                             }`}
                           />
                           <span className="font-bold text-[var(--text-primary)] font-mono">
-                            {new Date(selectedReport.checkInAt).toLocaleTimeString('id-ID')} WIB — CHECK-IN
+                            {new Date(selectedReport.checkInAt).toLocaleTimeString('id-ID')} WIB · CHECK-IN
                           </span>
                           <p className="text-[var(--text-secondary)] mt-0.5">
                             {selectedReport.checkInValid ? 'Valid di dalam radius' : 'Di luar radius proyek'} (Jarak:{' '}
@@ -3342,8 +3295,7 @@ export const AdminDashboard: React.FC = () => {
                           <div key={photo.id} className="relative">
                             <div className="absolute -left-[31px] top-0.5 w-3.5 h-3.5 rounded-full bg-amber-500 border-2 border-[var(--bg-card)]" />
                             <span className="font-bold text-[var(--text-primary)] font-mono">
-                              {new Date(photo.capturedAt).toLocaleTimeString('id-ID')} WIB — DOKUMENTASI PROGRES #
-                              {idx + 1}
+                              {new Date(photo.capturedAt).toLocaleTimeString('id-ID')} WIB · DOKUMENTASI PROGRES {idx + 1}
                             </span>
                           </div>
                         ))}
@@ -3355,7 +3307,7 @@ export const AdminDashboard: React.FC = () => {
                             }`}
                           />
                           <span className="font-bold text-[var(--text-primary)] font-mono">
-                            {new Date(selectedReport.checkOutAt).toLocaleTimeString('id-ID')} WIB — CHECK-OUT
+                            {new Date(selectedReport.checkOutAt).toLocaleTimeString('id-ID')} WIB · CHECK-OUT
                           </span>
                           <p className="text-[var(--text-secondary)] mt-0.5">
                             Total durasi: {Math.round((selectedReport.durationSeconds || 0) / 60)} menit.

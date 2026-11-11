@@ -410,10 +410,8 @@ export function QuotationPage() {
             <TabContainer tabs={hubTabs} activeTab={subTab} onChange={id => setSubTab(id as HubSubTab)} showFloatingBottom={false} />
 
             <PageHeader
-                title={isDirector ? "Approval & Pemantauan Penawaran Harga" : "Surat Penawaran Harga — PT Guci Emas Pratama"}
-                subtitle={isDirector
-                    ? "Tinjau draf penawaran yang diajukan tim, sesuaikan harga atau garansi, dan berikan persetujuan."
-                    : "Buat draf penawaran dari hasil survei lapangan, sesuaikan harga atau garansi saat negosiasi, lalu setujui untuk cetak PDF resmi."}
+                title="Surat Penawaran Harga · PT Guci Emas Pratama"
+                subtitle="Buat draf penawaran dari hasil survei lapangan, sesuaikan harga atau garansi saat negosiasi, lalu setujui untuk cetak PDF resmi."
                 actions={
                     <>
                         <button

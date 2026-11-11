@@ -42,18 +42,18 @@ const inputCls = "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg fo
 function PembayaranBadge({ status }: { status: StatusPembayaran }) {
     const c = PEMBAYARAN_CFG[status];
     return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
             style={{ background: c.bg, color: c.color }}>
-            {c.icon} {c.label}
+            {c.label}
         </span>
     );
 }
 function PengerjaanBadge({ status }: { status: StatusPengerjaan }) {
     const c = PENGERJAAN_CFG[status];
     return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold"
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold"
             style={{ background: c.bg, color: c.color }}>
-            {c.icon} {c.label}
+            {c.label}
         </span>
     );
 }
@@ -69,15 +69,15 @@ function ARTerminSection({
 }) {
     return (
         <div className="space-y-4">
-            <p className="text-xs font-bold uppercase tracking-wide text-purple-600 flex items-center gap-1.5">
-                <Shield size={12} /> Termin Pembayaran — Anti Rayap
+            <p className="text-xs font-bold uppercase tracking-wide text-purple-600">
+                Termin Pembayaran · Anti Rayap
             </p>
 
             {/* ── Termin 1: DP ── */}
             <div className={`rounded-xl p-4 border-2 transition-colors ${termin.dibayarDP ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-white"}`}>
                 <div className="flex items-center justify-between mb-3">
                     <div>
-                        <p className="text-sm font-bold text-slate-800">Termin 1 — DP</p>
+                        <p className="text-sm font-bold text-slate-800">Termin 1 (DP)</p>
                         <p className="text-xs text-slate-500">{total > 0 ? Math.round(termin.nominalDP / total * 100) : 0}% dari total kontrak</p>
                     </div>
                     <p className="text-base font-bold text-slate-800 font-mono">{fmtIDR(termin.nominalDP)}</p>
@@ -117,7 +117,7 @@ function ARTerminSection({
             <div className={`rounded-xl p-4 border-2 transition-colors ${termin.dibayarPelunasan ? "border-emerald-300 bg-emerald-50" : "border-slate-200 bg-white"}`}>
                 <div className="flex items-center justify-between mb-3">
                     <div>
-                        <p className="text-sm font-bold text-slate-800">Termin 2 — Pelunasan</p>
+                        <p className="text-sm font-bold text-slate-800">Termin 2 (Pelunasan)</p>
                         <p className="text-xs text-slate-500">Sisa {total > 0 ? Math.round(termin.nominalPelunasan / total * 100) : 0}% setelah pekerjaan selesai</p>
                     </div>
                     <p className="text-base font-bold text-slate-800 font-mono">{fmtIDR(termin.nominalPelunasan)}</p>
@@ -204,8 +204,8 @@ function PCOCicilanSection({
 
     return (
         <div className="space-y-4">
-            <p className="text-xs font-bold uppercase tracking-wide text-cyan-600 flex items-center gap-1.5">
-                <Bug size={12} /> Cicilan Bulanan — Pest Control
+            <p className="text-xs font-bold uppercase tracking-wide text-cyan-600">
+                Cicilan Bulanan · Pest Control
             </p>
 
             {/* Setup durasi + tanggal mulai (hanya untuk tracking baru atau saat belum ada cicilan) */}

@@ -810,21 +810,17 @@ export function InventoryPage() {
                 <div>
                     <h2 className="text-lg sm:text-xl font-extrabold text-[var(--text-primary)] tracking-tight">
                         {tab === "proyek"
-                            ? isDirector
-                                ? "Estimasi Chemical per ID Proyek & Analisis Untung Rugi"
-                                : "Alokasi Bahan Chemical per ID Proyek"
+                            ? "Alokasi Bahan Chemical per ID Proyek & Analisis Operasional"
                             : tab === "chemical-trend"
                             ? "Analitik & Tren Pemakaian Bahan Kimia (Cair & Padat)"
-                            : "Mode Kerja Gudang Minimalis — Stok Obat & Alat"}
+                            : "Manajemen Gudang · Stok Obat & Alat"}
                     </h2>
                     <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                         {tab === "proyek"
-                            ? isDirector
-                                ? "Pantau nilai kontrak, biaya chemical, operasional teknisi, dan margin untung rugi per proyek."
-                                : "Catat alokasi chemical ke ID proyek untuk operasional. Estimasi keuntungan dan margin finansial dikunci khusus Direktur."
+                            ? "Pantau nilai kontrak, biaya bahan kimia, operasional teknisi, dan rekap alokasi per proyek."
                             : tab === "chemical-trend"
                             ? "Evaluasi tren pemakaian bahan kimia cair (mL/Liter) dan padat/umpan (gr/Kg/Butir) per periode dan per proyek."
-                            : "Klik kartu status di bawah untuk menyaring stok, atau klik tombol [+ Masuk] / [- Pakai Proyek] langsung pada baris barang."}
+                            : "Pilih kartu status di bawah untuk menyaring stok, atau gunakan tombol Masuk / Pakai Proyek pada baris barang."}
                     </p>
                 </div>
                 {canWrite && (
@@ -1776,7 +1772,7 @@ export function InventoryPage() {
                             >
                                 {items.map(it => (
                                     <option key={it.id} value={it.id}>
-                                        {it.nama} — Sisa: {fmt(it.stok)} {it.satuan}
+                                        {it.nama} · Sisa: {fmt(it.stok)} {it.satuan}
                                     </option>
                                 ))}
                             </select>
@@ -1798,7 +1794,7 @@ export function InventoryPage() {
                                         <option value="">-- Pilih Nama Klien / Proyek --</option>
                                         {projects.map(p => (
                                             <option key={p.id} value={p.id}>
-                                                {p.clientName} — {p.projectName} ({p.code})
+                                                {p.clientName} · {p.projectName} ({p.code})
                                             </option>
                                         ))}
                                     </select>

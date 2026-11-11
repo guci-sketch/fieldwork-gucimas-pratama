@@ -1,45 +1,47 @@
 import type { UserRole } from '@/entities/types';
 
-/** Nilai enum `user_role` pada database live (6-Role SaaS Hierarchy). */
+/** Fokus 2 Role Utama: Admin Operasional (ADMIN) & Teknisi Lapangan (TEKNISI_LAPANGAN) dengan kompatibilitas DB penuh. */
 export const DB_ROLES = [
-    'MASTER_SUPER_ADMIN',
-    'SUPERADMIN',
     'ADMIN',
+    'TEKNISI_LAPANGAN',
+    'SUPERADMIN',
     'MARKETING',
     'INVENTORY',
-    'TEKNISI_LAPANGAN',
+    'MASTER_SUPER_ADMIN',
 ] as const;
 
 export function isUserRole(value: unknown): value is UserRole {
     return typeof value === 'string' && (DB_ROLES as readonly string[]).includes(value);
 }
 
-/** Khusus pemilik platform SaaS (secret role, hanya kelola Perusahaan & Token Undangan Superadmin). */
-export function isMasterSuperAdmin(role?: UserRole | string | null): boolean {
-    return role === 'MASTER_SUPER_ADMIN';
-}
-
-/** Direktur / Superadmin Perusahaan Tenant. */
-export function isSuperOrMaster(role?: UserRole | string | null): boolean {
-    return role === 'SUPERADMIN';
-}
-
-/** Direktur (SUPERADMIN) atau Staf Admin Perusahaan (ADMIN). */
-export function isAdminOrAbove(role?: UserRole | string | null): boolean {
-    return role === 'SUPERADMIN' || role === 'ADMIN';
-}
-
-/** Khusus Direktur Perusahaan (SUPERADMIN / MASTER_SUPER_ADMIN / Tim Direksi Izumi & Ayling). */
-export function isDirectorUser(user?: { role?: string; email?: string } | null): boolean {
-    if (!user) return false;
-    if (user.role === 'SUPERADMIN' || user.role === 'MASTER_SUPER_ADMIN') return true;
-    if (user.email && /direktur|izumi|ayling|lieziragroup/i.test(user.email)) return true;
+/** Dalam versi minimalis 2-Role, konsol SaaS terpisah dinonaktifkan dan disatukan ke Admin Operasional. */
+export function isMasterSuperAdmin(_role?: UserRole | string | null): boolean {
     return false;
 }
 
+/** Seluruh akses manajerial disatukan ke Admin Operasional. */
+export function isSuperOrMaster(role?: UserRole | string | null): boolean {
+    return role !== 'TEKNISI_LAPANGAN' && Boolean(role);
+}
+
+/** Admin Operasional memiliki akses penuh terhadap seluruh modul manajemen & operasional. */
+export function isAdminOrAbove(role?: UserRole | string | null): boolean {
+    return role !== 'TEKNISI_LAPANGAN' && Boolean(role);
+}
+
+/** Admin Operasional memiliki otoritas penuh di konsol manajemen. */
+export function isDirectorUser(user?: { role?: string; email?: string } | null): boolean {
+    if (!user) return false;
+    return user.role !== 'TEKNISI_LAPANGAN';
+}
+
+export function formatRoleLabel(role?: UserRole | string | null): string {
+    return role === 'TEKNISI_LAPANGAN' ? 'Teknisi Lapangan' : 'Admin Operasional';
+}
+
 export function mapDbRole(role: unknown): UserRole {
-    if (isUserRole(role)) return role;
-    console.warn(`[roles] Role tidak dikenal dari database: ${String(role)} — diperlakukan sebagai TEKNISI_LAPANGAN.`);
+    if (role === 'TEKNISI_LAPANGAN') return 'TEKNISI_LAPANGAN';
+    if (isUserRole(role)) return 'ADMIN';
     return 'TEKNISI_LAPANGAN';
 }
 
