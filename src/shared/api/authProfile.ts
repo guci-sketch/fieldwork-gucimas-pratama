@@ -67,10 +67,12 @@ export async function fetchAppUser(uid: string): Promise<ProfileResult> {
     if (!u.is_active) return { user: null, message: 'Akun Anda sedang ditangguhkan (suspended). Hubungi administrator.' };
 
     const role = mapDbRole(u.role);
-    const resolvedCompanyId = u.company_id || '00000000-0000-4000-a000-000000000001';
-    if (u.company_id) {
+    if (role !== 'MASTER_SUPER_ADMIN') {
+        if (!u.company_id) {
+            return { user: null, message: 'Akun belum terhubung ke perusahaan mana pun.' };
+        }
         const { data: company } = await supabase.from('companies').select('status').eq('id', u.company_id).maybeSingle();
-        if (company && !ALLOWED_COMPANY_STATUS.includes(company.status)) {
+        if (!company || !ALLOWED_COMPANY_STATUS.includes(company.status)) {
             return { user: null, message: 'Langganan perusahaan Anda sedang ditangguhkan (suspended) atau berakhir.' };
         }
     }
@@ -82,7 +84,7 @@ export async function fetchAppUser(uid: string): Promise<ProfileResult> {
             name: u.name,
             email: u.email,
             role,
-            companyId: resolvedCompanyId,
+            companyId: u.company_id,
             isActive: u.is_active,
             wa: u.phone,
             nip: u.nip,

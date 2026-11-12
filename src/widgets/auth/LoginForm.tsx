@@ -2,11 +2,18 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { supabase } from '@/shared/lib/supabase';
 import { useAuthStore } from '@/app/store/authStore';
-import { useAuth } from '@/shared/hooks/useAuth';
 import {
+    AlertCircle,
     Loader2,
     LockKeyhole,
+    Eye,
     EyeOff,
+    ShieldCheck,
+    ArrowRight,
+    UserCheck,
+    KeyRound,
+    Building2,
+    Smartphone,
 } from "lucide-react";
 import type { AppUser } from '@/entities/types';
 import { fetchAppUser } from '@/shared/api/authProfile';
@@ -14,50 +21,20 @@ import { readPendingInvite, repairPendingInviteUser } from '@/shared/api/inviteS
 
 const QUICK_DEMO_ACCOUNTS = [
     {
-        label: "Admin Operasional",
+        label: "Admin Verifikasi & Geolocation",
         roleBadge: "ADMIN",
         group: "admin" as const,
         email: "admin@gucimaspratama.co.id",
         pw: "GuciEmas123!",
     },
     {
-        label: "Teknisi Lapangan",
+        label: "Teknisi Lapangan (Mobile PWA)",
         roleBadge: "TEKNISI",
         group: "technician" as const,
         email: "teknisi@gucimaspratama.co.id",
         pw: "GuciEmas123!",
     },
 ];
-
-const DEMO_FALLBACK_USERS: Record<string, AppUser> = {
-    "admin@gucimaspratama.co.id": {
-        uid: "00000000-0000-4000-a000-000000000012",
-        email: "admin@gucimaspratama.co.id",
-        name: "Siti Rahmawati",
-        role: "ADMIN",
-        companyId: "00000000-0000-4000-a000-000000000001",
-        isActive: true,
-        nip: "GEP-ADM-001",
-    },
-    "direktur@gucimaspratama.co.id": {
-        uid: "00000000-0000-4000-a000-000000000011",
-        email: "direktur@gucimaspratama.co.id",
-        name: "Budi Santoso",
-        role: "ADMIN",
-        companyId: "00000000-0000-4000-a000-000000000001",
-        isActive: true,
-        nip: "GEP-DIR-001",
-    },
-    "teknisi@gucimaspratama.co.id": {
-        uid: "00000000-0000-4000-a000-000000000014",
-        email: "teknisi@gucimaspratama.co.id",
-        name: "Rizky Pratama",
-        role: "TEKNISI_LAPANGAN",
-        companyId: "00000000-0000-4000-a000-000000000001",
-        isActive: true,
-        nip: "GEP-TEK-001",
-    },
-};
 
 export function LoginPage() {
     const navigate = useNavigate();
@@ -70,6 +47,7 @@ export function LoginPage() {
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
 
+    // Deteksi dan bersihkan parameter hash atau query error Supabase
     useEffect(() => {
         if (typeof window === "undefined") return;
         const hashStr = window.location.hash.startsWith("#") ? window.location.hash.substring(1) : "";
@@ -86,6 +64,7 @@ export function LoginPage() {
         }
     }, [searchParams]);
 
+    // Jika URL memiliki ?invite=..., arahkan otomatis ke halaman aktivasi token /signup
     useEffect(() => {
         const inv = searchParams.get("invite") || searchParams.get("token");
         if (inv) {
@@ -153,38 +132,24 @@ export function LoginPage() {
                 }
             }
 
-            if (authErr || !authData.user) {
-                const fallbackDemo = DEMO_FALLBACK_USERS[cleanEmail];
-                if (fallbackDemo && loginPassword === "GuciEmas123!") {
-                    setUser(fallbackDemo);
-                    navigate("/");
-                    return;
+            if (authErr) {
+                const errLower = authErr.message.toLowerCase();
+                if (errLower.includes("not confirmed") || errLower.includes("unconfirmed")) {
+                    throw new Error(
+                        "Email akun Anda belum terkonfirmasi di Supabase. Jalankan file SQL `06_fix_invite_auth_and_autoconfirm.sql` di Supabase SQL Editor untuk mengaktifkan seluruh akun undangan secara otomatis."
+                    );
                 }
-                if (authErr) {
-                    const errLower = authErr.message.toLowerCase();
-                    if (errLower.includes("not confirmed") || errLower.includes("unconfirmed")) {
-                        throw new Error(
-                            "Email akun Anda belum terkonfirmasi di Supabase. Jalankan file SQL `06_fix_invite_auth_and_autoconfirm.sql` di Supabase SQL Editor untuk mengaktifkan seluruh akun undangan secara otomatis."
-                        );
-                    }
-                    if (errLower.includes("invalid login credentials")) {
-                        throw new Error(
-                            "Email atau password salah. Pastikan kredensial sesuai."
-                        );
-                    }
-                    throw authErr;
+                if (errLower.includes("invalid login credentials")) {
+                    throw new Error(
+                        "Email atau password salah (atau akun undangan Anda belum diaktifkan di Supabase). Jika baru mendaftar via link undangan, pastikan password sesuai atau jalankan SQL patch `06_fix_invite_auth_and_autoconfirm.sql` di Supabase SQL Editor."
+                    );
                 }
-                throw new Error("Login gagal. Silakan coba lagi.");
+                throw authErr;
             }
+            if (!authData.user) throw new Error("Login gagal. Silakan coba lagi.");
 
             const res = await fetchAppUser(authData.user.id);
             if (!res.user) {
-                const fallbackDemo = DEMO_FALLBACK_USERS[cleanEmail];
-                if (fallbackDemo) {
-                    setUser(fallbackDemo);
-                    navigate("/");
-                    return;
-                }
                 await supabase.auth.signOut();
                 setError(res.message ?? "Akun tidak dapat digunakan.");
                 return;
@@ -193,12 +158,6 @@ export function LoginPage() {
             setUser(appUser);
             navigate("/");
         } catch (err: any) {
-            const fallbackDemo = DEMO_FALLBACK_USERS[cleanEmail];
-            if (fallbackDemo && loginPassword === "GuciEmas123!") {
-                setUser(fallbackDemo);
-                navigate("/");
-                return;
-            }
             setError(err.message || "Email atau password salah. Silakan periksa kembali.");
         } finally {
             setLoading(false);
@@ -219,7 +178,7 @@ export function LoginPage() {
 
     return (
         <main className="min-h-screen grid grid-cols-1 lg:grid-cols-[minmax(420px,0.95fr)_minmax(480px,1.05fr)] bg-white">
-            {/* Left Aside */}
+            {/* Left Aside — RedesignFieldworkGuciMasLite Split Hero */}
             <section className="hidden lg:flex flex-col justify-between bg-[#245c45] text-white p-12 xl:p-14 relative overflow-hidden">
                 <div className="flex items-center gap-3 relative z-10">
                     <div className="brand-mark">
@@ -228,28 +187,32 @@ export function LoginPage() {
                         <span />
                     </div>
                     <div>
-                        <strong className="block text-base leading-tight font-bold text-white">Fieldwork</strong>
+                        <strong className="block text-base leading-tight font-bold">Fieldwork</strong>
                         <small className="block text-[11px] text-white/75 mt-0.5">PT Guci Emas Pratama</small>
                     </div>
                 </div>
 
                 <div className="max-w-xl relative z-10 my-auto">
                     <span className="text-xs font-bold tracking-[0.12em] text-[#cfe0d5] uppercase block">
-                        SISTEM LAPORAN KERJA DIGITAL &amp; PELANGGAN
+                        OPERASIONAL LAPANGAN &amp; PENAWARAN
                     </span>
                     <h1 className="text-4xl xl:text-[42px] font-bold leading-[1.15] tracking-[-0.035em] my-4 text-white">
                         Pekerjaan lapangan yang lebih jelas, dari penugasan hingga laporan.
                     </h1>
                     <p className="text-base leading-[1.7] text-[#dbe8df] max-w-[530px]">
-                        Satu ruang kerja terfokus untuk mengelola data lokasi pelanggan, memvalidasi kehadiran GPS teknisi, mendokumentasikan tindakan lapangan, dan menyusun Laporan Kerja Digital Pest Control maupun Anti Rayap secara presisi.
+                        Satu ruang kerja yang membantu tim fokus pada tindakan berikutnya, menjaga bukti pekerjaan tetap dapat ditelusuri, dan menyusun laporan Pest Control maupun Anti Rayap secara presisi.
                     </p>
                 </div>
 
-                <div className="text-xs text-[#dbe8df] relative z-10 border-l-2 border-[#a9c9b4] pl-3.5">
-                    <strong className="block text-white mb-0.5">Sistem Operasional Terintegrasi</strong>
-                    <span>Presensi GPS Haversine, Dokumentasi Foto Ber-watermark, &amp; Rekapitulasi Permenkes No. 2 Tahun 2023.</span>
+                <div className="flex items-center gap-3 text-xs text-[#dbe8df] relative z-10">
+                    <ShieldCheck size={20} className="shrink-0 text-[#cfe0d5]" />
+                    <div>
+                        <strong className="block text-white mb-0.5">Sistem Operasional Terintegrasi</strong>
+                        <span>Presensi GPS Haversine, Dokumentasi Foto Ber-watermark, &amp; Rekapitulasi Permenkes No. 2 Tahun 2023.</span>
+                    </div>
                 </div>
 
+                {/* Decorative Concentric Circles from RedesignFieldworkGuciMasLite */}
                 <div
                     aria-hidden="true"
                     className="pointer-events-none absolute w-[420px] h-[420px] rounded-full border border-white/12 -right-[180px] -bottom-[150px] shadow-[0_0_0_70px_rgba(255,255,255,0.03),0_0_0_140px_rgba(255,255,255,0.025)]"
@@ -283,29 +246,31 @@ export function LoginPage() {
                         Masuk untuk melanjutkan ke ruang kerja Anda.
                     </p>
 
-                    {/* Role Switcher (Admin Operasional vs Teknisi Lapangan) */}
+                    {/* Role Switcher (Admin vs Teknisi) */}
                     <div className="grid grid-cols-2 p-1 bg-[#eff3f0] rounded-xl mb-5" role="group" aria-label="Pilih peran">
                         <button
                             type="button"
                             onClick={() => handleSwitchRoleMode("admin")}
-                            className={`min-h-[42px] rounded-lg flex items-center justify-center text-[13px] font-semibold transition-all cursor-pointer ${
+                            className={`min-h-[42px] rounded-lg flex items-center justify-center gap-2 text-[13px] font-semibold transition-all cursor-pointer ${
                                 roleMode === "admin"
                                     ? "bg-white text-[#245c45] shadow-[0_1px_3px_rgba(23,35,28,0.09)]"
                                     : "text-[#66736b] hover:text-[#17231c]"
                             }`}
                         >
-                            Admin Operasional
+                            <Building2 size={17} />
+                            Admin &amp; Kantor
                         </button>
                         <button
                             type="button"
                             onClick={() => handleSwitchRoleMode("technician")}
-                            className={`min-h-[42px] rounded-lg flex items-center justify-center text-[13px] font-semibold transition-all cursor-pointer ${
+                            className={`min-h-[42px] rounded-lg flex items-center justify-center gap-2 text-[13px] font-semibold transition-all cursor-pointer ${
                                 roleMode === "technician"
                                     ? "bg-white text-[#245c45] shadow-[0_1px_3px_rgba(23,35,28,0.09)]"
                                     : "text-[#66736b] hover:text-[#17231c]"
                             }`}
                         >
-                            Teknisi Lapangan
+                            <Smartphone size={17} />
+                            Teknisi
                         </button>
                     </div>
 
@@ -346,8 +311,9 @@ export function LoginPage() {
                         </label>
 
                         {error && (
-                            <div className="text-[#943838] bg-[#fcecec] border border-[#f5c2c2] rounded-[10px] p-3 text-xs font-medium leading-relaxed">
-                                {error}
+                            <div className="flex items-start gap-2 text-[#943838] bg-[#fcecec] border border-[#f5c2c2] rounded-[10px] p-3 text-xs font-medium leading-relaxed">
+                                <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                                <span>{error}</span>
                             </div>
                         )}
 
@@ -361,9 +327,10 @@ export function LoginPage() {
                                     <Loader2 size={16} className="animate-spin" /> Memeriksa Akun...
                                 </>
                             ) : (
-                                <span>
-                                    Masuk sebagai {roleMode === "admin" ? "Admin Operasional" : "Teknisi Lapangan"}
-                                </span>
+                                <>
+                                    Masuk sebagai {roleMode === "admin" ? "Admin / Staf" : "Teknisi"}
+                                    <ArrowRight size={17} />
+                                </>
                             )}
                         </button>
                     </form>
@@ -373,38 +340,41 @@ export function LoginPage() {
                         <span className="text-[#66736b]">Punya Token Undangan?</span>
                         <Link
                             to="/signup"
-                            className="font-semibold text-[#245c45] hover:underline"
+                            className="inline-flex items-center gap-1 font-semibold text-[#245c45] hover:underline"
                         >
-                            Aktivasi via Token
+                            <KeyRound size={13} /> Aktivasi via Token
                         </Link>
                     </div>
 
-                    {/* 1-Click Demo Staff Accounts (2 Peran Utama) */}
+                    {/* 1-Click Demo Staff Accounts */}
                     <div className="mt-4 pt-3.5 border-t border-[#e1e8e2] space-y-2.5">
                         <div className="flex items-center justify-between">
                             <span className="text-[11px] font-semibold text-[#66736b]">
                                 Akses Cepat Akun Demo (1-Klik)
                             </span>
-                            <span className="text-[10px] text-[#87928b]">2 Peran Utama</span>
+                            <span className="text-[10px] text-[#87928b]">5 Peran Sistem</span>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-2 gap-1.5">
                             {QUICK_DEMO_ACCOUNTS.map(acc => (
                                 <button
                                     key={acc.email}
                                     type="button"
                                     disabled={loading}
                                     onClick={() => handleQuickLogin(acc.email, acc.pw, acc.group)}
-                                    className={`flex flex-col items-start justify-between p-2.5 rounded-[10px] border text-left transition-all cursor-pointer ${
+                                    className={`flex flex-col items-start justify-between p-2 rounded-[10px] border text-left transition-all cursor-pointer ${
                                         email === acc.email
                                             ? "border-[#245c45] bg-[#e8f1eb]/60"
                                             : "border-[#e1e8e2] bg-white hover:bg-[#f6f8f6]"
                                     }`}
                                 >
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#eff3f0] text-[#245c45] mb-1">
-                                        {acc.roleBadge}
-                                    </span>
-                                    <div className="font-semibold text-xs text-[#17231c] truncate w-full">{acc.label}</div>
+                                    <div className="flex items-center justify-between w-full gap-1 mb-0.5">
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#eff3f0] text-[#245c45]">
+                                            {acc.roleBadge}
+                                        </span>
+                                        <UserCheck size={11} className="text-[#87928b]" />
+                                    </div>
+                                    <div className="font-semibold text-[11px] text-[#17231c] truncate w-full">{acc.label}</div>
                                 </button>
                             ))}
                         </div>
@@ -418,4 +388,3 @@ export function LoginPage() {
         </main>
     );
 }
-

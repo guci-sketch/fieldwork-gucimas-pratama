@@ -29,8 +29,6 @@
   "exclude": [
     "Styling-Reference",
     "dist",
-    "node_modules",
-    "tests",
-    "e2e.config.ts"
+    "node_modules"
   ]
 }

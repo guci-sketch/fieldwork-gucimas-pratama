@@ -12,6 +12,7 @@ import {
   DEFAULT_FILTERS,
   KPIStats,
   WorkReportStatus,
+  Quotation,
 } from '@/entities/types';
 import {
   fetchAdminReports,
@@ -35,6 +36,7 @@ import {
   purgeOldPhotos,
   PhotoPurgePreview,
 } from '@/shared/api/admin';
+import { getQuotations } from '@/shared/api/quotationService';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -100,11 +102,17 @@ import { TemplateSettingsPanel } from '@/widgets/admin/TemplateSettingsPanel';
 import { MonthlyRecapBuilderModal } from '@/widgets/admin/MonthlyRecapBuilderModal';
 import { canGenerateMonthlyRecap } from '@/shared/lib/permenkesRecapEngine';
 import { CompanyPicker } from '@/widgets/admin/CompanyPicker';
-import { OperationsAnalyticsBento } from '@/widgets/admin/OperationsAnalyticsBento';
+import { OperationsAnalyticsBento, ExecutiveQuotationSummary } from '@/widgets/admin/OperationsAnalyticsBento';
 import { isDirectorUser } from '@/shared/lib/roles';
 import { useAuthStore } from '@/app/store/authStore';
 import { useTheme } from '@/shared/hooks/useTheme';
+import { InventoryPage } from '../../pages/inventory/InventoryPage';
+import { KontrolRayapPage } from '../../pages/customers/KontrolRayapPage';
+import { QuotationPage } from '../../pages/quotation/QuotationPage';
 import { CustomersPage } from '../../pages/customers/CustomersPage';
+import { TrackingPage } from '../../pages/tracking/TrackingPage';
+import { CashflowPage } from '../../pages/cashflow/CashflowPage';
+import { PerformaPage } from '../../pages/performance/PerformaPage';
 import { SPKPage } from '../../pages/spk/SPKPage';
 import { CompaniesPage } from '../../pages/super-admin/CompaniesPage';
 import { Header } from '../common/Header';
@@ -177,9 +185,15 @@ export const AdminDashboard: React.FC = () => {
   const isDirector = isDirectorUser(user);
   const activeCompanyId = useAuthStore(st => st.activeCompanyId) || user?.companyId || null;
 
-  // Tab awal: langsung membuka Dashboard Laporan Kerja ('dashboard')
+  // Tab awal: SUPERADMIN & ADMIN langsung membuka Dashboard Utama ('dashboard') agar ringkasan langsung terlihat
   const [activeTab, setActiveTab] = useState<Tab>(
-    user?.role === 'MASTER_SUPER_ADMIN' ? 'saas-companies' : 'dashboard'
+    user?.role === 'MASTER_SUPER_ADMIN'
+      ? 'saas-companies'
+      : user?.role === 'INVENTORY'
+      ? 'inventory'
+      : user?.role === 'SUPERADMIN' || user?.role === 'ADMIN'
+      ? 'dashboard'
+      : 'quotation'
   );
 
   useEffect(() => {
@@ -219,6 +233,8 @@ export const AdminDashboard: React.FC = () => {
   const [reports, setReports] = useState<WorkReportListItem[]>([]);
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportsError, setReportsError] = useState<string | null>(null);
+
+  const [quotationsList, setQuotationsList] = useState<Quotation[]>([]);
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectSearch, setProjectSearch] = useState('');
@@ -372,10 +388,12 @@ export const AdminDashboard: React.FC = () => {
     setLoadError(null);
     setStaleRefreshError(null);
     try {
-      const [summary, projectRes, executorList, latestLocs] = await Promise.all([
+      const targetCompany = (isSuper ? activeCompanyId : user?.companyId) ?? '';
+      const [summary, projectRes, executorList, quos, latestLocs] = await Promise.all([
         fetchAdminSummary(),
         fetchAdminProjects({ limit: 24, page: 1 }),
         fetchExecutors(),
+        targetCompany ? getQuotations({ companyId: targetCompany }).catch(() => []) : Promise.resolve([]),
         fetchLatestLocations().catch(() => []),
       ]);
       setSummaryData(summary);
@@ -383,6 +401,7 @@ export const AdminDashboard: React.FC = () => {
       setProjectTotalPages(projectRes.totalPages || 1);
       setProjectTotalCount(projectRes.totalCount || projectRes.projects.length);
       setExecutors(executorList);
+      setQuotationsList(quos);
       setUserLocations(latestLocs);
       await loadReports();
     } catch (err) {
@@ -394,11 +413,12 @@ export const AdminDashboard: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isAdmin, isSuper, activeCompanyId, loadReports]);
+  }, [isAdmin, isSuper, activeCompanyId, user?.companyId, loadReports]);
 
   // Reset state saat SUPERADMIN berpindah perusahaan agar data perusahaan lama tidak pernah ditampilkan sebagai data baru
   useEffect(() => {
     setSummaryData(null);
+    setQuotationsList([]);
     setReports([]);
     setProjects([]);
     setExecutors([]);
@@ -417,11 +437,14 @@ export const AdminDashboard: React.FC = () => {
     setIsRefreshingSummary(true);
     setStaleRefreshError(null);
     try {
-      const [summary] = await Promise.all([
+      const targetCompany = (isSuper ? activeCompanyId : user?.companyId) ?? '';
+      const [summary, quos] = await Promise.all([
         fetchAdminSummary(),
+        targetCompany ? getQuotations({ companyId: targetCompany }).catch(() => quotationsList) : Promise.resolve([]),
         loadReports(),
       ]);
       setSummaryData(summary);
+      setQuotationsList(quos);
       setLoadError(null);
     } catch (err) {
       const msg =
@@ -436,7 +459,22 @@ export const AdminDashboard: React.FC = () => {
     } finally {
       setIsRefreshingSummary(false);
     }
-  }, [isAdmin, isSuper, activeCompanyId, loadReports, summaryData]);
+  }, [isAdmin, isSuper, activeCompanyId, user?.companyId, loadReports, summaryData, quotationsList]);
+
+  const quotationSummary = useMemo<ExecutiveQuotationSummary | null>(() => {
+    if (!isAdmin) return null;
+    const totalQuotations = quotationsList.length;
+    const draftCount = quotationsList.filter(q => q.status === 'draft' || q.status === 'pending').length;
+    const approvedCount = quotationsList.filter(q => q.status === 'approved' || q.status === 'sent_to_client').length;
+    const dealCount = quotationsList.filter(q => q.status === 'deal').length;
+    return {
+      totalQuotations,
+      draftCount,
+      approvedCount,
+      dealCount,
+      onOpenQuotations: () => setActiveTab('quotation'),
+    };
+  }, [isAdmin, quotationsList]);
 
   useEffect(() => {
     if (!isAdmin || (isSuper && !activeCompanyId)) return;
@@ -721,7 +759,9 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Menu terfokus khusus pada Laporan Kerja Digital & Pelanggan untuk 2 Role Utama
+  // Menu terkonsolidasi menjadi 10 modul utama yang fokus (tanpa duplikasi halaman di sidebar)
+  // dengan tetap mendukung penuh seluruh alias activeTab lama dan grup standar.
+  const isMarketingUser = user?.role === 'MARKETING';
   const ALL_ITEMS: {
     id: Tab;
     label: string;
@@ -733,73 +773,64 @@ export const AdminDashboard: React.FC = () => {
     roles: string[];
     keywords?: string[];
   }[] = [
-    // GRUP 1: LAPORAN KERJA & PELANGGAN
+    // GRUP 1: GEOLOCATION HAVERSINE & DIGITAL REPORT
     {
       id: 'dashboard',
-      label: 'Dashboard Laporan Kerja',
+      label: 'Dashboard & Eskalasi Kendala',
       shortLabel: 'Dashboard',
-      group: '1. LAPORAN KERJA & PELANGGAN',
+      group: '1. GEOLOCATION & DIGITAL REPORT',
       icon: <LayoutDashboard size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
-      keywords: ['operation center', 'live map', 'performance team', 'pelanggan', 'kpi'],
+      roles: ['ADMIN', 'SUPERADMIN'],
+      keywords: ['dashboard', 'perlu tindakan', 'kendala', 'haversine'],
     },
     {
       id: 'reports',
-      label: 'Laporan Kerja Digital',
-      shortLabel: 'Laporan Kerja',
-      group: '1. LAPORAN KERJA & PELANGGAN',
+      label: 'Verifikasi Digital Report (LHP)',
+      shortLabel: 'Digital Report',
+      group: '1. GEOLOCATION & DIGITAL REPORT',
       icon: kpi.flaggedJobs > 0 ? <ShieldAlert size={16} /> : <CheckCircle2 size={16} />,
       danger: kpi.flaggedJobs > 0,
       badge: kpi.flaggedJobs > 0 ? kpi.flaggedJobs : undefined,
-      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
-      keywords: ['laporan kerja', 'anomali', 'perlu dicek', 'verifikasi', 'task monitoring', 'pdf'],
-    },
-    {
-      id: 'spk-cms',
-      label: 'Penugasan & Lokasi Proyek',
-      shortLabel: 'Penugasan & Proyek',
-      group: '1. LAPORAN KERJA & PELANGGAN',
-      icon: <Briefcase size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
-      keywords: ['spk', 'perintah kerja', 'proyek', 'kalender tugas', 'heatmap', 'radius', 'tipe tugas'],
-    },
-    {
-      id: 'customers',
-      label: 'Data Pelanggan & Garansi',
-      shortLabel: 'Data Pelanggan',
-      group: '1. LAPORAN KERJA & PELANGGAN',
-      icon: <Users size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
-      keywords: ['pelanggan', 'klien', 'kontrol rayap', 'garansi', 'pin point', 'kontrak'],
+      roles: ['ADMIN', 'SUPERADMIN'],
+      keywords: ['laporan hasil pekerjaan', 'digital report', 'haversine', 'evaluasi pic', 'anomali'],
     },
     {
       id: 'tracking',
-      label: 'Lacak Peta & GPS Teknisi',
-      shortLabel: 'Peta & GPS',
-      group: '1. LAPORAN KERJA & PELANGGAN',
+      label: 'Geolocation Haversine & Peta',
+      shortLabel: 'Geolocation & Peta',
+      group: '1. GEOLOCATION & DIGITAL REPORT',
       icon: <MapPin size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
-      keywords: ['lokasi teknisi', 'gps', 'perjalanan', 'journey', 'peta'],
+      roles: ['ADMIN', 'SUPERADMIN'],
+      keywords: ['lokasi teknisi', 'gps', 'haversine', 'radius', 'peta'],
+    },
+    {
+      id: 'customers',
+      label: 'Lokasi Klien & Titik Geofence',
+      shortLabel: 'Lokasi & Geofence',
+      group: '1. GEOLOCATION & DIGITAL REPORT',
+      icon: <Users size={16} />,
+      roles: ['ADMIN', 'SUPERADMIN'],
+      keywords: ['pelanggan', 'koordinat', 'pin peta', 'radius'],
     },
 
-    // GRUP 2: TIM & PENGATURAN
+    // GRUP 2: TIM TEKNISI & PENGATURAN RADIUS
     {
       id: 'approval',
-      label: 'Manajemen Tim & Akun',
-      shortLabel: 'Tim & Akun',
-      group: '2. TIM & PENGATURAN',
+      label: 'Tim Teknisi & Akun Lapangan',
+      shortLabel: 'Tim Teknisi',
+      group: '2. TIM TEKNISI & PENGATURAN',
       icon: <UserCheck size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
-      keywords: ['anggota', 'staf', 'kinerja teknisi', 'target kunjungan', 'undangan', 'live tracking'],
+      roles: ['ADMIN', 'SUPERADMIN'],
+      keywords: ['teknisi', 'anggota', 'target kunjungan'],
     },
     {
       id: 'templates',
-      label: 'Pengaturan Kop PDF & Audit',
-      shortLabel: 'Kop PDF & Audit',
-      group: '2. TIM & PENGATURAN',
+      label: 'Aturan Radius Haversine & Audit',
+      shortLabel: 'Radius & Audit',
+      group: '2. TIM TEKNISI & PENGATURAN',
       icon: <Settings2 size={16} />,
-      roles: ['SUPERADMIN', 'ADMIN', 'MARKETING', 'INVENTORY'],
-      keywords: ['kop surat', 'ttd direktur', 'aturan poin', 'risiko', 'retensi foto', 'audit', 'profil', 'tema'],
+      roles: ['ADMIN', 'SUPERADMIN'],
+      keywords: ['radius', 'risiko', 'retensi foto', 'audit', 'tema'],
     },
   ];
 
@@ -808,6 +839,7 @@ export const AdminDashboard: React.FC = () => {
     if (activeTab === 'kontrol-rayap') return 'customers';
     if (activeTab === 'projects') return 'spk-cms';
     if (activeTab === 'anomalies') return 'reports';
+    if (activeTab === 'cashflow' || activeTab === 'performa') return 'order-tracking';
     if (activeTab === 'executors') return 'approval';
     if ((activeTab === 'risk-config' || activeTab === 'audit' || activeTab === 'profile') && isAdmin) {
       return 'templates';
@@ -879,10 +911,10 @@ export const AdminDashboard: React.FC = () => {
       dynamicIslandItems={showFloatingBottom ? [] : []}
       sidebarHeader={
         <div>
-          <h2 className="text-sm font-black tracking-tight text-white leading-tight mb-0.5">
-            Field<span className="text-[#a9c9b4]">work</span>
+          <h2 className="text-xs font-black tracking-tight text-[var(--text-primary)] leading-tight mb-0.5">
+            Field<span className="text-[var(--accent-text)]">work</span>
           </h2>
-          <p className="text-[11px] text-[#c9d8cf]">
+          <p className="text-[11px] text-[var(--text-muted)]">
             {new Date().toLocaleDateString('id-ID', {
               weekday: 'long',
               day: 'numeric',
@@ -890,6 +922,7 @@ export const AdminDashboard: React.FC = () => {
               year: 'numeric',
             })}
           </p>
+          {isSuper && <CompanyPicker />}
         </div>
       }
     >
@@ -940,13 +973,15 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* Tab Dashboard: Fokus HANYA pada Data & Visual Penting */}
+        {/* Tab Dashboard: Fokus HANYA pada Data & Visual Penting (Tanpa Tabel Panjang yang Menumpuk di Bawah) */}
         {activeTab === 'dashboard' && (
           <OperationsAnalyticsBento
             summary={summaryData}
+            quotationSummary={quotationSummary}
             reports={reports}
             projects={projects}
             executors={executors}
+            quotations={quotationsList}
             userLocations={userLocations}
             companyDisplayName={user?.name || 'Gucimas Pratama'}
             isLoading={isLoading}
@@ -974,6 +1009,10 @@ export const AdminDashboard: React.FC = () => {
             onOpenProjectsTab={() => {
               setCameFromDashboard(true);
               setActiveTab('projects');
+            }}
+            onOpenQuotationsTab={() => {
+              setCameFromDashboard(true);
+              setActiveTab('quotation');
             }}
             onOpenCustomersTab={() => {
               setCameFromDashboard(true);
@@ -2421,17 +2460,24 @@ export const AdminDashboard: React.FC = () => {
                   {/* Header Halaman */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--border-subtle)]">
                     <div>
-                      <h3 className="text-base sm:text-lg font-extrabold text-[var(--text-primary)]">
+                      <h3 className="text-base sm:text-lg font-extrabold text-[var(--text-primary)] flex items-center gap-2">
+                        <UserCheck size={20} className="text-[var(--accent)]" />
                         Manajemen Akun Staf Perusahaan
                       </h3>
                       <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                        Kelola akses untuk 2 peran utama: Admin Operasional dan Teknisi Lapangan.
+                        Direktur dan Admin dapat menambahkan staf baru atau membuat link undangan resmi.
                       </p>
                     </div>
                     <div className="self-start sm:self-center">
-                      <span className="inline-flex items-center px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 font-bold text-xs">
-                        Admin Operasional
-                      </span>
+                      {isDirector ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 font-bold text-xs">
+                          👑 Otoritas Penuh Direktur
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 font-bold text-xs">
+                          Mode Admin (Akun Admin Lain Dilindungi)
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -2442,8 +2488,8 @@ export const AdminDashboard: React.FC = () => {
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <h4 className="font-extrabold text-sm text-[var(--text-primary)]">
-                          Tambah Pengguna Langsung
+                        <h4 className="font-extrabold text-sm text-[var(--text-primary)] flex items-center gap-2">
+                          <Plus size={16} className="text-[var(--accent)]" /> Tambah Pengguna Langsung
                         </h4>
                         <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                           Akun langsung aktif dan dapat langsung digunakan untuk login.
@@ -2505,7 +2551,9 @@ export const AdminDashboard: React.FC = () => {
                           onChange={e => setNewUser({ ...newUser, role: e.target.value as AdminUser['role'] })}
                           className="w-full px-3.5 py-2.5 min-h-[44px] text-xs sm:text-sm rounded-xl border border-[var(--border)] bg-white text-[var(--text-primary)] font-semibold focus:outline-none focus:border-[var(--accent)]"
                         >
-                          <option value="TEKNISI_LAPANGAN">Teknisi Lapangan</option>
+                          <option value="TEKNISI_LAPANGAN">Teknisi Lapangan (PWA Mobile)</option>
+                          <option value="MARKETING">Marketing / Surveyor</option>
+                          <option value="INVENTORY">Inventory / Staf Gudang</option>
                           <option value="ADMIN">Admin Operasional</option>
                         </select>
                       </div>
@@ -2514,8 +2562,9 @@ export const AdminDashboard: React.FC = () => {
                         <button
                           type="submit"
                           disabled={creatingUser}
-                          className="w-full min-h-[44px] px-5 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs sm:text-sm font-bold rounded-xl disabled:opacity-50 transition-all shadow-xs flex items-center justify-center cursor-pointer"
+                          className="w-full min-h-[44px] px-5 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs sm:text-sm font-bold rounded-xl disabled:opacity-50 transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
                         >
+                          <Plus size={15} />
                           {creatingUser ? 'Membuat...' : 'Buat Akun Sekarang'}
                         </button>
                       </div>
@@ -2526,7 +2575,8 @@ export const AdminDashboard: React.FC = () => {
                   <div className="clean-card p-5 sm:p-6 bg-emerald-50/30 border border-emerald-200/80 space-y-3.5">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div>
-                        <h4 className="font-extrabold text-sm text-emerald-950">
+                        <h4 className="font-extrabold text-sm text-emerald-950 flex items-center gap-2">
+                          <CheckCircle2 size={16} className="text-[var(--accent)]" />
                           Buat Link Undangan Mandiri (Berlaku 7 Hari)
                         </h4>
                         <p className="text-xs text-emerald-800 mt-0.5">
@@ -2542,14 +2592,17 @@ export const AdminDashboard: React.FC = () => {
                         className="px-3.5 py-2 min-h-[44px] text-xs sm:text-sm font-semibold rounded-xl border border-emerald-300 bg-white text-[var(--text-primary)]"
                       >
                         <option value="TEKNISI_LAPANGAN">Undangan: Teknisi Lapangan</option>
-                        <option value="ADMIN">Undangan: Admin Operasional</option>
+                        <option value="MARKETING">Undangan: Marketing</option>
+                        <option value="INVENTORY">Undangan: Inventory / Gudang</option>
+                        <option value="ADMIN">Undangan: Admin Perusahaan</option>
                       </select>
                       <button
                         type="button"
                         onClick={() => handleGenerateInvite(inviteRole)}
                         disabled={isGeneratingInvite}
-                        className="min-h-[44px] px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition-colors disabled:opacity-50 cursor-pointer shadow-xs"
+                        className="min-h-[44px] px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold rounded-xl transition-colors disabled:opacity-50 cursor-pointer shadow-xs flex items-center gap-1.5"
                       >
+                        <Plus size={14} />
                         {isGeneratingInvite ? 'Membuat...' : 'Buat Tautan Undangan'}
                       </button>
                     </div>
@@ -2677,12 +2730,22 @@ export const AdminDashboard: React.FC = () => {
                                     </span>
                                     <span
                                       className={`text-[10.5px] font-bold px-2.5 py-0.5 rounded-full border ${
-                                        u.role === 'TEKNISI_LAPANGAN'
-                                          ? 'bg-teal-50 text-teal-800 border-teal-200'
-                                          : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                        u.role === 'ADMIN'
+                                          ? 'bg-purple-50 text-purple-800 border-purple-200'
+                                          : u.role === 'MARKETING'
+                                          ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                          : u.role === 'INVENTORY'
+                                          ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                          : 'bg-teal-50 text-teal-800 border-teal-200'
                                       }`}
                                     >
-                                      {u.role === 'TEKNISI_LAPANGAN' ? 'TEKNISI LAPANGAN' : 'ADMIN OPERASIONAL'}
+                                      {u.role === 'ADMIN'
+                                        ? 'ADMIN'
+                                        : u.role === 'MARKETING'
+                                        ? 'MARKETING'
+                                        : u.role === 'INVENTORY'
+                                        ? 'GUDANG'
+                                        : 'TEKNISI'}
                                     </span>
                                     {isSelf && (
                                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
@@ -2693,13 +2756,14 @@ export const AdminDashboard: React.FC = () => {
 
                                   <div className="text-xs text-[var(--text-secondary)] font-mono flex items-center gap-2 flex-wrap">
                                     <span>{u.email}</span>
-                                    {u.nip && <span>· NIP: {u.nip}</span>}
-                                    {u.phone && <span>· WA: {u.phone}</span>}
+                                    {u.nip && <span>• NIP: {u.nip}</span>}
+                                    {u.phone && <span>• WA: {u.phone}</span>}
                                   </div>
 
+                                  {/* Indikator Perangkat, Versi Aplikasi, Geofence, Face ID & Live Tracking (Screenshot 10: Master Anggota) */}
                                   <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[10.5px]">
                                     <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
-                                      Perangkat: {u.is_active ? 'PWA Mobile Aktif (v2.10.1)' : 'Offline'}
+                                      📱 Perangkat: {u.is_active ? 'PWA Mobile Aktif (v2.10.1)' : 'Offline'}
                                     </span>
                                     <button
                                       type="button"
@@ -2719,10 +2783,10 @@ export const AdminDashboard: React.FC = () => {
                                       Geofence: {(memberGeofenceMap[u.id] ?? true) ? 'Aktif' : 'Fleksibel'}
                                     </button>
                                     <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
-                                      Live Tracking: {liveTrackingEnabled ? 'ON' : 'OFF'}
+                                      🛰️ Live Tracking: {liveTrackingEnabled ? 'ON' : 'OFF'}
                                     </span>
-                                    <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold">
-                                      Peran: {u.role === 'TEKNISI_LAPANGAN' ? 'Teknisi Lapangan' : 'Admin Operasional'}
+                                    <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
+                                      🔐 Akses Menu: Role {u.role}
                                     </span>
                                   </div>
 
@@ -2826,9 +2890,55 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               )}
 
+              {activeTab === 'quotation' && <QuotationPage />}
               {(activeTab === 'customers' || activeTab === 'kontrol-rayap') && (
                 <CustomersPage initialSubTab={activeTab === 'kontrol-rayap' ? 'garansi' : 'master'} />
               )}
+              {(activeTab === 'order-tracking' || activeTab === 'cashflow' || activeTab === 'performa') && (
+                <div className="space-y-5">
+                  <div className="flex flex-wrap items-center gap-1.5 bg-[var(--bg-card)] p-2 rounded-2xl border border-[var(--border-subtle)]">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('order-tracking')}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                        activeTab === 'order-tracking'
+                          ? 'bg-[var(--accent)] text-white shadow-2xs'
+                          : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                      }`}
+                    >
+                      💳 Tagihan &amp; Cicilan Klien
+                    </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('cashflow')}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                          activeTab === 'cashflow'
+                            ? 'bg-[var(--accent)] text-white shadow-2xs'
+                            : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                        }`}
+                      >
+                        💰 Laporan Pemasukan &amp; Cashflow
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('performa')}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                        activeTab === 'performa'
+                          ? 'bg-[var(--accent)] text-white shadow-2xs'
+                          : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                      }`}
+                    >
+                      📈 Performa MoM &amp; Capaian Target
+                    </button>
+                  </div>
+                  {activeTab === 'order-tracking' && <TrackingPage />}
+                  {activeTab === 'cashflow' && <CashflowPage />}
+                  {activeTab === 'performa' && <PerformaPage />}
+                </div>
+              )}
+              {activeTab === 'inventory' && <InventoryPage />}
               {activeTab === 'saas-companies' && isMasterSuper && <CompaniesPage />}
 
               {(activeTab === 'templates' || activeTab === 'risk-config' || activeTab === 'audit' || (activeTab === 'profile' && isAdmin)) && (
@@ -2844,7 +2954,7 @@ export const AdminDashboard: React.FC = () => {
                             : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
                         }`}
                       >
-                        Kop Surat &amp; TTD Direktur
+                        📄 Kop Surat &amp; TTD Direktur
                       </button>
                       <button
                         type="button"
@@ -2855,7 +2965,7 @@ export const AdminDashboard: React.FC = () => {
                             : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
                         }`}
                       >
-                        Aturan Poin Kehadiran &amp; Retensi Foto
+                        ⚖️ Aturan Poin Kehadiran &amp; Retensi Foto
                       </button>
                       <button
                         type="button"
@@ -2879,7 +2989,7 @@ export const AdminDashboard: React.FC = () => {
                         : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
                     }`}
                   >
-                    Profil &amp; Tema Saya
+                    👤 Profil &amp; Tema Saya
                   </button>
                 </div>
               )}
@@ -2920,7 +3030,7 @@ export const AdminDashboard: React.FC = () => {
                     <div>
                       <span className="block text-xs font-semibold text-[var(--text-muted)]">Peran</span>
                       <span className="inline-block font-semibold bg-[var(--status-working-bg)] text-[var(--status-working-text)] px-2.5 py-0.5 rounded text-xs border border-[var(--status-working-border)] mt-0.5">
-                        {user.role === 'TEKNISI_LAPANGAN' ? 'Teknisi Lapangan' : 'Admin Operasional'}
+                        {user.role}
                       </span>
                     </div>
                   </div>
@@ -3158,7 +3268,7 @@ export const AdminDashboard: React.FC = () => {
                             }`}
                           />
                           <span className="font-bold text-[var(--text-primary)] font-mono">
-                            {new Date(selectedReport.checkInAt).toLocaleTimeString('id-ID')} WIB · CHECK-IN
+                            {new Date(selectedReport.checkInAt).toLocaleTimeString('id-ID')} WIB — CHECK-IN
                           </span>
                           <p className="text-[var(--text-secondary)] mt-0.5">
                             {selectedReport.checkInValid ? 'Valid di dalam radius' : 'Di luar radius proyek'} (Jarak:{' '}
@@ -3172,7 +3282,8 @@ export const AdminDashboard: React.FC = () => {
                           <div key={photo.id} className="relative">
                             <div className="absolute -left-[31px] top-0.5 w-3.5 h-3.5 rounded-full bg-amber-500 border-2 border-[var(--bg-card)]" />
                             <span className="font-bold text-[var(--text-primary)] font-mono">
-                              {new Date(photo.capturedAt).toLocaleTimeString('id-ID')} WIB · DOKUMENTASI PROGRES {idx + 1}
+                              {new Date(photo.capturedAt).toLocaleTimeString('id-ID')} WIB — DOKUMENTASI PROGRES #
+                              {idx + 1}
                             </span>
                           </div>
                         ))}
@@ -3184,7 +3295,7 @@ export const AdminDashboard: React.FC = () => {
                             }`}
                           />
                           <span className="font-bold text-[var(--text-primary)] font-mono">
-                            {new Date(selectedReport.checkOutAt).toLocaleTimeString('id-ID')} WIB · CHECK-OUT
+                            {new Date(selectedReport.checkOutAt).toLocaleTimeString('id-ID')} WIB — CHECK-OUT
                           </span>
                           <p className="text-[var(--text-secondary)] mt-0.5">
                             Total durasi: {Math.round((selectedReport.durationSeconds || 0) / 60)} menit.
@@ -3681,6 +3792,7 @@ export const AdminDashboard: React.FC = () => {
           availableCustomers={Array.from(
             new Set([
               ...projects.map(p => p.clientName).filter(Boolean),
+              ...quotationsList.map(q => q.kepadaNama).filter(Boolean),
             ])
           )}
           reports={selectedReport ? [selectedReport] : []}

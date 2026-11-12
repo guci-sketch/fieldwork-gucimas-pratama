@@ -45,12 +45,11 @@ interface HeaderProps {
 }
 
 const ROLE_BADGE_LABELS: Record<string, string> = {
-  SUPERADMIN: 'Admin Operasional',
-  ADMIN: 'Admin Operasional',
-  TEKNISI_LAPANGAN: 'Teknisi Lapangan',
-  MARKETING: 'Admin Operasional',
-  INVENTORY: 'Admin Operasional',
-  MASTER_SUPER_ADMIN: 'Admin Operasional',
+  SUPERADMIN: 'Direktur',
+  ADMIN: 'Admin',
+  TEKNISI_LAPANGAN: 'Teknisi',
+  MARKETING: 'Marketing',
+  INVENTORY: 'Gudang',
 };
 
 export const Header: React.FC<HeaderProps> = ({
@@ -364,7 +363,7 @@ export const Header: React.FC<HeaderProps> = ({
                 value={jumpQuery}
                 onChange={e => setJumpQuery(e.target.value)}
                 aria-label="Ketik nama menu"
-                placeholder="Cari menu (contoh: Dashboard, Laporan Kerja, Pelanggan, Peta GPS)..."
+                placeholder="Cari menu (contoh: Dashboard, Penawaran, Gudang, SPK)..."
                 className="w-full bg-transparent text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none"
               />
               <button

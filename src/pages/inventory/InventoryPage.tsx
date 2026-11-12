@@ -153,7 +153,7 @@ function InventoryImportPreviewModal({
     );
 }
 
-type Mutation = { item: InventoryItem; type: "IN" | "OUT"; presetProjectId?: string; presetTipe?: "ESTIMASI" | "REALISASI" } | null;
+type Mutation = { item: InventoryItem | null; type: "IN" | "OUT"; presetProjectId?: string; presetTipe?: "ESTIMASI" | "REALISASI" } | null;
 type InvTab = "stok" | "chemical-trend" | "proyek" | "rekap" | "log" | "alert";
 type StockHealthFilter = "ALL" | "SAFE" | "LOW" | "EMPTY";
 type ChemicalFormFilter = "ALL" | "LIQUID" | "SOLID";
@@ -250,9 +250,7 @@ export function InventoryPage() {
             ]);
             setItems(it);
             setLogs(lg);
-            if (it.length > 0 && !selectedItemIdForProj) {
-                setSelectedItemIdForProj(it[0].id);
-            }
+            // Do not auto-default to items[0]; require explicit user selection (Whole-App Spec Section 7.7)
 
             const quoMap = new Map(quos.map(q => [q.id, q]));
             const byClientMap = new Map(quos.map(q => [q.kepadaNama.toLowerCase(), q]));
@@ -320,7 +318,7 @@ export function InventoryPage() {
         return items.map(i => ({ item: i, ...(by.get(i.id) ?? { masuk: 0, keluar: 0, akhir: null }) })).filter(r => r.masuk || r.keluar);
     }, [recapLogs, items]);
 
-    const openMutationModal = (item: InventoryItem, type: "IN" | "OUT", presetProjectId = "", presetTipe: "ESTIMASI" | "REALISASI" = "REALISASI") => {
+    const openMutationModal = (item: InventoryItem | null, type: "IN" | "OUT", presetProjectId = "", presetTipe: "ESTIMASI" | "REALISASI" = "REALISASI") => {
         const projObj = projects.find(p => p.id === presetProjectId);
         setMutation({ item, type, presetProjectId, presetTipe });
         setMProjectId(presetProjectId);
@@ -331,7 +329,8 @@ export function InventoryPage() {
     };
 
     const submitMutation = async () => {
-        if (!mutation) return;
+        if (!mutation || !mutation.item) { alert("Pilih barang/item inventaris secara eksplisit terlebih dahulu."); return; }
+        if (mutation.type === "OUT" && !mProjectId) { alert("Pilih proyek tujuan secara eksplisit terlebih dahulu."); return; }
         const qty = Number(mQty.replace(",", "."));
         if (!Number.isFinite(qty) || qty <= 0) { alert("Jumlah harus lebih dari 0."); return; }
         setBusy(true);
@@ -742,8 +741,7 @@ export function InventoryPage() {
                     <button
                         type="button"
                         onClick={() => {
-                            const defaultItem = items[0];
-                            if (defaultItem) openMutationModal(defaultItem, "IN", "", "REALISASI");
+                            if (items.length > 0) openMutationModal(null, "IN", "", "REALISASI");
                             else setShowNew(true);
                         }}
                         className="clean-card p-4 flex items-center justify-between gap-3 text-left hover:border-emerald-500 bg-gradient-to-r from-emerald-50/70 to-white dark:from-emerald-950/30 dark:to-[var(--bg-card)] transition-all cursor-pointer group shadow-2xs"
@@ -769,8 +767,7 @@ export function InventoryPage() {
                     <button
                         type="button"
                         onClick={() => {
-                            const defaultItem = items[0];
-                            if (defaultItem) openMutationModal(defaultItem, "OUT", projects[0]?.id || "", "REALISASI");
+                            if (items.length > 0) openMutationModal(null, "OUT", "", "REALISASI");
                             else setTab("proyek");
                         }}
                         className="clean-card p-4 flex items-center justify-between gap-3 text-left hover:border-amber-500 bg-gradient-to-r from-amber-50/70 to-white dark:from-amber-950/30 dark:to-[var(--bg-card)] transition-all cursor-pointer group shadow-2xs"
@@ -810,17 +807,21 @@ export function InventoryPage() {
                 <div>
                     <h2 className="text-lg sm:text-xl font-extrabold text-[var(--text-primary)] tracking-tight">
                         {tab === "proyek"
-                            ? "Alokasi Bahan Chemical per ID Proyek & Analisis Operasional"
+                            ? isDirector
+                                ? "Estimasi Chemical per ID Proyek & Analisis Untung Rugi"
+                                : "Alokasi Bahan Chemical per ID Proyek"
                             : tab === "chemical-trend"
                             ? "Analitik & Tren Pemakaian Bahan Kimia (Cair & Padat)"
-                            : "Manajemen Gudang · Stok Obat & Alat"}
+                            : "Mode Kerja Gudang Minimalis — Stok Obat & Alat"}
                     </h2>
                     <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                         {tab === "proyek"
-                            ? "Pantau nilai kontrak, biaya bahan kimia, operasional teknisi, dan rekap alokasi per proyek."
+                            ? isDirector
+                                ? "Pantau nilai kontrak, biaya chemical, operasional teknisi, dan margin untung rugi per proyek."
+                                : "Catat alokasi chemical ke ID proyek untuk operasional. Estimasi keuntungan dan margin finansial dikunci khusus Direktur."
                             : tab === "chemical-trend"
                             ? "Evaluasi tren pemakaian bahan kimia cair (mL/Liter) dan padat/umpan (gr/Kg/Butir) per periode dan per proyek."
-                            : "Pilih kartu status di bawah untuk menyaring stok, atau gunakan tombol Masuk / Pakai Proyek pada baris barang."}
+                            : "Klik kartu status di bawah untuk menyaring stok, atau klik tombol [+ Masuk] / [- Pakai Proyek] langsung pada baris barang."}
                     </p>
                 </div>
                 {canWrite && (
@@ -1139,10 +1140,11 @@ export function InventoryPage() {
                                 <div className="sm:col-span-5">
                                     <label className="block text-[10px] font-bold uppercase text-emerald-900 mb-1">Pilih Proyek Baru (ID Proyek)</label>
                                     <select
-                                        value={mProjectId || projects[0]?.id || ""}
+                                        value={mProjectId}
                                         onChange={e => setMProjectId(e.target.value)}
                                         className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-emerald-300 bg-white"
                                     >
+                                        <option value="">-- Pilih Proyek Tujuan --</option>
                                         {projects.map(p => (
                                             <option key={p.id} value={p.id}>
                                                 [{p.code}] {p.projectName} {isAdminOrDirector ? `(${formatRupiah(p.contractValue)})` : ""}
@@ -1153,10 +1155,11 @@ export function InventoryPage() {
                                 <div className="sm:col-span-4">
                                     <label className="block text-[10px] font-bold uppercase text-emerald-900 mb-1">Pilih Chemical / Material Gudang</label>
                                     <select
-                                        value={selectedItemIdForProj || items[0]?.id || ""}
+                                        value={selectedItemIdForProj}
                                         onChange={e => setSelectedItemIdForProj(e.target.value)}
                                         className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-emerald-300 bg-white"
                                     >
+                                        <option value="">-- Pilih Item / Chemical --</option>
                                         {items.map(it => (
                                             <option key={it.id} value={it.id}>
                                                 {it.nama} ({it.satuan}{isAdminOrDirector ? ` • HPP ${formatRupiah(it.hargaSatuan)}` : ""})
@@ -1168,11 +1171,8 @@ export function InventoryPage() {
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            const chosenItem = items.find(i => i.id === selectedItemIdForProj) || items[0];
-                                            const chosenProjId = mProjectId || projects[0]?.id || "";
-                                            if (chosenItem) {
-                                                openMutationModal(chosenItem, "OUT", chosenProjId, "ESTIMASI");
-                                            }
+                                            const chosenItem = items.find(i => i.id === selectedItemIdForProj) || null;
+                                            openMutationModal(chosenItem, "OUT", mProjectId, "ESTIMASI");
                                         }}
                                         className="w-full py-2 px-3 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold flex items-center justify-center gap-1.5"
                                     >
@@ -1296,8 +1296,7 @@ export function InventoryPage() {
                                                         <button
                                                             type="button"
                                                             onClick={() => {
-                                                                const chosen = items[0];
-                                                                if (chosen) openMutationModal(chosen, "OUT", p.id, "ESTIMASI");
+                                                                openMutationModal(null, "OUT", p.id, "ESTIMASI");
                                                             }}
                                                             className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold cursor-pointer"
                                                         >
@@ -1503,7 +1502,7 @@ export function InventoryPage() {
                                                 </button>
                                                 <button
                                                     type="button"
-                                                    onClick={() => openMutationModal(s, "OUT", projects[0]?.id ?? "", "REALISASI")}
+                                                    onClick={() => openMutationModal(s, "OUT", "", "REALISASI")}
                                                     className="min-h-[42px] py-2 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-extrabold flex items-center justify-center gap-1.5 cursor-pointer"
                                                 >
                                                     <ArrowUpCircle size={15} /> - Pakai Proyek
@@ -1605,7 +1604,7 @@ export function InventoryPage() {
                                                             </button>
                                                             <button
                                                                 type="button"
-                                                                onClick={() => openMutationModal(s, "OUT", projects[0]?.id ?? "", "REALISASI")}
+                                                                onClick={() => openMutationModal(s, "OUT", "", "REALISASI")}
                                                                 className="inline-flex items-center gap-1.5 px-3 py-2 min-h-[38px] text-xs font-extrabold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-xl transition-all cursor-pointer shadow-2xs"
                                                                 title="Catat Dipakai Proyek (-)"
                                                             >
@@ -1740,22 +1739,28 @@ export function InventoryPage() {
                         }`}>
                             <div>
                                 <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block">Stok Saat Ini</span>
-                                <span className="text-base font-extrabold font-mono text-slate-900">{fmt(mutation.item.stok)} {mutation.item.satuan}</span>
+                                <span className="text-base font-extrabold font-mono text-slate-900">
+                                    {mutation.item ? `${fmt(mutation.item.stok)} ${mutation.item.satuan}` : "Pilih barang dahulu"}
+                                </span>
                             </div>
                             <div className="text-right">
                                 <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wider block">
                                     {mutation.type === "IN" ? "Saldo Nanti (Setelah Masuk)" : "Sisa Nanti (Setelah Keluar)"}
                                 </span>
                                 <span className={`text-base font-extrabold font-mono ${
-                                    mutation.type === "IN"
+                                    !mutation.item
+                                        ? "text-slate-400"
+                                        : mutation.type === "IN"
                                         ? "text-emerald-700"
                                         : (mutation.item.stok - (Number(mQty.replace(",", ".")) || 0)) < 0
                                         ? "text-rose-700 font-bold"
                                         : "text-amber-800"
                                 }`}>
-                                    {mutation.type === "IN"
-                                        ? fmt(mutation.item.stok + (Number(mQty.replace(",", ".")) || 0))
-                                        : fmt(Math.max(0, mutation.item.stok - (Number(mQty.replace(",", ".")) || 0)))} {mutation.item.satuan}
+                                    {!mutation.item
+                                        ? "—"
+                                        : mutation.type === "IN"
+                                        ? `${fmt(mutation.item.stok + (Number(mQty.replace(",", ".")) || 0))} ${mutation.item.satuan}`
+                                        : `${fmt(Math.max(0, mutation.item.stok - (Number(mQty.replace(",", ".")) || 0)))} ${mutation.item.satuan}`}
                                 </span>
                             </div>
                         </div>
@@ -1763,16 +1768,17 @@ export function InventoryPage() {
                         <div className="space-y-1.5 text-xs">
                             <label className="block font-bold text-slate-800">Nama Barang / Obat / Alat *</label>
                             <select
-                                value={mutation.item.id}
+                                value={mutation.item?.id ?? ""}
                                 onChange={e => {
-                                    const found = items.find(i => i.id === e.target.value);
-                                    if (found) setMutation({ ...mutation, item: found });
+                                    const found = items.find(i => i.id === e.target.value) || null;
+                                    setMutation({ ...mutation, item: found });
                                 }}
                                 className="w-full px-3.5 py-2.5 min-h-[44px] rounded-xl border border-slate-300 bg-white font-semibold text-xs sm:text-sm text-slate-900 focus:outline-none focus:border-[var(--accent)]"
                             >
+                                <option value="">-- Pilih Barang / Obat / Alat Secara Eksplisit --</option>
                                 {items.map(it => (
                                     <option key={it.id} value={it.id}>
-                                        {it.nama} · Sisa: {fmt(it.stok)} {it.satuan}
+                                        {it.nama} — Sisa: {fmt(it.stok)} {it.satuan}
                                     </option>
                                 ))}
                             </select>
@@ -1794,7 +1800,7 @@ export function InventoryPage() {
                                         <option value="">-- Pilih Nama Klien / Proyek --</option>
                                         {projects.map(p => (
                                             <option key={p.id} value={p.id}>
-                                                {p.clientName} · {p.projectName} ({p.code})
+                                                {p.clientName} — {p.projectName} ({p.code})
                                             </option>
                                         ))}
                                     </select>
@@ -1832,7 +1838,7 @@ export function InventoryPage() {
 
                         <div className="space-y-1.5 text-xs">
                             <label className="block font-bold text-slate-800">
-                                Jumlah ({mutation.item.satuan}) Yang {mutation.type === "IN" ? "Masuk (+)" : "Dikeluarkan (-)"} *
+                                Jumlah ({mutation.item?.satuan || "Satuan"}) Yang {mutation.type === "IN" ? "Masuk (+)" : "Dikeluarkan (-)"} *
                             </label>
                             <input
                                 autoFocus
@@ -1842,7 +1848,7 @@ export function InventoryPage() {
                                 onChange={e => setMQty(e.target.value)}
                                 className="w-full px-3.5 py-2.5 min-h-[46px] text-base rounded-xl border border-slate-300 font-mono font-bold text-slate-900 focus:outline-none focus:border-[var(--accent)]"
                             />
-                            {isDirector && Number(mQty.replace(",", ".")) > 0 && (
+                            {isDirector && mutation.item && Number(mQty.replace(",", ".")) > 0 && (
                                 <p className="text-[11px] text-emerald-800 font-semibold pt-0.5">
                                     Estimasi Nilai HPP: {formatRupiah(Number(mQty.replace(",", ".")) * mutation.item.hargaSatuan)}
                                 </p>

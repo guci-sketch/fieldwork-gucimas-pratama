@@ -68,6 +68,10 @@ export function CompaniesPage() {
     }, []);
 
     const handleChangeCompanyStatus = async (companyId: string, status: "ACTIVE" | "TRIAL" | "SUSPENDED" | "EXPIRED") => {
+        const impactMsg = status === "SUSPENDED"
+            ? "Menangguhkan (SUSPEND) perusahaan ini akan membatasi akses seluruh pengguna tenant terkait. Lanjutkan?"
+            : `Ubah status perusahaan tenant menjadi ${status}?`;
+        if (!window.confirm(impactMsg)) return;
         setBusyId(companyId);
         try {
             await setCompanyStatus(companyId, status);
@@ -149,8 +153,8 @@ export function CompaniesPage() {
                             <h1 className="text-base sm:text-lg font-extrabold text-[var(--text-primary)]">
                                 Konsol SaaS — Kelola Perusahaan &amp; Token Undangan Superadmin
                             </h1>
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-900 text-white">
-                                PRIVATE CONSOLE
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#1A5C38] text-white">
+                                KONTEKS PLATFORM SAAS • ISOLASI MULTI-TENANT
                             </span>
                         </div>
                         <p className="text-xs text-[var(--text-secondary)] mt-0.5">

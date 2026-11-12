@@ -380,8 +380,8 @@ function getPeriodDayWindow(period: JarivisPeriodKey): { days: number; label: st
 }
 
 function formatMinutesLabel(minutes: number): string {
-  if (!Number.isFinite(minutes) || minutes <= 0) return '0 mnt';
-  if (minutes < 60) return `${Math.round(minutes)} mnt`;
+  if (!Number.isFinite(minutes) || minutes <= 0) return '0s';
+  if (minutes < 60) return `${Math.round(minutes)}m`;
   const h = Math.floor(minutes / 60);
   const m = Math.round(minutes % 60);
   return m > 0 ? `${h}j ${m}m` : `${h}j`;
@@ -410,7 +410,7 @@ function computeAverageClockTime(timestamps: (string | null | undefined)[]): str
       // ignore invalid format
     }
   }
-  if (validMinutes.length === 0) return '--:--';
+  if (validMinutes.length === 0) return '0s';
   const avg = Math.round(validMinutes.reduce((a, b) => a + b, 0) / validMinutes.length);
   const hh = String(Math.floor(avg / 60)).padStart(2, '0');
   const mm = String(avg % 60).padStart(2, '0');
@@ -617,12 +617,15 @@ export function computeJarivisDashboardMetrics(params: {
     }
   }
 
-  // Service category mix (Laporan Kerja Digital)
+  // Service category mix (from app.jarivis.com Beranda)
   const completedReportsList = reports.filter(
     r => r.status === 'COMPLETED' || r.status === 'REVIEWED'
   );
   const countByService = (types: ServiceType[]) =>
     completedReportsList.filter(r => types.includes(r.project?.serviceType)).length;
+
+  const surveyTermiteCount = quotations.filter(q => q.kategori === 'AR').length;
+  const surveyPestCount = quotations.filter(q => q.kategori === 'PCO').length;
 
   const serviceSlices: JarivisServiceCategorySlice[] = [
     {
@@ -655,12 +658,27 @@ export function computeJarivisDashboardMetrics(params: {
         'DISINFECTION',
       ]),
     },
+    {
+      id: 'survey_ar',
+      label: 'Survey Termite Control',
+      color: '#64748b',
+      count: surveyTermiteCount,
+    },
+    {
+      id: 'survey_pco',
+      label: 'Survey Pest Control',
+      color: '#38bdf8',
+      count: surveyPestCount,
+    },
   ];
 
-  // Pelanggan & Kontrak Tab Metrics
+  // Business Tab Metrics (8 KPI Cards + Leads/Quotation Funnel)
   const uniqueClientNames = new Set<string>();
   for (const p of projects) {
     if (p.clientName) uniqueClientNames.add(p.clientName.trim().toLowerCase());
+  }
+  for (const q of quotations) {
+    if (q.kepadaNama) uniqueClientNames.add(q.kepadaNama.trim().toLowerCase());
   }
   const activeCustomersCount = Math.max(uniqueClientNames.size, projects.length);
 

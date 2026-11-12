@@ -396,6 +396,66 @@ run_check(
     "AppLayout.tsx (#173f30 sidebar), Header.tsx (Lite topbar), OperationsAnalyticsBento.tsx (5 KPI Grid + Perlu tindakan + Aktivitas terbaru), LoginForm.tsx, dan ExecutorHome.tsx terintegrasi penuh."
 )
 
+
+# KEI-24: Whole-App Design Specification Compliance (Brand Green Dark Mode #4B9B70, Explicit Inventory Selection Without [0] Default, Platform Context Label, & 6-Role Separation)
+css_spec = (repo / "src/app/index.css").read_text(encoding="utf-8")
+inv_spec = (repo / "src/pages/inventory/InventoryPage.tsx").read_text(encoding="utf-8")
+comp_spec = (repo / "src/pages/super-admin/CompaniesPage.tsx").read_text(encoding="utf-8")
+run_check(
+    "KEI-24",
+    "Phase 10: Kepatuhan Penuh GUCI-APP-WHOLE-APP-DESIGN.md (Token Hijau Dark Mode #4B9B70, Mutasi Gudang Eksplisit Tanpa Default [0], & Isolasi Konteks SaaS)",
+    "Audit seluruh token tema, mutasi stok gudang, taksonomi status, dan pemisahan 6 role",
+    "1) Pastikan Dark Mode tetap menggunakan aksen hijau (#4B9B70) dan canvas #101613 / #F4F6F4. 2) Pastikan mutasi gudang tidak lagi default otomatis ke items[0] atau projects[0]. 3) Pastikan Master Super Admin memiliki label konteks platform yang jelas dan konfirmasi perubahan status tenant.",
+    "100% patuh terhadap spesifikasi GUCI-APP-WHOLE-APP-DESIGN.md di seluruh aplikasi",
+    "CRITICAL", "system", "functional",
+    all(k in css_spec for k in ["--brand-primary: #1A5C38", "--brand-primary: #4B9B70", "--bg-primary: #F4F6F4", "--bg-primary: #101613", "--border: #DCE5DE", "--border: #344239"])
+    and "-- Pilih Barang / Obat / Alat Secara Eksplisit --" in inv_spec
+    and "-- Pilih Proyek Tujuan --" in inv_spec
+    and 'projects[0]?.id' not in inv_spec
+    and "KONTEKS PLATFORM SAAS" in comp_spec,
+    "Token Light/Dark (#1A5C38 / #4B9B70), pencegahan default items[0]/projects[0] di InventoryPage.tsx, dan isolasi konteks platform SaaS di CompaniesPage.tsx tervalidasi."
+)
+
+
+# KEI-25: Phase 11 (Alpha Testing) - Integrasi Stitch Technician UI/UX Tanpa QR, Laporan Hasil Pekerjaan, Eskalasi Kendala ke Admin, & Floating Bottom Pill
+exec_stitch = (repo / "src/widgets/executor/ExecutorHome.tsx").read_text(encoding="utf-8")
+bento_stitch = (repo / "src/widgets/admin/OperationsAnalyticsBento.tsx").read_text(encoding="utf-8")
+run_check(
+    "KEI-25",
+    "Phase 11 (Alpha Test): Stitch Technician UI/UX (Tanpa QR, Standar Laporan Hasil Pekerjaan, Eskalasi Kendala ke Admin, & Floating Bottom Pill)",
+    "Teknisi membuka ExecutorHome.tsx dan Admin membuka OperationsAnalyticsBento.tsx",
+    "1) Pastikan fitur Pindai QR dihapus dan istilah Berita Acara diganti penuh menjadi Laporan Hasil Pekerjaan. 2) Pastikan Lapor Kendala (fw_field_issues_v1) tampil di panel Perlu tindakan Admin. 3) Pastikan navigasi bawah memakai Floating Bottom Pill (TabContainer).",
+    "100% sesuai keputusan user: Tanpa QR, hanya Laporan Hasil Pekerjaan, eskalasi kendala tampil di Admin, dan Floating Bottom Pill aktif",
+    "CRITICAL", "system", "usability",
+    all(k in exec_stitch for k in [
+        "Lihat Detail Rute &amp; Scope", "Lapor Kendala", "fw_field_issues_v1",
+        "Rincian Tugas &amp; Lokasi", "Pusat Notifikasi", "Pratinjau PDF",
+        "Laporan Hasil Pekerjaan", "Kirim Laporan Hasil Pekerjaan via WhatsApp", "Pembersihan Cache Foto",
+        "hideTopBar={true}", "floatingOnAllScreens={true}", "showFloatingBottom={!isAnyModalOpen}"
+    ])
+    and "Pindai QR" not in exec_stitch
+    and "Berita Acara" not in exec_stitch
+    and "fw_field_issues_v1" in bento_stitch,
+    "ExecutorHome.tsx bersih tanpa QR & tanpa Berita Acara (hanya Laporan Hasil Pekerjaan), eskalasi Lapor Kendala terhubung ke Perlu tindakan Admin, + Floating Bottom Pill."
+)
+
+# KEI-26: Phase 11 (Alpha Testing) - Animasi & Gesture + Microcopy Ringkas + Evaluasi PIC Otomatis Sesudah TTD (Wajib & Strict Blind dari Teknisi)
+treat_stitch = (repo / "src/widgets/executor/TreatmentFormModal.tsx").read_text(encoding="utf-8")
+review_stitch = (repo / "src/widgets/executor/CustomerReviewFormModal.tsx").read_text(encoding="utf-8")
+run_check(
+    "KEI-26",
+    "Phase 11 (Alpha Test): Animasi/Gesture + Reduksi Kognitif + Evaluasi PIC Otomatis Sesudah Tanda Tangan (Wajib & Strict Blind dari Teknisi)",
+    "PIC Klien menandatangani laporan lalu mengisi form evaluasi rahasia yang muncul otomatis",
+    "1) Periksa alur 2 langkah di CustomerReviewFormModal.tsx (SIGN_STAGE -> STRICT_BLIND_EVAL_STAGE) dengan bintang awal 0 (wajib diisi PIC). 2) Pastikan penilaian dienkripsi (STRICT_BLIND_PIC_REVIEW) dan layar teknisi hanya menampilkan Evaluasi PIC Klien: Terkunci & Rahasia tanpa membocorkan rating/komentar.",
+    "Evaluasi PIC muncul otomatis sesudah tanda tangan, wajib diisi oleh PIC, dan 100% strict tersembunyi dari teknisi",
+    "CRITICAL", "system", "security",
+    all(k in exec_stitch for k in ["AnimatePresence mode=\"wait\"", "drag=\"x\"", "handleDaySwipe", "Evaluasi PIC Klien: Terkunci &amp; Rahasia"])
+    and all(k in treat_stitch for k in ["1rb - 3rb", "> 5.000", "6-15", "showAdvancedTechDetails", "showTeamSection"])
+    and all(k in review_stitch for k in ["SIGN_STAGE", "STRICT_BLIND_EVAL_STAGE", "STRICT_BLIND_PIC_REVIEW", "MODE PRIVASI PENUH (STRICT BLIND REVIEW)", "useState<number>(0)"])
+    and "Berita Acara" not in review_stitch,
+    "Alur SIGN_STAGE -> STRICT_BLIND_EVAL_STAGE wajib diisi PIC (rating awal 0) dan 100% strict tersembunyi dari teknisi lulus Alpha Testing."
+)
+
 # Write CSV
 csv_out.parent.mkdir(parents=True, exist_ok=True)
 with csv_out.open("w", encoding="utf-8", newline="") as f:

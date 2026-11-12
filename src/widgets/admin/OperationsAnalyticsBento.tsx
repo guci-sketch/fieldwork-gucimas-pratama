@@ -19,6 +19,7 @@ import {
   JarivisExecutionTrendCard,
   JarivisGreetingBanner,
   JarivisIdleAlertBanner,
+  JarivisLeadsFunnelCard,
   JarivisPeriodPills,
   JarivisRadialMetricCard,
   JarivisServiceCategoryCard,
@@ -374,10 +375,10 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
       },
       {
         id: 'new_customers',
-        title: 'LOKASI PROYEK TERDAFTAR',
-        value: projects.length,
+        title: 'PELANGGAN BARU',
+        value: computed.business.newCustomersOrQuotationsCount,
         comparisonText: `0% ${suffix}`,
-        onClick: onOpenCustomersTab,
+        onClick: onOpenQuotationsTab || quotationSummary?.onOpenQuotations,
       },
       {
         id: 'inactive_customers',
@@ -402,10 +403,11 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
   }, [
     computed.business,
     computed.performanceTeam.comparisonSuffix,
-    projects.length,
     onOpenCustomersTab,
     onOpenProjectsTab,
     onOpenReportsTab,
+    onOpenQuotationsTab,
+    quotationSummary?.onOpenQuotations,
   ]);
 
   if (isLoading && !summary) {
@@ -555,7 +557,7 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
           {/* Ringkasan Eksekutif 5 Kartu KPI & Panel Prioritas Bergaya RedesignFieldworkGuciMasLite */}
           <div className="kpi-grid">
             {[
-              { label: 'Draft', code: 'DRAFT', count: reports.filter(r => r.status === 'DRAFT').length, sub: 'Draft laporan kerja', action: () => onOpenReportsTab?.() },
+              { label: 'Draft', code: 'DRAFT', count: reports.filter(r => r.status === 'DRAFT').length + (quotationSummary?.draftCount || 0), sub: 'Draft SPK & Penawaran', action: () => onOpenProjectsTab?.() },
               { label: 'Siap Dikerjakan', code: 'READY', count: reports.filter(r => r.status === 'READY').length, sub: 'Menunggu check-in teknisi', action: () => onOpenProjectsTab?.() },
               { label: 'Sedang Berlangsung', code: 'WORKING', count: summary.workingJobs || reports.filter(r => r.status === 'WORKING').length, sub: 'Aktif di lapangan', action: () => onOpenReportsTab?.() },
               { label: 'Selesai', code: 'COMPLETED', count: summary.completedJobs || reports.filter(r => r.status === 'COMPLETED' || r.status === 'REVIEWED').length, sub: 'Laporan selesai tercatat', action: () => onOpenReportsTab?.() },
@@ -588,6 +590,34 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                 </button>
               </div>
               <div className="action-list">
+                {(() => {
+                  let fieldIssues: any[] = [];
+                  try {
+                    const raw = localStorage.getItem('fw_field_issues_v1');
+                    if (raw) fieldIssues = JSON.parse(raw);
+                  } catch {
+                    fieldIssues = [];
+                  }
+                  return fieldIssues.slice(0, 2).map((iss: any) => (
+                    <button key={iss.id} type="button" onClick={() => onOpenReportsTab?.()}>
+                      <div className="alert-icon danger">
+                        <span className="font-bold text-xs">!</span>
+                      </div>
+                      <div>
+                        <div>
+                          <strong>Kendala Lapangan: {iss.issueType}</strong>
+                          <span className="badge danger">
+                            <span className="badge-dot" />
+                            Eskalasi Teknisi
+                          </span>
+                        </div>
+                        <p>{iss.projectName} · {iss.executorName}</p>
+                        <small>{iss.note || iss.address}</small>
+                      </div>
+                      <span className="text-[var(--secondary)] font-bold">›</span>
+                    </button>
+                  ));
+                })()}
                 {reports
                   .filter(r => r.status === 'FLAGGED' || r.status === 'WORKING')
                   .slice(0, 3)
@@ -604,7 +634,7 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                             {rep.status === 'FLAGGED' ? 'Perlu Ditinjau' : 'Sedang Berlangsung'}
                           </span>
                         </div>
-                        <p>{rep.project.name} · {rep.executor.name}</p>
+                        <p>{rep.project.projectName} · {rep.executor.name}</p>
                         <small>{rep.project.address}</small>
                       </div>
                       <span className="text-[var(--secondary)] font-bold">›</span>
@@ -636,7 +666,7 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                         <strong>
                           {rep.status === 'COMPLETED' ? 'Pekerjaan selesai dicatat' : rep.status === 'WORKING' ? 'Check-in berhasil dicatat' : rep.status === 'FLAGGED' ? 'Laporan ditandai sistem' : 'Penugasan siap dikerjakan'}
                         </strong>
-                        <small>{rep.executor.name} · {rep.project.name}</small>
+                        <small>{rep.executor.name} · {rep.project.projectName}</small>
                       </span>
                       <time>{timeStr}</time>
                     </div>
@@ -712,18 +742,23 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
             </div>
           </div>
 
-          {/* Idle Workforce Alert Banner */}
+          {/* Idle Workforce / Pending Quotation Alert Banner */}
           <JarivisIdleAlertBanner
             idleStaffCount={computed.operationCenter.idleStaffCount}
-            draftQuotationsCount={0}
+            draftQuotationsCount={quotationSummary?.draftCount ?? 0}
             onReviewStaff={() => setIdleModalOpen(true)}
-            onReviewQuotations={() => onOpenReportsTab?.()}
+            onReviewQuotations={() =>
+              (onOpenQuotationsTab || quotationSummary?.onOpenQuotations)?.()
+            }
           />
 
           {/* Bottom Section 1: BEBAN KERJA SAAT INI & ANTREAN VERIFIKASI */}
           <div className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-2xl p-4 sm:p-5 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-full bg-[#3b82f6]/20 border border-[#3b82f6]/40 text-[#60a5fa] text-xs font-bold flex items-center justify-center shrink-0">
+                  #
+                </span>
                 <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-[var(--text-primary)]">
                   BEBAN KERJA SAAT INI
                 </h3>
@@ -742,14 +777,17 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                   }
                   className="px-3 py-1.5 rounded-lg bg-[#1e3a8a]/50 hover:bg-[#1e3a8a]/70 border border-[#3b82f6]/40 text-[#93c5fd] text-xs font-semibold transition-colors cursor-pointer"
                 >
-                  {workloadSort === 'mostRemaining' ? 'Urutkan: Sisa Terbanyak' : 'Urutkan: Risiko Tertinggi'}
+                  {workloadSort === 'mostRemaining' ? '≡ Sisa Terbanyak' : '≡ Risiko Tertinggi'}
                 </button>
               </div>
             </div>
 
             {(summary.priorityReports ?? []).length === 0 && reports.length === 0 ? (
               <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl py-10 px-4 text-center space-y-2">
-                <p className="text-sm font-bold text-[var(--text-primary)]">
+                <div className="w-14 h-14 rounded-2xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] mx-auto flex items-center justify-center text-lg font-bold text-[#3b82f6]">
+                  ✓
+                </div>
+                <p className="text-sm font-bold text-[var(--text-primary)] pt-1">
                   Belum ada antrean beban kerja tertunda pada tanggal ini
                 </p>
                 <p className="text-xs text-[var(--text-secondary)] max-w-md mx-auto">
@@ -885,7 +923,7 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                               : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]'
                           }`}
                         >
-                          {idx + 1}
+                          #{idx + 1}
                         </span>
                         <div className="min-w-0">
                           <p className="text-xs font-bold text-[var(--text-primary)] truncate">{m.name}</p>
@@ -919,6 +957,8 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                 title: 'Anggota Aktif',
                 count: computed.liveMap.activeMembersCount,
                 sub: 'Anggota clock in',
+                badgeBg: 'bg-[#3b82f6]/15 text-[#60a5fa] border-[#3b82f6]/30',
+                symbol: '⊞',
                 onClick: onOpenExecutorsTab,
               },
               {
@@ -926,6 +966,8 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                 title: 'Anggota Idle',
                 count: computed.liveMap.idleMembersCount,
                 sub: 'Clock in, tanpa tugas',
+                badgeBg: 'bg-[#64748b]/15 text-[#94a3b8] border-[#64748b]/30',
+                symbol: '⊡',
                 onClick: () => setIdleModalOpen(true),
               },
               {
@@ -933,6 +975,8 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                 title: 'Kunjungan Aktif',
                 count: computed.liveMap.activeVisitsCount,
                 sub: 'On-site, belum selesai',
+                badgeBg: 'bg-[#10b981]/15 text-[#34d399] border-[#10b981]/30',
+                symbol: '✓',
                 onClick: onOpenReportsTab,
               },
               {
@@ -940,6 +984,8 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                 title: 'Anggota Belum Selesai',
                 count: computed.liveMap.unfinishedMembersCount,
                 sub: 'Tugas Belum Selesai',
+                badgeBg: 'bg-[#ef4444]/15 text-[#f87171] border-[#ef4444]/30',
+                symbol: '!',
                 onClick: onOpenReportsTab,
               },
               {
@@ -947,6 +993,8 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                 title: 'Anggota Selesai',
                 count: computed.liveMap.completedMembersCount,
                 sub: 'Semua tugas selesai',
+                badgeBg: 'bg-[#10b981]/15 text-[#34d399] border-[#10b981]/30',
+                symbol: '✓',
                 onClick: onOpenReportsTab,
               },
             ].map(card => (
@@ -954,16 +1002,24 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                 key={card.id}
                 className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-4 flex flex-col justify-between gap-3"
               >
-                <div className="min-w-0">
-                  <span className="text-xs font-bold text-[var(--text-primary)] block truncate">
-                    {card.title}
+                <div className="flex items-start gap-3">
+                  <span
+                    className={`w-8 h-8 rounded-lg border text-xs font-bold flex items-center justify-center shrink-0 mt-0.5 ${card.badgeBg}`}
+                    aria-hidden="true"
+                  >
+                    {card.symbol}
                   </span>
-                  <strong className="text-xl font-bold font-mono tabular-nums text-[var(--text-primary)] block mt-1">
-                    {formatNumberId(card.count)}
-                  </strong>
-                  <span className="text-[11px] text-[var(--text-secondary)] block truncate mt-0.5">
-                    {card.sub}
-                  </span>
+                  <div className="min-w-0">
+                    <span className="text-xs font-bold text-[var(--text-primary)] block truncate">
+                      {card.title}
+                    </span>
+                    <strong className="text-xl font-bold font-mono tabular-nums text-[var(--text-primary)] block mt-0.5">
+                      {formatNumberId(card.count)}
+                    </strong>
+                    <span className="text-[11px] text-[var(--text-secondary)] block truncate">
+                      {card.sub}
+                    </span>
+                  </div>
                 </div>
                 <div className="text-right">
                   <button
@@ -1331,8 +1387,6 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                   primaryText={formatDecimalId(computed.performanceTeam.avgAssignedPerMember)}
                   primaryTone="rose"
                   subText="Tugas per anggota"
-                  trendText={`0% ${computed.performanceTeam.comparisonSuffix}`}
-                  trendPositive={true}
                 />
                 <JarivisRadialMetricCard
                   title="RATA-RATA TUGAS SELESAI PER ANGGOTA"
@@ -1341,8 +1395,6 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
                   primaryText={formatDecimalId(computed.performanceTeam.avgCompletedPerMember)}
                   primaryTone="teal"
                   subText="Tugas per anggota"
-                  trendText={`0% ${computed.performanceTeam.comparisonSuffix}`}
-                  trendPositive={true}
                 />
               </div>
 
@@ -1439,15 +1491,29 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
       )}
 
       {/* ═══════════════════════════════════════════════════════════════════════
-          TAB 4: PELANGGAN & KONTRAK (`?tab=business`)
+          TAB 4: BISNIS (`?tab=business`)
          ═══════════════════════════════════════════════════════════════════════ */}
       {activeSubTab === 'business' && (
         <div className="space-y-4">
-          {/* Section 1: 8-Card Customer & Contract Performance Grid (`Ringkasan Performa`) */}
+          {/* Section 1: 8-Card Business Performance Grid (`Ringkasan Performa`) */}
           <JarivisBusinessKpiGrid
             items={businessKpiItems}
             selectedPeriod={selectedPeriod}
             onSelectPeriod={setSelectedPeriod}
+          />
+
+          {/* Section 2: Leads & Quotation Funnel (`Ringkasan Leads`) */}
+          <JarivisLeadsFunnelCard
+            newLeadsCount={computed.business.funnel.newLeadsCount}
+            contactedOrApprovedCount={computed.business.funnel.contactedOrApprovedCount}
+            visitsOrDealCount={computed.business.funnel.visitsOrDealCount}
+            totalEstimatedRevenueIdr={computed.business.funnel.totalEstimatedRevenueIdr}
+            totalLeadsCount={computed.business.funnel.totalLeadsCount}
+            selectedPeriod={selectedPeriod}
+            onSelectPeriod={setSelectedPeriod}
+            onOpenQuotations={() =>
+              (onOpenQuotationsTab || quotationSummary?.onOpenQuotations)?.()
+            }
           />
 
           {/* Section 3: Pembaruan Kontrak (90/60/30 Hari & Kedaluwarsa) + Pelanggan Tanpa Aktivitas */}

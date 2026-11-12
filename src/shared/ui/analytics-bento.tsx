@@ -82,7 +82,7 @@ export const JARIVIS_SUB_TABS: { id: JarivisDashboardTabId; label: string; eyebr
   { id: 'operationCenter', label: 'Operation Center', eyebrow: 'GUCI EMAS OPERATION CENTER' },
   { id: 'liveMap', label: 'Live Map', eyebrow: 'GUCI EMAS LIVE MAP' },
   { id: 'performanceTeam', label: 'Performance Team', eyebrow: 'GUCI EMAS PERFORMANCE TEAM' },
-  { id: 'business', label: 'Pelanggan & Kontrak', eyebrow: 'GUCI EMAS PELANGGAN & KONTRAK' },
+  { id: 'business', label: 'Bisnis', eyebrow: 'GUCI EMAS BUSINESS' },
 ];
 
 export const JARIVIS_PERIOD_OPTIONS: { id: JarivisPeriodKey; label: string }[] = [
@@ -307,11 +307,11 @@ export const JarivisRadialMetricCard: React.FC<JarivisRadialMetricCardProps> = (
       type={onClick ? 'button' : undefined}
       onClick={onClick}
       className={cn(
-        'w-full flex-1 h-full min-h-[146px] text-left bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-4 flex flex-col justify-between gap-3 transition-colors',
+        'w-full text-left bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-4 flex flex-col justify-between gap-3 transition-colors',
         onClick && 'hover:border-[var(--border-focus)] cursor-pointer btn-tactile'
       )}
     >
-      <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-primary)] block leading-snug min-h-[28px]">
+      <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-primary)] block leading-snug">
         {title}
       </span>
 
@@ -325,7 +325,7 @@ export const JarivisRadialMetricCard: React.FC<JarivisRadialMetricCardProps> = (
               r={radius}
               fill="none"
               stroke="var(--text-primary)"
-              strokeOpacity="0.14"
+              strokeOpacity="0.16"
               strokeWidth="5.5"
             />
             {clampedPct > 0 && (
@@ -359,18 +359,17 @@ export const JarivisRadialMetricCard: React.FC<JarivisRadialMetricCardProps> = (
         </div>
       </div>
 
-      <div
-        className={cn(
-          'text-[11px] font-medium pt-1 border-t border-[var(--border-subtle)]/60 flex items-center justify-between',
-          trendText
-            ? trendPositive
-              ? 'text-[#10b981]'
-              : 'text-[#f87171]'
-            : 'text-[var(--text-muted)]'
-        )}
-      >
-        <span>{trendText || 'Rata-rata periode aktif'}</span>
-      </div>
+      {trendText && (
+        <div
+          className={cn(
+            'text-[11px] font-semibold flex items-center gap-1',
+            trendPositive ? 'text-[#10b981]' : 'text-[#f87171]'
+          )}
+        >
+          <span>{trendPositive ? '↗' : '↘'}</span>
+          <span>{trendText}</span>
+        </div>
+      )}
     </Wrapper>
   );
 };
@@ -383,29 +382,27 @@ export const JarivisEfficiencyCard: React.FC<{
   avgDuration: string;
 }> = ({ avgStartTime, avgEndTime, avgDuration }) => {
   const rows = [
-    { id: 'start', label: 'Rata-rata Waktu Mulai', meta: 'Check-in', value: avgStartTime },
-    { id: 'end', label: 'Rata-rata Waktu Selesai', meta: 'Check-out', value: avgEndTime },
-    { id: 'total', label: 'Rata-rata Durasi Tugas', meta: 'Per Tugas', value: avgDuration },
+    { id: 'start', label: 'rata-rata waktu mulai', value: avgStartTime },
+    { id: 'end', label: 'rata-rata waktu selesai', value: avgEndTime },
+    { id: 'total', label: 'rata-rata total tugas', value: avgDuration },
   ];
 
   return (
-    <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-4 sm:p-5 flex flex-col justify-between h-full min-h-[308px]">
+    <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-4 sm:p-5 flex flex-col justify-between h-full">
       <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-primary)] block mb-2">
         EFISIENSI OPERASIONAL
       </span>
 
       <div className="divide-y divide-[var(--border-subtle)] flex-1 flex flex-col justify-around">
         {rows.map(row => (
-          <div key={row.id} className="py-3 flex items-center justify-between gap-3">
+          <div key={row.id} className="py-2.5 flex items-end justify-between gap-3">
             <div>
-              <span className="text-xs font-medium text-[var(--text-secondary)] block">{row.label}</span>
+              <span className="text-xs text-[var(--text-secondary)] block">{row.label}</span>
               <span className="text-lg sm:text-xl font-bold font-mono tabular-nums text-[#3b82f6] mt-0.5 block">
                 {row.value}
               </span>
             </div>
-            <span className="text-[11px] font-medium text-[var(--text-muted)] px-2 py-0.5 rounded bg-[var(--bg-secondary)] border border-[var(--border-subtle)]">
-              {row.meta}
-            </span>
+            <span className="w-16 h-0.5 rounded-full bg-[var(--border-subtle)] mb-1.5" aria-hidden="true" />
           </div>
         ))}
       </div>
@@ -428,7 +425,10 @@ export const JarivisCrimsonAttentionCard: React.FC<{
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--alert-surface-muted)]">
-          PERLU PERHATIAN
+          PERLU PERHATIAN!
+        </span>
+        <span className="text-xs font-bold text-[var(--alert-surface-muted)]" aria-hidden="true">
+          !
         </span>
       </div>
 
@@ -479,21 +479,29 @@ export const JarivisIdleAlertBanner: React.FC<{
 
   return (
     <div className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-xl p-3.5 sm:px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-      <div className="min-w-0">
-        <p className="text-xs sm:text-sm font-bold text-[var(--text-primary)]">
-          {showIdle ? 'Peringatan Tenaga Kerja Idle' : 'Penawaran Menunggu Persetujuan'}
-        </p>
-        <p className="text-xs text-[var(--text-secondary)] truncate">
-          {showIdle ? (
-            <>
-              Ada <span className="text-[#fb7185] font-semibold underline">{count} anggota</span> tanpa tugas selama lebih dari 5 hari.
-            </>
-          ) : (
-            <>
-              Ada <span className="text-[#fbbf24] font-semibold underline">{count} dokumen penawaran</span> yang menunggu pemeriksaan/approval.
-            </>
-          )}
-        </p>
+      <div className="flex items-center gap-3 min-w-0">
+        <span
+          className="w-8 h-8 rounded-lg bg-[#f43f5e]/20 border border-[#f43f5e]/40 text-[#fb7185] font-bold text-sm flex items-center justify-center shrink-0"
+          aria-hidden="true"
+        >
+          !
+        </span>
+        <div className="min-w-0">
+          <p className="text-xs sm:text-sm font-bold text-[var(--text-primary)]">
+            {showIdle ? 'Peringatan Tenaga Kerja Idle' : 'Penawaran Menunggu Persetujuan'}
+          </p>
+          <p className="text-xs text-[var(--text-secondary)] truncate">
+            {showIdle ? (
+              <>
+                Ada <span className="text-[#fb7185] font-semibold underline">{count} anggota</span> tanpa tugas selama lebih dari 5 hari.
+              </>
+            ) : (
+              <>
+                Ada <span className="text-[#fbbf24] font-semibold underline">{count} dokumen penawaran</span> yang menunggu pemeriksaan/approval.
+              </>
+            )}
+          </p>
+        </div>
       </div>
 
       <button

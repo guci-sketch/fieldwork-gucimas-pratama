@@ -48,31 +48,31 @@ export const PDF_VARIANT_OPTIONS: { value: PdfTemplateVariant; label: string; de
     },
     {
         value: "ar_pra_profile_8p",
-        label: "Tipe 1: Proposal Pra-Konstruksi + Pipa (8 Halaman)",
+        label: "Tipe 1 — Proposal Pra-Konstruksi + Pipa (8 Halaman)",
         desc: "Cover + Edukasi Rayap + Company Profile Guci Emas + Koloni + Metode SNI + Pipa + Survey + Biaya (Contoh: PT Oreka 0005)",
         badge: "AR 8 Hal",
     },
     {
         value: "ar_pasca_standar_4p",
-        label: "Tipe 2: Penawaran Pasca-Konstruksi / Retreatment (4 Halaman)",
+        label: "Tipe 2 — Penawaran Pasca-Konstruksi / Retreatment (4 Halaman)",
         desc: "Cover + Hasil Survey & Solusi Barrier + Tabel Rumus Volume + Tabel Biaya & Diskon Upah + Garansi (Contoh: Bank Victoria 0022)",
         badge: "AR 4 Hal",
     },
     {
         value: "pco_rodent_survey_4p",
-        label: "Tipe 3: Proposal Lengkap Rodent Control A-E (4 Halaman)",
-        desc: "Cover + Hasil Survey Tikus + Program Kerja A-D (Tabel Planning Indoor/Outdoor) + E. Tabel Biaya Oranye (Contoh: Puskesmas 0009)",
+        label: "Tipe 3 — Proposal Lengkap Rodent Control A–E (4 Halaman)",
+        desc: "Cover + Hasil Survey Tikus + Program Kerja A–D (Tabel Planning Indoor/Outdoor) + E. Tabel Biaya Oranye (Contoh: Puskesmas 0009)",
         badge: "PCO Proposal",
     },
     {
         value: "pco_korporat_boq_3p",
-        label: "Tipe 4: Penawaran Pest & Rodent Korporat / BUMN (3 Halaman)",
+        label: "Tipe 4 — Penawaran Pest & Rodent Korporat / BUMN (3 Halaman)",
         desc: "Cover dengan Total Harga + Metode I. Pest & II. Rodent + Tabel BOQ DPP Nilai Lain 11/12 & PPN 12% (Contoh: PLN 0003)",
         badge: "PCO BOQ",
     },
     {
         value: "pco_jadwal_fogging_1p",
-        label: "Tipe 5: Surat Jadwal Kerja Fogging 12 Bulan (1 Halaman)",
+        label: "Tipe 5 — Surat Jadwal Kerja Fogging 12 Bulan (1 Halaman)",
         desc: "Surat pengantar + Tabel Jadwal Kerja Januari s/d Desember (Tgl I & II) + TTD/Stempel (Contoh: Ibu Dita 0015)",
         badge: "PCO 1 Hal",
     },
@@ -680,11 +680,12 @@ export function QuotationFormPage({ onSavedSuccess, onCancel }: QuotationFormPag
                         <ArrowLeft size={16} />
                     </button>
                     <div>
-                        <h2 className="text-base sm:text-lg font-bold text-[var(--text-primary)]">
-                            Input Hasil Survey &amp; Automation Quotation
+                        <h2 className="text-base sm:text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
+                            <FileText size={18} className="text-[var(--accent)]" />
+                            Input Hasil Survey & Automation Quotation
                         </h2>
                         <p className="text-xs text-[var(--text-muted)]">
-                            Fieldwork · Alur Draft Survey <span className="font-mono font-bold text-amber-700">GP-DRF/...</span> ke Approved Resmi <span className="font-mono font-bold text-emerald-700">GP/...</span>
+                            Fieldwork — Alur Draft Survey <span className="font-mono font-bold text-amber-700">GP-DRF/...</span> → Approved Resmi <span className="font-mono font-bold text-emerald-700">GP/...</span>
                         </p>
                     </div>
                 </div>
@@ -694,6 +695,7 @@ export function QuotationFormPage({ onSavedSuccess, onCancel }: QuotationFormPag
                     disabled={previewBusy}
                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-white hover:bg-[var(--bg-tertiary)] text-xs font-semibold text-[var(--text-primary)] shadow-2xs"
                 >
+                    <Eye size={14} className="text-[var(--accent)]" />
                     {previewBusy ? "Merender..." : "Preview PDF"}
                 </button>
             </div>
@@ -709,7 +711,7 @@ export function QuotationFormPage({ onSavedSuccess, onCancel }: QuotationFormPag
                                 {/* Kolom AR */}
                                 <div className="p-3.5 rounded-xl border border-purple-200 bg-purple-50/30 space-y-2.5">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-xs font-bold text-purple-800 uppercase tracking-wider">Anti Rayap (Kode: AR)</span>
+                                        <span className="text-xs font-bold text-purple-800 uppercase tracking-wider">🛡️ Anti Rayap (Kode: AR)</span>
                                         <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-800">GP-DRF/AR/...</span>
                                     </div>
                                     <div className="space-y-1.5">
@@ -737,7 +739,7 @@ export function QuotationFormPage({ onSavedSuccess, onCancel }: QuotationFormPag
                                 {/* Kolom PCO */}
                                 <div className="p-3.5 rounded-xl border border-emerald-200 bg-emerald-50/30 space-y-2.5">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-xs font-bold text-emerald-900 uppercase tracking-wider">Pest Control (Kode: PCO)</span>
+                                        <span className="text-xs font-bold text-emerald-900 uppercase tracking-wider">🦟 Pest Control (Kode: PCO)</span>
                                         <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">GP-DRF/PCO/...</span>
                                     </div>
                                     <div className="space-y-1.5">
@@ -1089,7 +1091,7 @@ export function QuotationFormPage({ onSavedSuccess, onCancel }: QuotationFormPag
                                         <div key={idx} className="p-4 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-tertiary)]/50 space-y-3">
                                             <div className="flex items-center justify-between gap-2">
                                                 <span className="text-xs font-bold text-[var(--accent)] uppercase tracking-wider">
-                                                    Item Pekerjaan {idx + 1}
+                                                    Item Pekerjaan #{idx + 1}
                                                 </span>
                                                 <div className="flex items-center gap-2">
                                                     <button

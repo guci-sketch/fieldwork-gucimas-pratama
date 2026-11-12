@@ -4,16 +4,14 @@ import path from 'path';
 import express from 'express';
 
 async function startServer() {
-  const portArgIdx = process.argv.indexOf('--port');
-  const cliPort = portArgIdx !== -1 && process.argv[portArgIdx + 1] ? Number(process.argv[portArgIdx + 1]) : null;
-  const envPort = process.env.PORT && process.env.PORT !== '8080' ? Number(process.env.PORT) : null;
-  const port = cliPort || envPort || 3000;
+  const port = Number(process.env.PORT || 3000);
   const app = createApp();
 
   if (process.env.NODE_ENV !== 'production') {
+    // Dynamic import: `vite` adalah devDependency, tidak boleh ikut ter-require di bundle produksi/serverless.
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true, hmr: false },
+      server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);

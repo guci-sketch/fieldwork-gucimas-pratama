@@ -17,13 +17,7 @@ export function createApp() {
   const app = express();
 
   app.set('trust proxy', 1);
-  app.use(
-    helmet({
-      contentSecurityPolicy: false,
-      crossOriginResourcePolicy: false,
-      frameguard: false,
-    })
-  );
+  app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'same-origin' } }));
   app.use(express.json({ limit: '1mb' }));
 
   const apiLimiter = rateLimit({

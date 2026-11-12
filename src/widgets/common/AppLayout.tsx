@@ -265,7 +265,7 @@ export function AppLayout({
                             </button>
                             <div
                                 className={cn(
-                                    'ml-3 overflow-hidden whitespace-nowrap transition-all duration-150 ease-out [&_h2]:!text-white [&_p]:!text-[#c9d8cf]',
+                                    'ml-3 overflow-hidden whitespace-nowrap transition-all duration-150 ease-out [&_span]:!text-white [&_p]:!text-[#c9d8cf]',
                                     isExpanded
                                         ? 'opacity-100 translate-x-0 w-[166px]'
                                         : 'opacity-0 -translate-x-1.5 w-0 pointer-events-none'

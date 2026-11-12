@@ -10,13 +10,16 @@ import {
 } from '@/shared/api/inviteService';
 import { fetchAppUser } from '@/shared/api/authProfile';
 import { useAuthStore } from '@/app/store/authStore';
-import { Loader2, Eye, EyeOff } from "lucide-react";
+import {
+    AlertCircle, Loader2, User, Mail, Lock, Eye, EyeOff,
+    ShieldCheck, CheckCircle2, ArrowLeft, KeyRound, ArrowRight
+} from "lucide-react";
 
 const ROLE_DISPLAY_NAMES: Record<string, string> = {
-    SUPERADMIN: "Admin Operasional",
-    ADMIN: "Admin Operasional",
-    MARKETING: "Admin Operasional",
-    INVENTORY: "Admin Operasional",
+    SUPERADMIN: "Superadmin (Direktur Perusahaan)",
+    ADMIN: "Admin Operasional Perusahaan",
+    MARKETING: "Marketing / Surveyor",
+    INVENTORY: "Admin Gudang & Chemical",
     TEKNISI_LAPANGAN: "Teknisi Lapangan",
 };
 
@@ -278,48 +281,62 @@ export function SignupPage() {
                 ) : invite && !success ? (
                     <div className="bg-white rounded-2xl shadow-lg border border-[var(--border-subtle)] p-5 sm:p-7">
                         <div className="mb-4 pb-3 border-b border-[var(--border-subtle)]">
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700 block mb-1">
-                                Token Undangan Valid
-                            </span>
+                            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg w-fit mb-1.5">
+                                <ShieldCheck size={14} />
+                                <span>Token Undangan Valid</span>
+                            </div>
                             <h2 className="text-base sm:text-lg font-bold text-[var(--text-primary)]">
-                                Registrasi Akun Staf Perusahaan
+                                {invite.role === "SUPERADMIN" ? "Registrasi Akun Superadmin Perusahaan" : "Registrasi Akun Anggota Perusahaan"}
                             </h2>
                             <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                                 Anda diundang bergabung ke <strong className="text-slate-900">{invite.companyName}</strong> sebagai{" "}
-                                <strong className="text-[var(--accent)]">{ROLE_DISPLAY_NAMES[invite.role] || "Teknisi Lapangan"}</strong>.
+                                <strong className="text-[var(--accent)]">{ROLE_DISPLAY_NAMES[invite.role] || invite.role}</strong>.
                             </p>
                         </div>
 
                         <form onSubmit={handleSignupWithInvite} className="space-y-3.5">
                             <div className="space-y-1">
                                 <label className="block text-xs font-semibold text-[var(--text-secondary)]">Nama Lengkap</label>
-                                <input
-                                    id="userName"
-                                    type="text"
-                                    value={form.userName}
-                                    onChange={handleChange}
-                                    required
-                                    placeholder="Masukkan nama lengkap Anda"
-                                    className="w-full px-3.5 py-2.5 bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                                />
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                        <User size={16} className="text-[var(--text-muted)]" />
+                                    </div>
+                                    <input
+                                        id="userName"
+                                        type="text"
+                                        value={form.userName}
+                                        onChange={handleChange}
+                                        required
+                                        placeholder="Masukkan nama lengkap Anda"
+                                        className="w-full pl-10 pr-3.5 py-2.5 bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                                    />
+                                </div>
                             </div>
 
                             <div className="space-y-1">
                                 <label className="block text-xs font-semibold text-[var(--text-secondary)]">Email</label>
-                                <input
-                                    id="email"
-                                    type="email"
-                                    value={form.email}
-                                    onChange={handleChange}
-                                    required
-                                    placeholder="nama@perusahaan.com"
-                                    className="w-full px-3.5 py-2.5 bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                                />
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                        <Mail size={16} className="text-[var(--text-muted)]" />
+                                    </div>
+                                    <input
+                                        id="email"
+                                        type="email"
+                                        value={form.email}
+                                        onChange={handleChange}
+                                        required
+                                        placeholder="nama@perusahaan.com"
+                                        className="w-full pl-10 pr-3.5 py-2.5 bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                                    />
+                                </div>
                             </div>
 
                             <div className="space-y-1">
                                 <label className="block text-xs font-semibold text-[var(--text-secondary)]">Password</label>
                                 <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                        <Lock size={16} className="text-[var(--text-muted)]" />
+                                    </div>
                                     <input
                                         id="password"
                                         type={showPassword ? "text" : "password"}
@@ -327,7 +344,7 @@ export function SignupPage() {
                                         onChange={handleChange}
                                         required
                                         placeholder="Minimal 6 karakter"
-                                        className="w-full pl-3.5 pr-10 py-2.5 bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                                        className="w-full pl-10 pr-10 py-2.5 bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
                                     />
                                     <button
                                         type="button"
@@ -341,20 +358,26 @@ export function SignupPage() {
 
                             <div className="space-y-1">
                                 <label className="block text-xs font-semibold text-[var(--text-secondary)]">Konfirmasi Password</label>
-                                <input
-                                    id="confirmPassword"
-                                    type={showPassword ? "text" : "password"}
-                                    value={form.confirmPassword}
-                                    onChange={handleChange}
-                                    required
-                                    placeholder="Ulangi password"
-                                    className="w-full px-3.5 py-2.5 bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-                                />
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                                        <Lock size={16} className="text-[var(--text-muted)]" />
+                                    </div>
+                                    <input
+                                        id="confirmPassword"
+                                        type={showPassword ? "text" : "password"}
+                                        value={form.confirmPassword}
+                                        onChange={handleChange}
+                                        required
+                                        placeholder="Ulangi password"
+                                        className="w-full pl-10 pr-3.5 py-2.5 bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-sm rounded-xl focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                                    />
+                                </div>
                             </div>
 
                             {error && (
-                                <div className="text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs font-semibold leading-relaxed">
-                                    {error}
+                                <div className="flex items-start gap-2 text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs font-semibold leading-relaxed">
+                                    <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                                    <span>{error}</span>
                                 </div>
                             )}
 
@@ -368,20 +391,23 @@ export function SignupPage() {
                         </form>
 
                         <div className="mt-4 pt-3.5 border-t border-[var(--border-subtle)] text-center">
-                            <Link to="/login" className="text-xs font-semibold text-[var(--text-muted)] hover:text-emerald-700">
-                                Kembali ke Halaman Masuk
+                            <Link to="/login" className="text-xs font-semibold text-[var(--text-muted)] hover:text-emerald-700 inline-flex items-center gap-1.5">
+                                <ArrowLeft size={14} /> Kembali ke Halaman Masuk
                             </Link>
                         </div>
                     </div>
                 ) : success ? (
                     <div className="bg-white rounded-2xl shadow-lg border border-[var(--border-subtle)] p-6 text-center space-y-3">
-                        <h2 className="text-lg font-bold text-slate-900">Pendaftaran Berhasil</h2>
+                        <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center mx-auto">
+                            <CheckCircle2 size={26} />
+                        </div>
+                        <h2 className="text-lg font-bold text-slate-900">Pendaftaran Berhasil!</h2>
                         <p className="text-xs sm:text-sm text-[var(--text-secondary)]">
                             {successNote || "Akun Anda telah aktif dan terhubung ke perusahaan."}
                         </p>
                         <Link
                             to="/"
-                            className="inline-flex items-center justify-center px-4 py-2 bg-[var(--accent)] text-white text-xs sm:text-sm font-bold rounded-xl"
+                            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-[var(--accent)] text-white text-xs sm:text-sm font-bold rounded-xl"
                         >
                             Masuk ke Dashboard
                         </Link>
@@ -389,16 +415,22 @@ export function SignupPage() {
                 ) : (
                     /* Form Input Kode Token Undangan Manual */
                     <div className="bg-white rounded-2xl shadow-lg border border-[var(--border-subtle)] p-5 sm:p-7 space-y-4">
-                        <div>
-                            <h2 className="text-base font-bold text-slate-900">Verifikasi Token Undangan</h2>
-                            <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                                Masukkan kode token undangan atau tautan undangan yang Anda terima untuk mengaktifkan akun Admin Operasional atau Teknisi Lapangan.
-                            </p>
+                        <div className="flex items-start gap-3">
+                            <div className="w-10 h-10 bg-emerald-50 text-[var(--accent)] border border-emerald-200 rounded-xl flex items-center justify-center shrink-0">
+                                <KeyRound size={20} />
+                            </div>
+                            <div>
+                                <h2 className="text-base font-bold text-slate-900">Verifikasi Token Undangan</h2>
+                                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                                    Masukkan kode token undangan atau tautan undangan yang Anda terima untuk mengaktifkan akun Superadmin atau Staf Perusahaan.
+                                </p>
+                            </div>
                         </div>
 
                         {inviteError && (
-                            <div className="text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs font-medium">
-                                {inviteError}
+                            <div className="flex items-start gap-2 text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3 text-xs font-medium">
+                                <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                                <span>{inviteError}</span>
                             </div>
                         )}
 
@@ -418,18 +450,18 @@ export function SignupPage() {
                             </div>
                             <button
                                 type="submit"
-                                className="w-full py-2.5 px-4 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center cursor-pointer"
+                                className="w-full py-2.5 px-4 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
                             >
-                                Verifikasi Token Undangan
+                                Verifikasi Token Undangan <ArrowRight size={15} />
                             </button>
                         </form>
 
                         <div className="pt-3 border-t border-[#e8e5e0] text-center">
                             <Link
                                 to="/login"
-                                className="text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--accent)]"
+                                className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--accent)]"
                             >
-                                Kembali ke Halaman Masuk
+                                <ArrowLeft size={14} /> Kembali ke Halaman Masuk
                             </Link>
                         </div>
                     </div>
