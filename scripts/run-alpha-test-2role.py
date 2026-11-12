@@ -15,6 +15,9 @@ bento_src = (repo / "src/widgets/admin/OperationsAnalyticsBento.tsx").read_text(
 login_src = (repo / "src/widgets/auth/LoginForm.tsx").read_text(encoding="utf-8")
 
 checks = [
+    ("ALPHA-DATE-01", "Klasifikasi Tanggal Tugas (Hari Ini, Besok, Kemarin, Arsip > Kemarin), Filter Tanggal, & Detail On-Click Tanpa Toggle Mode Ringkas",
+     all(k in exec_src for k in ["classifyTaskHorizon", "resolveTaskDateKey", "ARCHIVE", "taskDateFilter", "historyDateFilter"])
+     and "Mode Ringkas" not in exec_src and "Mode Detail" not in exec_src),
     ("ALPHA-2ROLE-01", "Fokus 2 Role (ADMIN & TEKNISI_LAPANGAN) tanpa menu SPK/Quotation/Gudang di Sidebar Admin",
      "1. GEOLOCATION & DIGITAL REPORT" in adm_src and "id: \x27spk-cms\x27" not in adm_src.split("const ALL_ITEMS:")[1].split("// Petakan alias")[0]
      and "Admin Verifikasi & Geolocation" in login_src and "Teknisi Lapangan (Mobile PWA)" in login_src),

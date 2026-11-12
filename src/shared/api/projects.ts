@@ -22,6 +22,22 @@ export interface CreateProjectInput {
   notes?: string;
 }
 
+function toLocalYmd(input?: string | Date | null): string {
+  if (!input) {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
+  if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.trim())) {
+    return input.trim();
+  }
+  const d = typeof input === 'string' ? new Date(input) : input;
+  if (Number.isNaN(d.getTime())) {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 function resolveActiveCompanyId(): string | null {
   const st = useAuthStore.getState();
   if ((st.user?.role === 'MASTER_SUPER_ADMIN' || st.user?.role === 'SUPERADMIN')) {
@@ -31,6 +47,11 @@ function resolveActiveCompanyId(): string | null {
 }
 
 export function mapDbProject(row: any): Project {
+  const rawWorkDate =
+    (typeof row.work_date === 'string' && row.work_date.trim() ? row.work_date.slice(0, 10) : null) ||
+    (typeof row.next_service_date === 'string' && row.next_service_date.trim() ? row.next_service_date.slice(0, 10) : null) ||
+    toLocalYmd(row.created_at);
+
   return {
     id: row.id,
     projectName: row.project_name || '',
@@ -39,7 +60,7 @@ export function mapDbProject(row: any): Project {
     latitude: Number(row.latitude ?? 0),
     longitude: Number(row.longitude ?? 0),
     radius: Number(row.radius ?? 100),
-    workDate: typeof row.work_date === 'string' ? row.work_date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+    workDate: rawWorkDate,
     workType: row.work_type || '',
     serviceType: (row.service_type || 'GENERAL_PEST_CONTROL') as ServiceType,
     focusTarget: row.focus_target ?? null,
@@ -69,29 +90,29 @@ export async function createProject(input: CreateProjectInput): Promise<{ projec
     .insert({
       company_id: companyId,
       project_name: input.projectName,
-      client_name: input.clientName || input.projectName,
+      client_name: input.clientName || null,
       address: input.address,
       latitude: input.latitude,
       longitude: input.longitude,
       radius: input.radius ?? 100,
-      work_date: input.workDate,
-      work_type: input.workType || input.projectName,
+      work_date: input.workDate || toLocalYmd(new Date()),
+      work_type: input.workType || null,
       service_type: input.serviceType,
-      focus_target: input.focusTarget ?? (input.targetFocus?.join(', ') || null),
-      target_focus: input.targetFocus ?? [],
+      focus_target: input.focusTarget || null,
+      target_focus: input.targetFocus || [],
       building_area_sqm: input.buildingAreaSqm ?? null,
       contract_type: input.contractType,
-      warranty_months: input.warrantyMonths ?? 0,
+      warranty_months: input.warrantyMonths,
       next_service_date: input.nextServiceDate || null,
       scheduled_start_time: input.scheduledStartTime || '08:00',
-      notes: input.notes ?? null,
+      notes: input.notes || null,
       created_by: st.user.uid,
     })
     .select('*')
     .single();
 
   if (projErr || !projRow) {
-    throw new Error(projErr?.message || 'Gagal membuat proyek lapangan.');
+    throw new Error(projErr?.message || 'Gagal menyimpan lokasi penugasan baru.');
   }
 
   const { data: wrRow, error: wrErr } = await supabase
@@ -101,33 +122,30 @@ export async function createProject(input: CreateProjectInput): Promise<{ projec
       project_id: projRow.id,
       executor_id: st.user.uid,
       status: 'READY',
-      customer_name: input.clientName || input.projectName,
-      notes: input.notes ?? null,
+      risk_score: 0,
+      risk_level: 'NORMAL',
+      work_notes: input.notes || null,
     })
     .select('id')
     .single();
 
-  if (wrErr) {
-    console.warn('[createProject] gagal membuat work_report otomatis:', wrErr.message);
+  if (wrErr || !wrRow) {
+    throw new Error(wrErr?.message || 'Proyek tersimpan namun gagal membuat laporan kerja awal.');
   }
 
   return {
     project: mapDbProject(projRow),
-    workReportId: wrRow?.id || projRow.id,
+    workReportId: wrRow.id,
   };
 }
 
 export async function fetchMyProjects(): Promise<Project[]> {
   const companyId = resolveActiveCompanyId();
   let q = supabase.from('projects').select('*').order('created_at', { ascending: false }).limit(50);
-  if (companyId) q = q.eq('company_id', companyId);
+  if (companyId) {
+    q = q.eq('company_id', companyId);
+  }
   const { data, error } = await q;
   if (error) throw new Error(error.message);
   return (data || []).map(mapDbProject);
-}
-
-export async function fetchProject(id: string): Promise<Project> {
-  const { data, error } = await supabase.from('projects').select('*').eq('id', id).single();
-  if (error || !data) throw new Error(error?.message || 'Proyek tidak ditemukan.');
-  return mapDbProject(data);
 }
