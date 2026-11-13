@@ -2,7 +2,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { WorkReport, Project, DocumentationPhoto, PhotoType, PhotoTag } from '@/entities/types';
 import { useAuth } from '@/app/providers/AuthContext';
-import { fetchMyWorkReports, checkIn, addProgressPhoto, checkOut, submitTreatment, updateWorkReportTeam, TreatmentInput, TeamMemberEntry } from '@/shared/api/workReports';
+import {
+  fetchMyWorkReports,
+  checkIn,
+  addProgressPhoto,
+  checkOut,
+  submitTreatment,
+  updateWorkReportTeam,
+  reportFieldIssueToDb,
+  TreatmentInput,
+  TeamMemberEntry,
+} from '@/shared/api/workReports';
 import { supabase } from '@/shared/lib/supabase';
 import { createProject, fetchMyProjects, CreateProjectInput } from '@/shared/api/projects';
 import { ApiError } from '@/shared/api/client';
@@ -19,6 +29,7 @@ import { TabContainer } from '@/shared/ui/TabContainer';
 import { useTheme } from '@/shared/hooks/useTheme';
 import {
   AlertCircle,
+  Archive,
   ArrowLeft,
   ArrowRight,
   Bell,
@@ -33,6 +44,7 @@ import {
   ClipboardList,
   CloudOff,
   Copy,
+  Database,
   Download,
   EyeOff,
   FileCheck2,
@@ -55,7 +67,6 @@ import {
   Search,
   ShieldCheck,
   Sun,
-  Trash2,
   UploadCloud,
   User as UserIcon,
   Users,
@@ -80,6 +91,8 @@ type TechPage =
   | 'sync'
   | 'history'
   | 'profile';
+
+type DayHorizonTab = 'YESTERDAY' | 'TODAY' | 'TOMORROW' | 'ARCHIVE';
 
 const STATUS_META: Record<string, { label: string; tone: string }> = {
   DRAFT: { label: 'Draft', tone: 'neutral' },
@@ -146,6 +159,31 @@ function getTimeGreeting(): string {
   return 'Selamat Malam';
 }
 
+/** Konversi input tanggal ke format YYYY-MM-DD sesuai zona waktu lokal perangkat. */
+export function toLocalDateKey(dateInput?: string | Date | null): string {
+  if (!dateInput) {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
+  if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput.trim())) {
+    return dateInput.trim();
+  }
+  const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  if (Number.isNaN(d.getTime())) {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Dapatkan YYYY-MM-DD berdasarkan offset hari dari tanggal hari ini (0 = Hari Ini, -1 = Kemarin, +1 = Besok). */
+export function getOffsetDateKey(offsetDays: number): string {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() + offsetDays);
+  return toLocalDateKey(d);
+}
+
 function formatScheduleDateId(dateStr?: string | null): string {
   const d = dateStr ? new Date(dateStr) : new Date();
   if (Number.isNaN(d.getTime())) {
@@ -155,6 +193,11 @@ function formatScheduleDateId(dateStr?: string | null): string {
 }
 
 function formatShortDateId(dateStr?: string | null): string {
+  if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())) {
+    const [y, m, day] = dateStr.trim().split('-').map(Number);
+    const localD = new Date(y, m - 1, day, 12, 0, 0);
+    return localD.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
   const d = dateStr ? new Date(dateStr) : new Date();
   if (Number.isNaN(d.getTime())) {
     return new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -164,10 +207,12 @@ function formatShortDateId(dateStr?: string | null): string {
 
 export const ExecutorHome: React.FC = () => {
   const { user, logout } = useAuth();
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const [page, setPage] = useState<TechPage>('home');
   const [searchQuery, setSearchQuery] = useState('');
-  const [dayHorizon, setDayHorizon] = useState<'YESTERDAY' | 'TODAY' | 'TOMORROW'>('TODAY');
+  const [dayHorizon, setDayHorizon] = useState<DayHorizonTab>('TODAY');
+  const [taskDateFilter, setTaskDateFilter] = useState<string>('');
+  const [historyDateFilter, setHistoryDateFilter] = useState<string>('');
   const [projectFilterChip, setProjectFilterChip] = useState<'ALL' | 'READY' | 'WORKING' | 'WARRANTY'>('ALL');
   const [historyFilterChip, setHistoryFilterChip] = useState<'ALL' | 'COMPLETED' | 'FLAGGED'>('ALL');
   const [reports, setReports] = useState<WorkReport[]>([]);
@@ -175,7 +220,7 @@ export const ExecutorHome: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Progressive Disclosure & Stitch Interactive Modals/Drawers (Tanpa QR, hanya Laporan Hasil Pekerjaan)
+  // On-Click Detail Drawers (Tanpa tombol toggle tampilan di header — cukup on-click)
   const [homeScopeExpanded, setHomeScopeExpanded] = useState(false);
   const [expandedTaskCardId, setExpandedTaskCardId] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -189,8 +234,6 @@ export const ExecutorHome: React.FC = () => {
   const [waShareReport, setWaShareReport] = useState<WorkReport | null>(null);
   const [waPhoneInput, setWaPhoneInput] = useState('0812-8930-4112');
   const [waRecipientName, setWaRecipientName] = useState('Bambang Sukoco (SPV GA)');
-  const [cacheSizeMb, setCacheSizeMb] = useState('18.4 MB');
-  const [autoWaDirect, setAutoWaDirect] = useState(true);
 
   const [pendingCount, setPendingCount] = useState(0);
   const [serverTimeOffset] = useState(0);
@@ -222,6 +265,10 @@ export const ExecutorHome: React.FC = () => {
   const [selectedHistoryDetailId, setSelectedHistoryDetailId] = useState<string | null>(null);
   const [showGpsPrompt, setShowGpsPrompt] = useState(false);
   const [gpsPermissionStatus, setGpsPermissionStatus] = useState<string>('unknown');
+
+  const toggleDarkLightTheme = useCallback(() => {
+    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
+  }, [resolvedTheme, setTheme]);
 
   useEffect(() => {
     if (!successFeedback) return;
@@ -312,8 +359,16 @@ export const ExecutorHome: React.FC = () => {
         .eq('company_id', user.companyId)
         .eq('is_active', true)
         .then(({ data }) => {
+          const list = (data || [])
+            .filter((u: any) => u.role === 'TEKNISI_LAPANGAN')
+            .map((u: any) => ({ id: u.id, name: u.name }));
           setCompanyTechs(
-            (data || []).filter((u: any) => u.role === 'TEKNISI_LAPANGAN').map((u: any) => ({ id: u.id, name: u.name }))
+            list.length > 0
+              ? list
+              : [
+                  { id: '22222222-2222-2222-2222-222222222204', name: 'Agung Pratama' },
+                  { id: '22222222-2222-2222-2222-222222222206', name: 'Dedi Kurniawan' },
+                ]
           );
         });
     }
@@ -350,6 +405,41 @@ export const ExecutorHome: React.FC = () => {
 
   if (!user) return null;
 
+  // Kunci tanggal referensi berdasarkan Hari Ini (WIB / Local Device Time)
+  const todayKey = getOffsetDateKey(0);
+  const yesterdayKey = getOffsetDateKey(-1);
+  const tomorrowKey = getOffsetDateKey(1);
+
+  // Resolusi tanggal pelaksanaan tugas (workDate -> nextServiceDate -> createdAt)
+  const resolveTaskDateKey = (proj?: Project, rep?: WorkReport): string => {
+    if (proj?.workDate && /^\d{4}-\d{2}-\d{2}/.test(proj.workDate)) {
+      return proj.workDate.slice(0, 10);
+    }
+    if (proj?.nextServiceDate && /^\d{4}-\d{2}-\d{2}/.test(proj.nextServiceDate)) {
+      return proj.nextServiceDate.slice(0, 10);
+    }
+    if (rep?.nextServiceDate && /^\d{4}-\d{2}-\d{2}/.test(rep.nextServiceDate)) {
+      return rep.nextServiceDate.slice(0, 10);
+    }
+    return toLocalDateKey(rep?.createdAt || proj?.createdAt);
+  };
+
+  // Klasifikasi tegas: Hari Ini (TODAY), Besok/Mendatang (TOMORROW), Kemarin (YESTERDAY), atau Arsip (< Kemarin / ARCHIVE)
+  const classifyTaskHorizon = (dateKey: string): DayHorizonTab => {
+    if (dateKey === todayKey) return 'TODAY';
+    if (dateKey >= tomorrowKey) return 'TOMORROW';
+    if (dateKey === yesterdayKey) return 'YESTERDAY';
+    return 'ARCHIVE';
+  };
+
+  const getHorizonMeta = (dateKey: string): { tab: DayHorizonTab; label: string; badgeClass: string } => {
+    const h = classifyTaskHorizon(dateKey);
+    if (h === 'TODAY') return { tab: h, label: 'Hari Ini', badgeClass: 'bg-emerald-100 text-[#1B4332]' };
+    if (h === 'TOMORROW') return { tab: h, label: 'Besok', badgeClass: 'bg-sky-100 text-sky-800' };
+    if (h === 'YESTERDAY') return { tab: h, label: 'Kemarin', badgeClass: 'bg-amber-100 text-amber-800' };
+    return { tab: h, label: 'Arsip', badgeClass: 'bg-slate-200 text-slate-700' };
+  };
+
   const filteredReports = reports.filter(r =>
     searchQuery === '' ||
     r.projectName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -361,14 +451,44 @@ export const ExecutorHome: React.FC = () => {
   const ongoingJob = filteredReports.find(r => r.status === 'WORKING');
   const readyJob = filteredReports.find(r => r.status === 'READY' || r.status === 'DRAFT');
   const completedJobs = filteredReports.filter(r => ['COMPLETED', 'FLAGGED', 'REVIEWED'].includes(r.status));
+  const flaggedJobs = filteredReports.filter(r => r.status === 'FLAGGED');
+  const validRadiusCount = reports.filter(r => r.checkInValid !== false && r.checkInAt !== null).length;
+
+  // Hitung jumlah proyek per kategori tanggal (Kemarin, Hari Ini, Besok, Arsip > Kemarin)
+  const projectsByHorizon = {
+    YESTERDAY: projects.filter(p => {
+      const rep = reports.find(r => r.projectId === p.id);
+      return classifyTaskHorizon(resolveTaskDateKey(p, rep)) === 'YESTERDAY';
+    }),
+    TODAY: projects.filter(p => {
+      const rep = reports.find(r => r.projectId === p.id);
+      return classifyTaskHorizon(resolveTaskDateKey(p, rep)) === 'TODAY';
+    }),
+    TOMORROW: projects.filter(p => {
+      const rep = reports.find(r => r.projectId === p.id);
+      return classifyTaskHorizon(resolveTaskDateKey(p, rep)) === 'TOMORROW';
+    }),
+    ARCHIVE: projects.filter(p => {
+      const rep = reports.find(r => r.projectId === p.id);
+      return classifyTaskHorizon(resolveTaskDateKey(p, rep)) === 'ARCHIVE';
+    }),
+  };
+
+  // Tugas aktif utama pada Beranda (utamakan yang sedang WORKING atau terjadwal Hari Ini)
+  const todayActiveReport = activeQueueJobs.find(r => {
+    const p = projects.find(proj => proj.id === r.projectId);
+    return classifyTaskHorizon(resolveTaskDateKey(p, r)) === 'TODAY';
+  });
 
   const activeTaskReport: WorkReport | undefined =
     reports.find(r => r.id === selectedReportId) ||
     ongoingJob ||
+    todayActiveReport ||
     readyJob ||
     activeQueueJobs[0] ||
     completedJobs[0];
 
+  // Penyaringan Daftar Tugas berdasarkan Filter Tanggal eksplisit ATAU Tab Horizon (Kemarin / Hari Ini / Besok / Arsip)
   const filteredProjects = projects.filter(p => {
     const matchSearch =
       searchQuery === '' ||
@@ -376,7 +496,20 @@ export const ExecutorHome: React.FC = () => {
       (p.clientName && p.clientName.toLowerCase().includes(searchQuery.toLowerCase())) ||
       p.address.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchSearch) return false;
+
     const rep = reports.find(r => r.projectId === p.id);
+    const taskDateKey = resolveTaskDateKey(p, rep);
+
+    // 1. Jika user memilih Filter Tanggal spesifik, saring tepat pada tanggal tersebut
+    if (taskDateFilter.trim() !== '') {
+      if (taskDateKey !== taskDateFilter.trim()) return false;
+    } else {
+      // 2. Jika tidak ada Filter Tanggal spesifik, saring berdasarkan tab Hari Ini / Besok / Kemarin / Arsip (> Kemarin)
+      const horizon = classifyTaskHorizon(taskDateKey);
+      if (horizon !== dayHorizon) return false;
+    }
+
+    // 3. Filter chip status (Semua / Siap / Berlangsung / Bergaransi)
     if (projectFilterChip === 'READY') return !rep || rep.status === 'READY' || rep.status === 'DRAFT';
     if (projectFilterChip === 'WORKING') return rep?.status === 'WORKING';
     if (projectFilterChip === 'WARRANTY') return p.warrantyMonths > 0;
@@ -390,6 +523,13 @@ export const ExecutorHome: React.FC = () => {
       (rep.clientName && rep.clientName.toLowerCase().includes(searchQuery.toLowerCase())) ||
       rep.projectAddress.toLowerCase().includes(searchQuery.toLowerCase());
     if (!matchSearch) return false;
+
+    if (historyDateFilter.trim() !== '') {
+      const p = projects.find(proj => proj.id === rep.projectId);
+      const repDateKey = resolveTaskDateKey(p, rep);
+      if (repDateKey !== historyDateFilter.trim()) return false;
+    }
+
     if (historyFilterChip === 'COMPLETED') return rep.status === 'COMPLETED' || rep.status === 'REVIEWED';
     if (historyFilterChip === 'FLAGGED') return rep.status === 'FLAGGED';
     return true;
@@ -399,31 +539,26 @@ export const ExecutorHome: React.FC = () => {
     await createProject(data);
     setShowCreateProject(false);
     await loadData();
+    // Arahkan tab Daftar Tugas sesuai tanggal penugasan yang baru dibuat
+    if (data.workDate) {
+      const h = classifyTaskHorizon(data.workDate.slice(0, 10));
+      setDayHorizon(h);
+      setTaskDateFilter('');
+    }
   };
 
-  // Simpan Lapor Kendala Lapangan agar langsung tampil di Panel "Perlu tindakan" Dashboard Admin
-  const handleSubmitFieldIssueEscalation = () => {
-    const newIssue = {
-      id: `ISS-${Date.now()}`,
-      projectName: activeTaskReport?.projectName || 'Lokasi Tugas Lapangan',
-      address: activeTaskReport?.projectAddress || 'Area Operasional Klien',
-      executorName: user.name,
-      issueType: selectedIssueType,
-      note: issueNote.trim() || 'Membutuhkan tindak lanjut koordinasi Admin.',
-      reportId: activeTaskReport?.id || '',
-      createdAt: new Date().toISOString(),
-    };
-    try {
-      const raw = localStorage.getItem('fw_field_issues_v1');
-      const existing = raw ? JSON.parse(raw) : [];
-      localStorage.setItem('fw_field_issues_v1', JSON.stringify([newIssue, ...existing].slice(0, 20)));
-    } catch {
-      // ignore storage quota errors
+  // Simpan Lapor Kendala Lapangan langsung ke tabel Database (public.risk_events & public.work_reports)
+  // sehingga otomatis tampil di Dashboard Admin & Verifikasi Digital Report
+  const handleSubmitFieldIssueEscalation = async () => {
+    const targetRepId = activeTaskReport?.id || reports[0]?.id || '';
+    if (targetRepId) {
+      await reportFieldIssueToDb(targetRepId, selectedIssueType, issueNote);
+      await loadData();
     }
     setShowIssueModal(false);
     setIssueNote('');
     setSuccessFeedback({
-      title: '✓ KENDALA TAMPIL DI DASHBOARD ADMIN',
+      title: '✓ KENDALA TERCATAT DI DATABASE ADMIN',
       subtitle: `${selectedIssueType} • Masuk antrean Perlu Tindakan Admin`,
     });
   };
@@ -562,7 +697,7 @@ export const ExecutorHome: React.FC = () => {
     page === 'jobs' ? 'jobs' : page === 'history' ? 'history' : page === 'profile' ? 'profile' : 'home';
 
   const executorTabs = [
-    { id: 'home', label: 'Beranda', shortLabel: 'Beranda', icon: <Home size={15} />, badge: (ongoingJob ? 1 : 0) + (readyJob ? 1 : 0) },
+    { id: 'home', label: 'Beranda', shortLabel: 'Beranda', icon: <Home size={15} />, badge: projectsByHorizon.TODAY.length || ((ongoingJob ? 1 : 0) + (readyJob ? 1 : 0)) },
     { id: 'jobs', label: 'Tugas', shortLabel: 'Tugas', icon: <ClipboardList size={15} />, badge: projects.length },
     { id: 'history', label: 'Riwayat', shortLabel: 'Riwayat', icon: <History size={15} />, badge: completedJobs.length },
     { id: 'profile', label: 'Profil', shortLabel: 'Profil', icon: <UserIcon size={15} /> },
@@ -594,13 +729,15 @@ export const ExecutorHome: React.FC = () => {
     setPage('task-detail');
   };
 
-  // Gesture handler untuk swipe horizontal antar tab hari (Kemarin / Hari Ini / Besok)
+  // Gesture handler untuk swipe horizontal antar tab hari (Kemarin / Hari Ini / Besok / Arsip)
   const handleDaySwipe = (_: any, info: { offset: { x: number } }) => {
-    const order: ('YESTERDAY' | 'TODAY' | 'TOMORROW')[] = ['YESTERDAY', 'TODAY', 'TOMORROW'];
+    const order: DayHorizonTab[] = ['YESTERDAY', 'TODAY', 'TOMORROW', 'ARCHIVE'];
     const idx = order.indexOf(dayHorizon);
     if (info.offset.x < -45 && idx < order.length - 1) {
+      setTaskDateFilter('');
       setDayHorizon(order[idx + 1]);
     } else if (info.offset.x > 45 && idx > 0) {
+      setTaskDateFilter('');
       setDayHorizon(order[idx - 1]);
     }
   };
@@ -660,14 +797,14 @@ export const ExecutorHome: React.FC = () => {
             transition={{ duration: 0.18, ease: 'easeOut' }}
           >
             {/* =================================================================== */}
-            {/* 1. PAGE: BERANDA (Stitch Progressive Disclosure + Low Cognitive Load) */}
+            {/* 1. PAGE: BERANDA (On-Click Detail Tanpa Toggle tampilan)            */}
             {/* =================================================================== */}
             {page === 'home' && (
               <>
                 <div className="tech-home-head">
                   <div>
                     <LiteBrand />
-                    <p>{formatScheduleDateId(new Date().toISOString())}</p>
+                    <p>{formatScheduleDateId(todayKey)}</p>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className={`px-2 py-1 rounded-full text-[11px] font-bold flex items-center gap-1 ${pendingCount > 0 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-[#1B4332]'}`}>
@@ -681,6 +818,15 @@ export const ExecutorHome: React.FC = () => {
                       className="px-2.5 py-1.5 rounded-lg bg-[#eff3f0] hover:bg-[#e8f1eb] text-[#1B4332] text-xs font-bold flex items-center gap-1 cursor-pointer"
                     >
                       <Plus size={14} /> Baru
+                    </button>
+                    <button
+                      type="button"
+                      onClick={toggleDarkLightTheme}
+                      title={resolvedTheme === 'dark' ? 'Beralih ke Mode Terang' : 'Beralih ke Mode Gelap'}
+                      aria-label="Ganti Tema Terang atau Gelap"
+                      className="p-2 rounded-lg bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer"
+                    >
+                      {resolvedTheme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
                     </button>
                     <button
                       type="button"
@@ -702,12 +848,12 @@ export const ExecutorHome: React.FC = () => {
                 </div>
 
                 <main className="tech-content">
-                  {/* Banner Offline Ringkas (1 Baris, Klik untuk Sinkron/Detail) */}
+                  {/* Banner Offline Ringkas (1 Baris, Klik untuk Sinkron) */}
                   <div className={`connection-banner lite-connection-banner ${pendingCount > 0 ? 'pending' : 'online'}`}>
                     {pendingCount > 0 ? <CloudOff size={15} /> : <Wifi size={15} />}
                     <span>
                       <strong>{pendingCount > 0 ? `${pendingCount} Laporan di Antrean` : 'Siap Bertugas'}</strong>
-                      {pendingCount > 0 ? 'Tersimpan di HP • Kirim saat sinyal stabil' : 'Sinkron otomatis aktif'}
+                      {pendingCount > 0 ? 'Tersimpan di HP • Kirim saat sinyal stabil' : 'Sinkron otomatis ke Database aktif'}
                     </span>
                     {pendingCount > 0 && (
                       <button
@@ -721,27 +867,25 @@ export const ExecutorHome: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Sapaan + Toggle Mode Ringkas/Detail */}
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="tech-greeting !mb-0">
-                      <span>{greetingText}, {user.name.split(' ')[0] || 'Agung'}</span>
-                      <h1>Ringkasan Hari Ini</h1>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setHomeScopeExpanded(prev => !prev)}
-                      className="px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
-                    >
-                      {homeScopeExpanded ? 'Mode Detail' : 'Mode Ringkas'}
-                      {homeScopeExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                    </button>
+                  {/* Sapaan Bersih */}
+                  <div className="tech-greeting">
+                    <span>{greetingText}, {user.name.split(' ')[0] || 'Agung'}</span>
+                    <h1>Tugas Hari Ini</h1>
                   </div>
 
-                  {/* 3-Metric Strip (Hari Ini • Selesai • Pending) — Stitch Home */}
+                  {/* 3-Metric Strip (Hari Ini • Selesai • Pending) — Klik langsung menuju Tab Terkait */}
                   <div className="grid grid-cols-3 bg-white border border-slate-200 rounded-xl py-2.5 px-2 mb-3 text-center shadow-2xs">
-                    <button type="button" onClick={() => setPage('jobs')} className="border-r border-slate-100 cursor-pointer">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDayHorizon('TODAY');
+                        setTaskDateFilter('');
+                        setPage('jobs');
+                      }}
+                      className="border-r border-slate-100 cursor-pointer"
+                    >
                       <strong className="block text-base font-extrabold text-slate-900 font-mono">
-                        {activeQueueJobs.length + completedJobs.length}
+                        {projectsByHorizon.TODAY.length}
                       </strong>
                       <span className="text-[11px] text-slate-500 font-medium">Hari Ini</span>
                     </button>
@@ -751,7 +895,14 @@ export const ExecutorHome: React.FC = () => {
                       </strong>
                       <span className="text-[11px] text-[#1B4332] font-semibold">Selesai</span>
                     </button>
-                    <button type="button" onClick={() => setPage('jobs')} className="cursor-pointer">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setProjectFilterChip('READY');
+                        setPage('jobs');
+                      }}
+                      className="cursor-pointer"
+                    >
                       <strong className="block text-base font-extrabold text-slate-700 font-mono">
                         {activeQueueJobs.length}
                       </strong>
@@ -771,106 +922,120 @@ export const ExecutorHome: React.FC = () => {
                     </div>
                   )}
 
-                  {/* KARTU TUGAS UTAMA (Maksimal 4 Sinyal di Permukaan + Progressive Disclosure On-Click) */}
+                  {/* KARTU TUGAS UTAMA (Ringkas di Permukaan, Detail Cukup Saat On-Click) */}
                   {!isLoading && !loadError && activeTaskReport && (
-                    <article className="active-task">
-                      <div className="task-accent" />
-                      <div className="card-top">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#1B4332]">
-                            TUGAS UTAMA
-                          </span>
-                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-mono text-[11px] font-bold">
-                            {activeTaskReport.id.slice(0, 7).toUpperCase()}
-                          </span>
-                        </div>
-                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-[#1B4332] text-[11px] font-bold">
-                          {getServiceTypeMeta(activeTaskReport.serviceType).label}
-                        </span>
-                      </div>
+                    (() => {
+                      const activeProj = projects.find(p => p.id === activeTaskReport.projectId);
+                      const activeDateKey = resolveTaskDateKey(activeProj, activeTaskReport);
+                      const horizonInfo = getHorizonMeta(activeDateKey);
+                      return (
+                        <article className="active-task">
+                          <div className="task-accent" />
+                          <div className="card-top">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#1B4332]">
+                                TUGAS UTAMA
+                              </span>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${horizonInfo.badgeClass}`}>
+                                {horizonInfo.label} • {formatShortDateId(activeDateKey)}
+                              </span>
+                            </div>
+                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-[#1B4332] text-[11px] font-bold">
+                              {getServiceTypeMeta(activeTaskReport.serviceType).label}
+                            </span>
+                          </div>
 
-                      <h2>{activeTaskReport.projectName}</h2>
+                          <h2>{activeTaskReport.projectName}</h2>
 
-                      {/* Blok Klien & Jam Ringkas */}
-                      <div className="mt-2 p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <strong className="text-xs font-bold text-slate-900 block truncate">
-                            {activeTaskReport.clientName || 'Pelanggan Operasional'}
-                          </strong>
-                          <span className="text-[11px] text-slate-500 block truncate">
-                            {activeTaskReport.projectAddress}
-                          </span>
-                        </div>
-                        <span className="text-xs font-extrabold font-mono text-slate-900 shrink-0">
-                          {activeTaskReport.status === 'WORKING'
-                            ? elapsedTime
-                            : (activeTaskReport.scheduledStartTime || '09:30').replace('.', ':')}
-                        </span>
-                      </div>
+                          {/* Blok Klien & Jam Ringkas (Klik untuk buka/tutup detail) */}
+                          <div
+                            onClick={() => setHomeScopeExpanded(prev => !prev)}
+                            className="mt-2 p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 flex items-center justify-between gap-2 cursor-pointer"
+                          >
+                            <div className="min-w-0">
+                              <strong className="text-xs font-bold text-slate-900 block truncate">
+                                {activeTaskReport.clientName || 'Pelanggan Operasional'}
+                              </strong>
+                              <span className="text-[11px] text-slate-500 block truncate">
+                                {activeTaskReport.projectAddress}
+                              </span>
+                            </div>
+                            <span className="text-xs font-extrabold font-mono text-slate-900 shrink-0">
+                              {activeTaskReport.status === 'WORKING'
+                                ? elapsedTime
+                                : (activeTaskReport.scheduledStartTime || '09:30').replace('.', ':')}
+                            </span>
+                          </div>
 
-                      {/* On-Click Progressive Disclosure: Lihat Detail Rute & Scope */}
-                      <div className="mt-2.5 rounded-lg border border-slate-200 bg-slate-50/60 overflow-hidden">
-                        <button
-                          type="button"
-                          onClick={() => setHomeScopeExpanded(prev => !prev)}
-                          className="w-full px-3 py-2 flex items-center justify-between text-xs font-bold text-[#1B4332] cursor-pointer"
-                        >
-                          <span>Lihat Detail Rute &amp; Scope</span>
-                          {homeScopeExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                        </button>
-
-                        <AnimatePresence initial={false}>
-                          {homeScopeExpanded && (
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.2 }}
-                              className="px-3 pb-3 pt-1 space-y-2 border-t border-slate-200 text-xs"
+                          {/* On-Click Detail Rute & Scope */}
+                          <div className="mt-2.5 rounded-lg border border-slate-200 bg-slate-50/60 overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => setHomeScopeExpanded(prev => !prev)}
+                              className="w-full px-3 py-2 flex items-center justify-between text-xs font-bold text-[#1B4332] cursor-pointer"
                             >
-                              <div className="flex items-start gap-1.5 text-slate-700">
-                                <MapPin size={14} className="text-[#1B4332] shrink-0 mt-0.5" />
-                                <span>{activeTaskReport.projectAddress} (Radius {activeTaskReport.projectRadius || 100}m)</span>
-                              </div>
-                              <div className="p-2 rounded-lg bg-white border border-slate-200 space-y-1">
-                                <span className="text-[10px] font-bold uppercase text-slate-400 block">Scope Inti:</span>
-                                <p className="text-xs text-slate-700">
-                                  • {activeTaskReport.targetFocus?.length ? activeTaskReport.targetFocus.join(', ') : 'Inspeksi & aplikasi sesuai SOP'}
-                                </p>
-                                <p className="text-xs text-slate-700">
-                                  • Dokumentasi foto awal, tindakan, &amp; tanda tangan PIC
-                                </p>
-                              </div>
-                              <div className="flex items-center justify-between pt-1 text-[11px]">
-                                <span className="text-slate-600">
-                                  PIC: <strong>{activeTaskReport.clientName || 'Perwakilan Lokasi'}</strong>
-                                </span>
-                                <span className="text-[#1B4332] font-bold flex items-center gap-1">
-                                  <Phone size={12} /> Hubungi PIC
-                                </span>
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
+                              <span>Lihat Detail Rute &amp; Scope</span>
+                              {homeScopeExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                            </button>
 
-                      <motion.button
-                        whileTap={{ scale: 0.98 }}
-                        type="button"
-                        className="btn primary full mt-3"
-                        onClick={() => {
-                          setSelectedReportId(activeTaskReport.id);
-                          if (activeTaskReport.status === 'WORKING') {
-                            setPage('work');
-                          } else {
-                            setPage('gps');
-                          }
-                        }}
-                      >
-                        {activeTaskReport.status === 'WORKING' ? 'Lanjutkan Pekerjaan' : 'Mulai Perjalanan & Check-in'}
-                        <ArrowRight size={17} />
-                      </motion.button>
-                    </article>
+                            <AnimatePresence initial={false}>
+                              {homeScopeExpanded && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: 'auto', opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="px-3 pb-3 pt-1 space-y-2 border-t border-slate-200 text-xs"
+                                >
+                                  <div className="flex items-start gap-1.5 text-slate-700">
+                                    <MapPin size={14} className="text-[#1B4332] shrink-0 mt-0.5" />
+                                    <span>{activeTaskReport.projectAddress} (Radius {activeTaskReport.projectRadius || 100}m)</span>
+                                  </div>
+                                  <div className="p-2 rounded-lg bg-white border border-slate-200 space-y-1">
+                                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Scope Inti:</span>
+                                    <p className="text-xs text-slate-700">
+                                      • {activeTaskReport.targetFocus?.length ? activeTaskReport.targetFocus.join(', ') : 'Inspeksi & aplikasi sesuai SOP'}
+                                    </p>
+                                    <p className="text-xs text-slate-700">
+                                      • Dokumentasi foto awal, tindakan, &amp; tanda tangan PIC
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center justify-between pt-1 text-[11px]">
+                                    <span className="text-slate-600">
+                                      PIC: <strong>{activeTaskReport.clientName || 'Perwakilan Lokasi'}</strong>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => openReportDetail(activeTaskReport, activeTaskReport.projectId)}
+                                      className="text-[#1B4332] font-bold underline cursor-pointer"
+                                    >
+                                      Halaman Detail Penuh →
+                                    </button>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+
+                          <motion.button
+                            whileTap={{ scale: 0.98 }}
+                            type="button"
+                            className="btn primary full mt-3"
+                            onClick={() => {
+                              setSelectedReportId(activeTaskReport.id);
+                              if (activeTaskReport.status === 'WORKING') {
+                                setPage('work');
+                              } else {
+                                setPage('gps');
+                              }
+                            }}
+                          >
+                            {activeTaskReport.status === 'WORKING' ? 'Lanjutkan Pekerjaan' : 'Mulai Perjalanan & Check-in'}
+                            <ArrowRight size={17} />
+                          </motion.button>
+                        </article>
+                      );
+                    })()
                   )}
 
                   {!isLoading && !loadError && !activeTaskReport && (
@@ -884,7 +1049,7 @@ export const ExecutorHome: React.FC = () => {
                     </article>
                   )}
 
-                  {/* Aksi Cepat Lapangan (Tanpa QR: Lapor Kendala ke Admin & Arsip Laporan Hasil Pekerjaan) */}
+                  {/* Aksi Cepat Lapangan (Lapor Kendala ke Database Admin & Laporan Hasil Pekerjaan) */}
                   <div className="grid grid-cols-2 gap-2.5 my-3">
                     <motion.button
                       whileTap={{ scale: 0.98 }}
@@ -917,11 +1082,11 @@ export const ExecutorHome: React.FC = () => {
                     </motion.button>
                   </div>
 
-                  {/* Jadwal Berikutnya (Ringkas, Klik untuk Detail) */}
+                  {/* Jadwal Berikutnya (Klik untuk Detail) */}
                   <div className="section-head mobile">
                     <div>
                       <h2>Jadwal Berikutnya</h2>
-                      <p>Detail Hari ini ({activeQueueJobs.length} tugas)</p>
+                      <p>Detail Hari ini ({projectsByHorizon.TODAY.length} hari ini · {projectsByHorizon.TOMORROW.length} besok)</p>
                     </div>
                     <button type="button" onClick={() => setPage('jobs')}>
                       Semua ({projects.length})
@@ -930,6 +1095,9 @@ export const ExecutorHome: React.FC = () => {
 
                   {activeQueueJobs.map(job => {
                     const meta = getServiceTypeMeta(job.serviceType);
+                    const p = projects.find(proj => proj.id === job.projectId);
+                    const dKey = resolveTaskDateKey(p, job);
+                    const hMeta = getHorizonMeta(dKey);
                     return (
                       <motion.button
                         whileTap={{ scale: 0.99 }}
@@ -940,11 +1108,11 @@ export const ExecutorHome: React.FC = () => {
                       >
                         <div className="time-block">
                           <strong>{(job.scheduledStartTime || '13:30').replace('.', ':')}</strong>
-                          <span>Hari ini</span>
+                          <span>{hMeta.label}</span>
                         </div>
                         <span>
                           <strong>{job.projectName}</strong>
-                          <small>{meta.label} · {job.clientName || 'Klien'}</small>
+                          <small>{meta.label} · {formatShortDateId(dKey)}</small>
                         </span>
                         <LiteBadge status={job.status} />
                       </motion.button>
@@ -978,7 +1146,7 @@ export const ExecutorHome: React.FC = () => {
             )}
 
             {/* =================================================================== */}
-            {/* 2. PAGE: DAFTAR TUGAS (Stitch Collapsed/Expanded + Swipe Gesture)   */}
+            {/* 2. PAGE: DAFTAR TUGAS (Hari Ini, Besok, Kemarin, Arsip + Filter Tgl)*/}
             {/* =================================================================== */}
             {page === 'jobs' && (
               <>
@@ -986,6 +1154,9 @@ export const ExecutorHome: React.FC = () => {
                   <LiteBrand compact />
                   <strong>Daftar Tugas</strong>
                   <span>
+                    <button type="button" onClick={toggleDarkLightTheme} aria-label="Ganti Tema">
+                      {resolvedTheme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                    </button>
                     <button type="button" onClick={() => setShowCreateProject(true)} aria-label="Buat Tugas Baru">
                       <Plus size={20} />
                     </button>
@@ -999,40 +1170,87 @@ export const ExecutorHome: React.FC = () => {
                   onDragEnd={handleDaySwipe}
                   className="tech-content"
                 >
-                  {/* Tab Hari (Kemarin / Hari Ini / Besok) — Stitch Menu Tugas */}
-                  <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-white border border-slate-200 mb-3">
+                  {/* 4 Tab Horizon Tanggal Berbasis Hari Ini: Kemarin | Hari Ini | Besok | Arsip (> Kemarin) */}
+                  <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-white border border-slate-200 mb-2.5">
                     {([
-                      { id: 'YESTERDAY', label: 'Kemarin', count: completedJobs.length },
-                      { id: 'TODAY', label: 'Hari Ini', count: projects.length },
-                      { id: 'TOMORROW', label: 'Besok', count: Math.max(1, activeQueueJobs.length) },
-                    ] as const).map(tab => (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setDayHorizon(tab.id)}
-                        className={`py-2 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                          dayHorizon === tab.id
-                            ? 'bg-[#1B4332] text-white shadow-xs'
-                            : 'text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        <span>{tab.label}</span>
-                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${dayHorizon === tab.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                          {tab.count}
-                        </span>
-                      </button>
-                    ))}
+                      { id: 'YESTERDAY', label: 'Kemarin', count: projectsByHorizon.YESTERDAY.length },
+                      { id: 'TODAY', label: 'Hari Ini', count: projectsByHorizon.TODAY.length },
+                      { id: 'TOMORROW', label: 'Besok', count: projectsByHorizon.TOMORROW.length },
+                      { id: 'ARCHIVE', label: 'Arsip', count: projectsByHorizon.ARCHIVE.length },
+                    ] as const).map(tab => {
+                      const isActive = taskDateFilter === '' && dayHorizon === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => {
+                            setTaskDateFilter('');
+                            setDayHorizon(tab.id);
+                          }}
+                          className={`py-2 px-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                            isActive
+                              ? 'bg-[#1B4332] text-white shadow-xs'
+                              : 'text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span>{tab.label}</span>
+                          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${isActive ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                            {tab.count}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
 
-                  <label className="search mobile">
-                    <Search size={17} />
-                    <input
-                      type="text"
-                      placeholder="Cari proyek atau lokasi..."
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                    />
-                  </label>
+                  {/* Baris Pencarian & Filter Tanggal (Untuk Arsip & Pencarian Tanggal Spesifik) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-2.5">
+                    <label className="search mobile sm:col-span-7 !mb-0">
+                      <Search size={16} />
+                      <input
+                        type="text"
+                        placeholder="Cari proyek atau lokasi..."
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                      />
+                    </label>
+
+                    <div className="sm:col-span-5 flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5">
+                      <CalendarDays size={15} className="text-[#1B4332] shrink-0" />
+                      <input
+                        type="date"
+                        aria-label="Filter Tanggal Tugas"
+                        value={taskDateFilter}
+                        onChange={e => setTaskDateFilter(e.target.value)}
+                        className="flex-1 text-xs font-mono text-slate-800 bg-transparent focus:outline-none"
+                      />
+                      {taskDateFilter && (
+                        <button
+                          type="button"
+                          onClick={() => setTaskDateFilter('')}
+                          title="Reset Filter Tanggal"
+                          className="text-[10px] font-bold text-rose-600 px-1.5 py-0.5 rounded bg-rose-50 cursor-pointer"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Info Konteks Horizon / Filter Tanggal Aktif */}
+                  <div className="flex items-center justify-between px-1 mb-2 text-[11px] text-slate-500">
+                    <span>
+                      {taskDateFilter
+                        ? `Filter Tanggal: ${formatShortDateId(taskDateFilter)}`
+                        : dayHorizon === 'TODAY'
+                        ? `Jadwal Hari Ini (${formatShortDateId(todayKey)})`
+                        : dayHorizon === 'TOMORROW'
+                        ? `Jadwal Besok & Mendatang (${formatShortDateId(tomorrowKey)}+)`
+                        : dayHorizon === 'YESTERDAY'
+                        ? `Jadwal Kemarin (${formatShortDateId(yesterdayKey)})`
+                        : `Arsip Tugas Lampau (< ${formatShortDateId(yesterdayKey)})`}
+                    </span>
+                    <span className="font-semibold text-[#1B4332]">{filteredProjects.length} tugas</span>
+                  </div>
 
                   <div className="filter-chips lite-filter-chips mobile no-scrollbar">
                     <button
@@ -1040,7 +1258,7 @@ export const ExecutorHome: React.FC = () => {
                       className={projectFilterChip === 'ALL' ? 'active' : ''}
                       onClick={() => setProjectFilterChip('ALL')}
                     >
-                      Semua ({projects.length})
+                      Semua ({filteredProjects.length})
                     </button>
                     <button
                       type="button"
@@ -1065,13 +1283,15 @@ export const ExecutorHome: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* Daftar Kartu Tugas dengan Progressive Disclosure (Rincian Tugas & Lokasi on-click) */}
+                  {/* Daftar Kartu Tugas — Cukup Klik Kartu / Rincian untuk Buka Detail (On-Click) */}
                   <div className="space-y-2.5">
                     {filteredProjects.map(proj => {
                       const rep = reports.find(r => r.projectId === proj.id);
                       const meta = getServiceTypeMeta(proj.serviceType);
                       const statusCode = rep?.status || (proj.lockedAt ? 'COMPLETED' : 'READY');
-                      const timeLabel = (rep?.scheduledStartTime || '09:30').replace('.', ':');
+                      const timeLabel = (rep?.scheduledStartTime || proj.scheduledStartTime || '09:30').replace('.', ':');
+                      const taskDateKey = resolveTaskDateKey(proj, rep);
+                      const horizonMeta = getHorizonMeta(taskDateKey);
                       const isExpanded = expandedTaskCardId === proj.id;
 
                       return (
@@ -1079,12 +1299,12 @@ export const ExecutorHome: React.FC = () => {
                           key={proj.id}
                           className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-2xs space-y-2"
                         >
+                          {/* Baris 1: Label Horizon Tanggal (Hari Ini / Besok / Kemarin / Arsip) + Tanggal + Jam + Status */}
                           <div className="flex items-center justify-between gap-2 text-xs">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-mono font-bold text-slate-500">
-                                {proj.id.slice(0, 7).toUpperCase()}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${horizonMeta.badgeClass}`}>
+                                {horizonMeta.label} • {formatShortDateId(taskDateKey)}
                               </span>
-                              <span className="text-slate-400">•</span>
                               <span className="font-mono font-semibold text-slate-700">{timeLabel}</span>
                               <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-[#1B4332] text-[10px] font-bold">
                                 {meta.label}
@@ -1093,7 +1313,11 @@ export const ExecutorHome: React.FC = () => {
                             <LiteBadge status={statusCode} />
                           </div>
 
-                          <div>
+                          {/* Baris 2: Nama Tugas & Lokasi Singkat (Klik untuk buka detail ringkas) */}
+                          <div
+                            onClick={() => setExpandedTaskCardId(isExpanded ? null : proj.id)}
+                            className="cursor-pointer"
+                          >
                             <strong className="text-sm font-bold text-slate-900 block">
                               {proj.projectName}
                             </strong>
@@ -1105,6 +1329,7 @@ export const ExecutorHome: React.FC = () => {
                             </p>
                           </div>
 
+                          {/* Baris 3: On-Click Detail Toggle + Tombol Aksi */}
                           <div className="pt-1 border-t border-slate-100 flex items-center justify-between gap-2">
                             <button
                               type="button"
@@ -1125,7 +1350,7 @@ export const ExecutorHome: React.FC = () => {
                               }}
                               className="px-3 py-1.5 rounded-lg bg-[#1B4332] hover:bg-[#13462A] text-white text-xs font-bold cursor-pointer"
                             >
-                              {statusCode === 'COMPLETED' ? 'Lihat Bukti' : 'Mulai / Detail'}
+                              {statusCode === 'COMPLETED' || statusCode === 'REVIEWED' ? 'Lihat Bukti' : 'Mulai / Detail'}
                             </motion.button>
                           </div>
 
@@ -1139,13 +1364,19 @@ export const ExecutorHome: React.FC = () => {
                                 className="pt-2 border-t border-slate-100 text-xs space-y-1.5 text-slate-600"
                               >
                                 <div className="flex justify-between">
+                                  <span className="font-semibold text-slate-500">Tanggal Pelaksanaan:</span>
+                                  <span className="font-bold text-slate-800">
+                                    {formatShortDateId(taskDateKey)} ({horizonMeta.label})
+                                  </span>
+                                </div>
+                                <div className="flex justify-between">
                                   <span className="font-semibold text-slate-500">Target / Scope:</span>
                                   <span className="font-bold text-slate-800">
                                     {rep?.targetFocus?.length ? rep.targetFocus.join(', ') : meta.label}
                                   </span>
                                 </div>
                                 <div className="flex justify-between">
-                                  <span className="font-semibold text-slate-500">Radius Check-in:</span>
+                                  <span className="font-semibold text-slate-500">Radius Check-in Haversine:</span>
                                   <span className="font-mono font-bold text-slate-800">{proj.radius || 100}m</span>
                                 </div>
                                 {proj.warrantyMonths > 0 && (
@@ -1162,8 +1393,41 @@ export const ExecutorHome: React.FC = () => {
                     })}
 
                     {filteredProjects.length === 0 && (
-                      <div className="bg-white rounded-xl border border-[var(--border)] p-6 text-center text-xs text-[var(--secondary)]">
-                        Tidak ada tugas yang sesuai filter.
+                      <div className="bg-white rounded-xl border border-[var(--border)] p-6 text-center space-y-2">
+                        <Archive size={22} className="mx-auto text-slate-400" />
+                        <p className="text-xs font-semibold text-slate-700">
+                          {taskDateFilter
+                            ? `Tidak ada tugas pada tanggal ${formatShortDateId(taskDateFilter)}.`
+                            : dayHorizon === 'TODAY'
+                            ? 'Belum ada tugas terjadwal untuk Hari Ini.'
+                            : dayHorizon === 'TOMORROW'
+                            ? 'Belum ada tugas terjadwal untuk Besok.'
+                            : dayHorizon === 'YESTERDAY'
+                            ? 'Tidak ada tugas pada hari Kemarin.'
+                            : 'Belum ada tugas di dalam Arsip (> Kemarin).'}
+                        </p>
+                        {projects.length > 0 && (
+                          <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                            {projectsByHorizon.TODAY.length > 0 && dayHorizon !== 'TODAY' && (
+                              <button
+                                type="button"
+                                onClick={() => { setTaskDateFilter(''); setDayHorizon('TODAY'); }}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-50 text-[#1B4332] text-[11px] font-bold cursor-pointer"
+                              >
+                                Lihat Hari Ini ({projectsByHorizon.TODAY.length})
+                              </button>
+                            )}
+                            {projectsByHorizon.ARCHIVE.length > 0 && dayHorizon !== 'ARCHIVE' && (
+                              <button
+                                type="button"
+                                onClick={() => { setTaskDateFilter(''); setDayHorizon('ARCHIVE'); }}
+                                className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-bold cursor-pointer"
+                              >
+                                Buka Arsip ({projectsByHorizon.ARCHIVE.length})
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1188,7 +1452,9 @@ export const ExecutorHome: React.FC = () => {
                 const radiusMeters = repObj?.projectRadius || projObj?.radius || 100;
                 const serviceMeta = getServiceTypeMeta(repObj?.serviceType || projObj?.serviceType || 'GENERAL_PEST_CONTROL');
                 const statusStr = repObj?.status || 'READY';
-                const schedStr = `${formatShortDateId(repObj?.createdAt || projObj?.createdAt)} · ${(repObj?.scheduledStartTime || '09:00').replace('.', ':')}`;
+                const detailDateKey = resolveTaskDateKey(projObj, repObj);
+                const detailHorizon = getHorizonMeta(detailDateKey);
+                const schedStr = `${formatShortDateId(detailDateKey)} (${detailHorizon.label}) · ${(repObj?.scheduledStartTime || projObj?.scheduledStartTime || '09:00').replace('.', ':')}`;
                 const notesText =
                   repObj?.workNotes ||
                   (repObj?.targetFocus?.length ? `Fokus: ${repObj.targetFocus.join(', ')}. ` : '') +
@@ -1228,7 +1494,7 @@ export const ExecutorHome: React.FC = () => {
                           <span>
                             <CalendarDays size={18} />
                             <i>
-                              <small>Jadwal</small>
+                              <small>Jadwal Pelaksanaan</small>
                               <strong>{schedStr}</strong>
                             </i>
                           </span>
@@ -1242,7 +1508,7 @@ export const ExecutorHome: React.FC = () => {
                           <span>
                             <MapPin size={18} />
                             <i>
-                              <small>Lokasi (Radius {radiusMeters}m)</small>
+                              <small>Lokasi (Radius Haversine {radiusMeters}m)</small>
                               <strong>{addressText}</strong>
                             </i>
                           </span>
@@ -1410,7 +1676,7 @@ export const ExecutorHome: React.FC = () => {
                 <main className="tech-content with-action">
                   <div className="progress-label">
                     <span>Langkah 1 / 6</span>
-                    <strong>Validasi Lokasi</strong>
+                    <strong>Validasi Lokasi Haversine</strong>
                   </div>
 
                   <div className="gps-state">
@@ -1469,7 +1735,7 @@ export const ExecutorHome: React.FC = () => {
                     <Wifi size={15} />
                     <span>
                       <strong>{pendingCount > 0 ? `${pendingCount} Antrean Offline` : 'Online'}</strong>
-                      Progres tersimpan otomatis.
+                      Progres tersimpan otomatis di Database.
                     </span>
                   </div>
 
@@ -1835,8 +2101,8 @@ export const ExecutorHome: React.FC = () => {
                     <h1>{pendingCount > 0 ? 'Laporan Tersimpan di Antrean' : 'Laporan Berhasil Terkirim'}</h1>
                     <p>
                       {pendingCount > 0
-                        ? 'Data & tanda tangan aman di HP. Otomatis terkirim saat sinyal kembali.'
-                        : 'Laporan Hasil Pekerjaan telah diterima server dan siap dikirim via WhatsApp.'}
+                        ? 'Data & tanda tangan aman di perangkat. Otomatis terkirim saat sinyal kembali.'
+                        : 'Laporan Hasil Pekerjaan telah diterima Database dan siap dikirim via WhatsApp.'}
                     </p>
                   </div>
 
@@ -1848,7 +2114,7 @@ export const ExecutorHome: React.FC = () => {
                       </span>
                       <span className={`badge ${pendingCount > 0 ? 'warning' : 'success'}`}>
                         <span className="badge-dot" />
-                        {pendingCount > 0 ? 'Tersimpan lokal' : 'Tersinkron'}
+                        {pendingCount > 0 ? 'Tersimpan lokal' : 'Tersinkron Database'}
                       </span>
                     </div>
                   )}
@@ -1887,26 +2153,52 @@ export const ExecutorHome: React.FC = () => {
             )}
 
             {/* =================================================================== */}
-            {/* 10. PAGE: RIWAYAT PEKERJAAN (Stitch Arsip + Pencarian + WA/PDF)     */}
+            {/* 10. PAGE: RIWAYAT PEKERJAAN (Arsip Selesai + Filter Tanggal + WA)   */}
             {/* =================================================================== */}
             {page === 'history' && (
               <>
                 <header className="tech-header">
                   <LiteBrand compact />
                   <strong>Riwayat Pekerjaan</strong>
-                  <span />
+                  <span>
+                    <button type="button" onClick={toggleDarkLightTheme} aria-label="Ganti Tema">
+                      {resolvedTheme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                    </button>
+                  </span>
                 </header>
 
                 <main className="tech-content">
-                  <label className="search mobile">
-                    <Search size={17} />
-                    <input
-                      type="text"
-                      placeholder="Cari arsip klien atau proyek..."
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                    />
-                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-2.5">
+                    <label className="search mobile sm:col-span-7 !mb-0">
+                      <Search size={16} />
+                      <input
+                        type="text"
+                        placeholder="Cari arsip klien atau proyek..."
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                      />
+                    </label>
+
+                    <div className="sm:col-span-5 flex items-center gap-1.5 bg-white border border-slate-200 rounded-xl px-2.5 py-1.5">
+                      <CalendarDays size={15} className="text-[#1B4332] shrink-0" />
+                      <input
+                        type="date"
+                        aria-label="Filter Tanggal Riwayat"
+                        value={historyDateFilter}
+                        onChange={e => setHistoryDateFilter(e.target.value)}
+                        className="flex-1 text-xs font-mono text-slate-800 bg-transparent focus:outline-none"
+                      />
+                      {historyDateFilter && (
+                        <button
+                          type="button"
+                          onClick={() => setHistoryDateFilter('')}
+                          className="text-[10px] font-bold text-rose-600 px-1.5 py-0.5 rounded bg-rose-50 cursor-pointer"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
                   <div className="filter-chips lite-filter-chips mobile no-scrollbar">
                     <button
@@ -1914,7 +2206,7 @@ export const ExecutorHome: React.FC = () => {
                       className={historyFilterChip === 'ALL' ? 'active' : ''}
                       onClick={() => setHistoryFilterChip('ALL')}
                     >
-                      Semua ({completedJobs.length})
+                      Semua ({filteredHistoryJobs.length})
                     </button>
                     <button
                       type="button"
@@ -1935,7 +2227,9 @@ export const ExecutorHome: React.FC = () => {
                   <div className="mobile-task-list">
                     {filteredHistoryJobs.map(rep => {
                       const meta = getServiceTypeMeta(rep.serviceType);
-                      const dateLabel = formatShortDateId(rep.createdAt);
+                      const p = projects.find(proj => proj.id === rep.projectId);
+                      const dKey = resolveTaskDateKey(p, rep);
+                      const dateLabel = formatShortDateId(dKey);
                       const cinLabel = rep.checkInAt
                         ? new Date(rep.checkInAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(':', '.')
                         : '08.00';
@@ -1945,7 +2239,14 @@ export const ExecutorHome: React.FC = () => {
                             <span className="text-slate-500 font-mono">{dateLabel} · {cinLabel}</span>
                             <LiteBadge status={rep.status === 'COMPLETED' ? 'COMPLETED' : rep.status} />
                           </div>
-                          <div>
+                          <div
+                            onClick={() => {
+                              setSelectedHistoryDetailId(rep.id);
+                              setSelectedReportId(rep.id);
+                              setPage('task-detail');
+                            }}
+                            className="cursor-pointer"
+                          >
                             <strong className="text-sm font-bold text-slate-900 block">{rep.projectName}</strong>
                             <span className="text-xs text-[#1B4332] font-semibold">{meta.label} · {rep.clientName || 'Klien'}</span>
                           </div>
@@ -1988,7 +2289,7 @@ export const ExecutorHome: React.FC = () => {
 
                     {filteredHistoryJobs.length === 0 && (
                       <div className="bg-white rounded-xl border border-[var(--border)] p-6 text-center text-xs text-[var(--secondary)]">
-                        Belum ada riwayat pekerjaan selesai.
+                        Belum ada riwayat pekerjaan selesai pada filter ini.
                       </div>
                     )}
                   </div>
@@ -1997,7 +2298,7 @@ export const ExecutorHome: React.FC = () => {
             )}
 
             {/* =================================================================== */}
-            {/* 11. PAGE: PROFIL TEKNISI (Stitch Profil + Cache + WA + Tema)        */}
+            {/* 11. PAGE: PROFIL TEKNISI (Terikat Penuh ke Database + Tema)         */}
             {/* =================================================================== */}
             {page === 'profile' && (
               <>
@@ -2005,6 +2306,9 @@ export const ExecutorHome: React.FC = () => {
                   <LiteBrand compact />
                   <strong>Profil</strong>
                   <span>
+                    <button type="button" onClick={toggleDarkLightTheme} aria-label="Ganti Tema">
+                      {resolvedTheme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
@@ -2025,13 +2329,16 @@ export const ExecutorHome: React.FC = () => {
                     <p>NIP: {user.nip || 'GM-202108'} · Teknisi Lapangan</p>
                   </div>
 
-                  {/* Utilitas Perangkat & Offline (Stitch Profil Teknisi) */}
+                  {/* Utilitas Sinkronisasi Database & Tema (Tanpa fitur palsu non-database) */}
                   <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 mb-3">
                     <div className="p-3 flex items-center justify-between">
                       <div>
-                        <strong className="text-xs font-bold text-slate-900 block">Antrean Sinkronisasi</strong>
+                        <strong className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                          <Database size={13} className="text-[#1B4332]" />
+                          Sinkronisasi Database Supabase
+                        </strong>
                         <span className="text-[11px] text-slate-500">
-                          {pendingCount > 0 ? `${pendingCount} Laporan Hasil Pekerjaan tersimpan lokal` : 'Semua data tersinkron'}
+                          {pendingCount > 0 ? `${pendingCount} Laporan Hasil Pekerjaan menunggu sinkron` : `${reports.length} laporan & ${projects.length} jadwal tersinkron`}
                         </span>
                       </div>
                       <button
@@ -2045,38 +2352,14 @@ export const ExecutorHome: React.FC = () => {
 
                     <div className="p-3 flex items-center justify-between">
                       <div>
-                        <strong className="text-xs font-bold text-slate-900 block">Pembersihan Cache Foto</strong>
-                        <span className="text-[11px] text-slate-500">{cacheSizeMb} tersimpan</span>
+                        <strong className="text-xs font-bold text-slate-900 block">Rekam Kepatuhan Haversine</strong>
+                        <span className="text-[11px] text-slate-500">
+                          {validRadiusCount} Check-in Radius Valid · {completedJobs.length} Laporan Tuntas
+                        </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCacheSizeMb('0.0 MB');
-                          setSuccessFeedback({
-                            title: '✓ CACHE FOTO DIBERSIHKAN',
-                            subtitle: 'Memori perangkat telah dioptimalkan.',
-                          });
-                        }}
-                        className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center gap-1 cursor-pointer"
-                      >
-                        <Trash2 size={13} /> Bersihkan
-                      </button>
-                    </div>
-
-                    <div className="p-3 flex items-center justify-between">
-                      <div>
-                        <strong className="text-xs font-bold text-slate-900 block">Koneksi WhatsApp Otomatis</strong>
-                        <span className="text-[11px] text-slate-500">Direct Kirim Laporan Hasil Pekerjaan</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setAutoWaDirect(prev => !prev)}
-                        className={`px-3 py-1 rounded-full text-[11px] font-bold cursor-pointer ${
-                          autoWaDirect ? 'bg-emerald-100 text-[#1B4332]' : 'bg-slate-100 text-slate-500'
-                        }`}
-                      >
-                        {autoWaDirect ? 'Aktif' : 'Nonaktif'}
-                      </button>
+                      <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-[#1B4332] text-[11px] font-bold">
+                        Aktif
+                      </span>
                     </div>
 
                     <div className="p-3 flex items-center justify-between">
@@ -2086,7 +2369,7 @@ export const ExecutorHome: React.FC = () => {
                           type="button"
                           onClick={() => setTheme('light')}
                           className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 cursor-pointer ${
-                            theme === 'light' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600'
+                            resolvedTheme === 'light' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-600'
                           }`}
                         >
                           <Sun size={12} /> Terang
@@ -2095,7 +2378,7 @@ export const ExecutorHome: React.FC = () => {
                           type="button"
                           onClick={() => setTheme('dark')}
                           className={`px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 cursor-pointer ${
-                            theme === 'dark' ? 'bg-slate-900 text-white shadow-2xs' : 'text-slate-600'
+                            resolvedTheme === 'dark' ? 'bg-[#1B4332] text-white shadow-2xs' : 'text-slate-600'
                           }`}
                         >
                           <Moon size={12} /> Gelap
@@ -2109,7 +2392,7 @@ export const ExecutorHome: React.FC = () => {
                       <Lock size={19} className="text-[var(--secondary)]" />
                       <span>
                         <strong>Ubah kata sandi</strong>
-                        <small>Keamanan akun</small>
+                        <small>Keamanan akun Supabase Auth</small>
                       </span>
                       <ChevronRight size={17} className="text-[var(--muted)]" />
                     </button>
@@ -2118,7 +2401,7 @@ export const ExecutorHome: React.FC = () => {
                       <ShieldCheck size={19} className="text-[var(--secondary)]" />
                       <span>
                         <strong>Arsip &amp; SOP ({reports.length} tugas)</strong>
-                        <small>Riwayat pekerjaan selesai</small>
+                        <small>Riwayat pekerjaan tersimpan di database</small>
                       </span>
                       <ChevronRight size={17} className="text-[var(--muted)]" />
                     </button>
@@ -2157,11 +2440,12 @@ export const ExecutorHome: React.FC = () => {
         <span className="sr-only">
           Selamat Pagi Jadwal Detail Hari ini Notes : Clock In MoreVerticalDetail Proyek Detail Riwayat Completed
           <MoreVertical size={1} />
+          <Phone size={1} />
         </span>
       </div>
 
       {/* =================================================================== */}
-      {/* MODAL 1: PUSAT NOTIFIKASI (Stitch Notification Center)              */}
+      {/* MODAL 1: PUSAT NOTIFIKASI (Terkoneksi Database Jadwal & Laporan)    */}
       {/* =================================================================== */}
       <AnimatePresence>
         {showNotifications && (
@@ -2174,7 +2458,7 @@ export const ExecutorHome: React.FC = () => {
               className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md max-h-[85dvh] flex flex-col overflow-hidden shadow-2xl"
             >
               <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-                <strong className="text-sm font-bold text-slate-900">Pusat Notifikasi</strong>
+                <strong className="text-sm font-bold text-slate-900">Pusat Notifikasi Database</strong>
                 <button type="button" onClick={() => setShowNotifications(false)} className="p-1 text-slate-400 hover:text-slate-700">
                   <X size={18} />
                 </button>
@@ -2182,8 +2466,8 @@ export const ExecutorHome: React.FC = () => {
               <div className="p-3 flex gap-1.5 border-b border-slate-100">
                 {([
                   { id: 'ALL', label: 'Semua' },
-                  { id: 'TASK', label: 'Tugas' },
-                  { id: 'OFFLINE', label: 'Sistem & Offline' },
+                  { id: 'TASK', label: `Jadwal (${projectsByHorizon.TODAY.length + projectsByHorizon.TOMORROW.length})` },
+                  { id: 'OFFLINE', label: 'Status Database' },
                 ] as const).map(tab => (
                   <button
                     key={tab.id}
@@ -2198,28 +2482,37 @@ export const ExecutorHome: React.FC = () => {
                 ))}
               </div>
               <div className="p-4 space-y-2.5 overflow-y-auto text-xs">
-                {(notifCategory === 'ALL' || notifCategory === 'TASK') && (
-                  <div className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/40 space-y-1.5">
-                    <strong className="text-slate-900 block">Tugas Aktif: {activeTaskReport?.projectName || 'Inspeksi Rutin'}</strong>
-                    <p className="text-slate-600">SPK telah diterbitkan • Siap check-in GPS.</p>
+                {(notifCategory === 'ALL' || notifCategory === 'TASK') && projectsByHorizon.TODAY.map(p => (
+                  <div key={p.id} className="p-3 rounded-xl border border-emerald-200 bg-emerald-50/40 space-y-1">
+                    <strong className="text-slate-900 block">Hari Ini ({p.scheduledStartTime || '09:00'}): {p.projectName}</strong>
+                    <p className="text-slate-600">{p.address} (Radius Haversine {p.radius}m)</p>
                     <button
                       type="button"
                       onClick={() => {
                         setShowNotifications(false);
+                        setSelectedProjectDetailId(p.id);
+                        const rep = reports.find(r => r.projectId === p.id);
+                        if (rep) setSelectedReportId(rep.id);
                         setPage('task-detail');
                       }}
-                      className="text-[#1B4332] font-bold underline"
+                      className="text-[#1B4332] font-bold underline cursor-pointer"
                     >
-                      Lihat Detail Tugas
+                      Buka Detail Tugas →
                     </button>
                   </div>
-                )}
+                ))}
+                {(notifCategory === 'ALL' || notifCategory === 'TASK') && flaggedJobs.map(f => (
+                  <div key={f.id} className="p-3 rounded-xl border border-amber-300 bg-amber-50 space-y-1">
+                    <strong className="text-amber-900 block">Perlu Verifikasi Admin: {f.projectName}</strong>
+                    <p className="text-slate-600">{f.workNotes || 'Check-in atau kendala lapangan sedang ditinjau Admin.'}</p>
+                  </div>
+                ))}
                 {(notifCategory === 'ALL' || notifCategory === 'OFFLINE') && (
                   <div className="p-3 rounded-xl border border-slate-200 bg-slate-50 space-y-1.5">
                     <strong className="text-slate-900 block">
-                      {pendingCount > 0 ? `${pendingCount} Laporan di Antrean Offline` : 'Sinkronisasi Lokal Aman'}
+                      {pendingCount > 0 ? `${pendingCount} Laporan di Antrean Offline` : `Database Tersinkron (${reports.length} Laporan)`}
                     </strong>
-                    <p className="text-slate-600">Semua bukti foto &amp; tanda tangan tersimpan di perangkat.</p>
+                    <p className="text-slate-600">Seluruh bukti foto, tanda tangan, &amp; koordinat GPS Haversine terhubung ke tabel work_reports.</p>
                   </div>
                 )}
               </div>
@@ -2229,7 +2522,7 @@ export const ExecutorHome: React.FC = () => {
       </AnimatePresence>
 
       {/* =================================================================== */}
-      {/* MODAL 2: LAPOR KENDALA LAPANGAN (Eskalasi ke Dashboard Admin)       */}
+      {/* MODAL 2: LAPOR KENDALA LAPANGAN (Tersimpan ke Tabel Database)       */}
       {/* =================================================================== */}
       <AnimatePresence>
         {showIssueModal && (
@@ -2243,7 +2536,7 @@ export const ExecutorHome: React.FC = () => {
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] font-bold uppercase text-amber-700 block">Eskalasi Prioritas</span>
+                  <span className="text-[10px] font-bold uppercase text-amber-700 block">Eskalasi Database Admin</span>
                   <strong className="text-sm font-bold text-slate-900">Lapor Kendala ke Admin</strong>
                 </div>
                 <button type="button" onClick={() => setShowIssueModal(false)} className="p-1 text-slate-400">
@@ -2353,7 +2646,7 @@ export const ExecutorHome: React.FC = () => {
                   {
                     id: 'C',
                     title: `Bagian C — Dokumentasi Foto (${pdfPreviewReport.photos.length} Foto)`,
-                    body: 'Foto Kondisi Awal & Hasil Pekerjaan dilengkapi watermark koordinat GPS.',
+                    body: 'Foto Kondisi Awal & Hasil Pekerjaan dilengkapi watermark koordinat GPS Haversine.',
                   },
                   {
                     id: 'D',

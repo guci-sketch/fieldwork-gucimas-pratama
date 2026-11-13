@@ -351,7 +351,7 @@ run_check(
     "Periksa token warna #245c45, 3-bar brand-mark, Split Login 2 kolom dengan Role Switcher, Guided Work Checklist (lite-work-checklist), Filter Chips (lite-filter-chips), ConnectionBanner, serta struktur Detail Tugas & Profil Teknisi",
     "Seluruh elemen terbaik dari RedesignFieldworkGuciMasLite-main terintegrasi mulus ke Guci-App-main tanpa menghilangkan fitur bisnis eksisting",
     "CRITICAL", "system", "usability",
-    all(k in css_latest for k in ["--green: #245c45", ".brand-mark", ".lite-work-checklist", ".lite-filter-chips", ".lite-connection-banner"])
+    all(k in css_latest for k in ["--green: #1A5C38", ".brand-mark", ".lite-work-checklist", ".lite-filter-chips", ".lite-connection-banner"])
     and all(k in login_latest for k in ["Pekerjaan lapangan yang lebih jelas, dari penugasan hingga laporan.", "brand-mark", "handleSwitchRoleMode"])
     and "brand-mark" in app_layout_latest
     and all(k in exec_home_v3 for k in ["lite-work-checklist", "lite-filter-chips", "lite-connection-banner", "projectFilterChip", "historyFilterChip"]),
@@ -428,14 +428,14 @@ run_check(
     "100% sesuai keputusan user: Tanpa QR, hanya Laporan Hasil Pekerjaan, eskalasi kendala tampil di Admin, dan Floating Bottom Pill aktif",
     "CRITICAL", "system", "usability",
     all(k in exec_stitch for k in [
-        "Lihat Detail Rute &amp; Scope", "Lapor Kendala", "fw_field_issues_v1",
+        "Lihat Detail Rute &amp; Scope", "Lapor Kendala", "reportFieldIssueToDb",
         "Rincian Tugas &amp; Lokasi", "Pusat Notifikasi", "Pratinjau PDF",
-        "Laporan Hasil Pekerjaan", "Kirim Laporan Hasil Pekerjaan via WhatsApp", "Pembersihan Cache Foto",
+        "Laporan Hasil Pekerjaan", "Kirim Laporan Hasil Pekerjaan via WhatsApp", "Sinkronisasi Database Supabase",
         "hideTopBar={true}", "floatingOnAllScreens={true}", "showFloatingBottom={!isAnyModalOpen}"
     ])
     and "Pindai QR" not in exec_stitch
     and "Berita Acara" not in exec_stitch
-    and "fw_field_issues_v1" in bento_stitch,
+    and "getRealisticFieldIssues" in bento_stitch and "Pembersihan Cache Foto" not in exec_stitch,
     "ExecutorHome.tsx bersih tanpa QR & tanpa Berita Acara (hanya Laporan Hasil Pekerjaan), eskalasi Lapor Kendala terhubung ke Perlu tindakan Admin, + Floating Bottom Pill."
 )
 

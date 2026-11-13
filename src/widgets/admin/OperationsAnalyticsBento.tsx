@@ -38,6 +38,7 @@ import {
 } from '@/shared/utils/operationalSummary';
 import { getWorkReportStatusMeta } from '@/shared/utils/riskMeta';
 import { RiskBadge } from '../common/RiskBadge';
+import { getRealisticFieldIssues } from '@/shared/data/realisticFieldworkSeed';
 import { AllProjectsMap } from '../maps/AllProjectsMap';
 
 export interface ExecutiveQuotationSummary {
@@ -591,15 +592,9 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
               </div>
               <div className="action-list">
                 {(() => {
-                  let fieldIssues: any[] = [];
-                  try {
-                    const raw = localStorage.getItem('fw_field_issues_v1');
-                    if (raw) fieldIssues = JSON.parse(raw);
-                  } catch {
-                    fieldIssues = [];
-                  }
-                  return fieldIssues.slice(0, 2).map((iss: any) => (
-                    <button key={iss.id} type="button" onClick={() => onOpenReportsTab?.()}>
+                  const fieldIssues = getRealisticFieldIssues();
+                  return fieldIssues.slice(0, 3).map((iss: any) => (
+                    <button key={iss.id} type="button" onClick={() => iss.reportId ? onOpenReportDetail(iss.reportId) : onOpenReportsTab?.()}>
                       <div className="alert-icon danger">
                         <span className="font-bold text-xs">!</span>
                       </div>

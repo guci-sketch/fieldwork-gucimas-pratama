@@ -25,13 +25,13 @@ export interface TabContainerProps {
 
 const BADGE_TONES: Record<NonNullable<CapsuleTabItem['badgeTone']>, string> = {
     default: 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)]',
-    warning: 'bg-amber-100 text-amber-800',
-    success: 'bg-emerald-100 text-emerald-800',
-    danger:  'bg-rose-100 text-rose-800',
+    warning: 'bg-amber-500/20 text-amber-700 dark:text-amber-300',
+    success: 'bg-emerald-500/20 text-emerald-800 dark:text-emerald-300',
+    danger:  'bg-rose-500/20 text-rose-800 dark:text-rose-300',
 };
 
 /**
- * Komponen TabContainer bergaya Barventis:
+ * Komponen TabContainer bergaya Barventis (mendukung penuh Tema Terang & Tema Gelap html.dark):
  * 1. Top Capsule Sub-Menu Bar: tampil konsisten sesuai menu pada grup sidebar role aktif (dapat disembunyikan via hideTopBar).
  * 2. Dynamic Floating Bottom Pill: tampil di bagian bawah layar dan otomatis bersembunyi saat modal/kamera aktif.
  */
@@ -63,7 +63,7 @@ export const TabContainer: React.FC<TabContainerProps> = ({
                 <div
                     ref={containerRef}
                     role="tablist"
-                    className={`inline-flex items-center gap-1 p-1 rounded-xl bg-[#f5f3ef] border border-[#e8e5e0] max-w-full overflow-x-auto no-scrollbar ${className}`}
+                    className={`inline-flex items-center gap-1 p-1 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border-subtle)] max-w-full overflow-x-auto no-scrollbar ${className}`}
                 >
                     {tabs.map(tab => {
                         const isActive = tab.id === activeTab;
@@ -78,12 +78,12 @@ export const TabContainer: React.FC<TabContainerProps> = ({
                                 onClick={() => onChange(tab.id)}
                                 className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs whitespace-nowrap transition-all duration-150 cursor-pointer ${
                                     isActive
-                                        ? 'bg-white text-[var(--accent)] font-bold shadow-2xs border border-[#e8e5e0]'
-                                        : 'text-[#5a554f] font-medium hover:text-[#2d2a26] hover:bg-white/60 border border-transparent'
+                                        ? 'bg-[var(--bg-card)] text-[var(--accent)] font-bold shadow-2xs border border-[var(--border-subtle)]'
+                                        : 'text-[var(--text-secondary)] font-medium hover:text-[var(--text-primary)] hover:bg-[var(--bg-card)]/60 border border-transparent'
                                 }`}
                             >
                                 {tab.icon && (
-                                    <span className={`shrink-0 ${isActive ? 'text-[var(--accent)]' : 'text-[#8a8580]'}`}>
+                                    <span className={`shrink-0 ${isActive ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}`}>
                                         {tab.icon}
                                     </span>
                                 )}
@@ -116,7 +116,7 @@ export const TabContainer: React.FC<TabContainerProps> = ({
                     <motion.div
                         layout
                         transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-                        className="bg-white/95 backdrop-blur-md border border-[#e8e5e0] shadow-[0_8px_24px_rgba(45,42,38,0.12)] rounded-full p-1 flex items-center gap-0.5 overflow-x-auto no-scrollbar"
+                        className="floating-bottom-pill bg-[var(--bg-card)]/95 backdrop-blur-md border border-[var(--border-subtle)] shadow-[0_8px_24px_rgba(0,0,0,0.18)] rounded-full p-1 flex items-center gap-0.5 overflow-x-auto no-scrollbar"
                     >
                         {tabs.map(tab => {
                             const isActive = tab.id === activeTab;
@@ -131,7 +131,7 @@ export const TabContainer: React.FC<TabContainerProps> = ({
                                     className={`relative flex items-center justify-center rounded-full transition-colors cursor-pointer select-none shrink-0 ${
                                         isActive
                                             ? 'bg-[var(--accent)] text-white px-3 py-1.5 gap-1.5 font-semibold text-[11px] shadow-2xs'
-                                            : 'w-8 h-8 text-[#5a554f] hover:bg-[#f5f3ef] hover:text-[var(--accent)]'
+                                            : 'w-8 h-8 text-[var(--text-secondary)] hover:bg-[var(--bg-secondary)] hover:text-[var(--accent)]'
                                     }`}
                                     style={{ touchAction: 'manipulation' }}
                                 >

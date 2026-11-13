@@ -167,7 +167,13 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose,
     }
   }, []);
 
-  const [workDate, setWorkDate] = useState(new Date().toISOString().split('T')[0]);
+  const getLocalOffsetYmd = (offsetDays: number) => {
+    const d = new Date();
+    d.setHours(12, 0, 0, 0);
+    d.setDate(d.getDate() + offsetDays);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const [workDate, setWorkDate] = useState(() => getLocalOffsetYmd(0));
   const [scheduledStartTime, setScheduledStartTime] = useState('08:00');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -701,9 +707,32 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose,
           {/* Work Date & Scheduled Start Time */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-1">
-                Tanggal Pelaksanaan *
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                  Tanggal Pelaksanaan *
+                </label>
+                <div className="flex items-center gap-1">
+                  {[
+                    { lbl: 'Kemarin', off: -1 },
+                    { lbl: 'Hari Ini', off: 0 },
+                    { lbl: 'Besok', off: 1 },
+                  ].map(b => {
+                    const ymd = getLocalOffsetYmd(b.off);
+                    return (
+                      <button
+                        key={b.lbl}
+                        type="button"
+                        onClick={() => setWorkDate(ymd)}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold border cursor-pointer ${
+                          workDate === ymd ? 'bg-[#1B4332] text-white border-[#1B4332]' : 'bg-slate-50 text-slate-600 border-slate-200'
+                        }`}
+                      >
+                        {b.lbl}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <div className="relative">
                 <Calendar size={16} className="absolute left-3 top-3 text-[var(--text-muted)]" />
                 <input
