@@ -31,6 +31,7 @@ import {
   activateUser,
   deleteUser,
   createUser,
+  resetUserPassword,
   AdminUser,
   fetchPhotoPurgePreview,
   purgeOldPhotos,
@@ -93,11 +94,12 @@ import {
   Lock,
   Plus,
   Copy,
+  LogOut,
 } from 'lucide-react';
 
 import { useAuth } from '@/app/providers/AuthContext';
 import { ChangePasswordModal } from '../auth/ChangePasswordModal';
-import { generateInvite } from '@/shared/api/auth';
+import { generateInvite, DEFAULT_ACCOUNT_PASSWORD } from '@/shared/api/auth';
 import { TemplateSettingsPanel } from '@/widgets/admin/TemplateSettingsPanel';
 import { MonthlyRecapBuilderModal } from '@/widgets/admin/MonthlyRecapBuilderModal';
 import { canGenerateMonthlyRecap } from '@/shared/lib/permenkesRecapEngine';
@@ -206,7 +208,7 @@ export const AdminDashboard: React.FC = () => {
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
-    password: '',
+    password: DEFAULT_ACCOUNT_PASSWORD,
     role: 'TEKNISI_LAPANGAN' as AdminUser['role'],
     phone: '',
   });
@@ -599,7 +601,7 @@ export const AdminDashboard: React.FC = () => {
     try {
       const created = await createUser({ ...newUser, phone: newUser.phone || undefined });
       setAdminUsers(prev => [created, ...prev]);
-      setNewUser({ name: '', email: '', password: '', role: 'TEKNISI_LAPANGAN', phone: '' });
+      setNewUser({ name: '', email: '', password: DEFAULT_ACCOUNT_PASSWORD, role: 'TEKNISI_LAPANGAN', phone: '' });
       setActionBanner({
         tone: 'success',
         message: `Akun ${created.email} berhasil dibuat. Bagikan email dan kata sandi awal kepada pengguna.`,
@@ -611,6 +613,21 @@ export const AdminDashboard: React.FC = () => {
       });
     } finally {
       setCreatingUser(false);
+    }
+  };
+
+  const handleResetPasswordToDefault = async (targetUser: AdminUser) => {
+    try {
+      const resetPw = await resetUserPassword(targetUser.id, targetUser.email);
+      setActionBanner({
+        tone: 'success',
+        message: `Kata sandi akun ${targetUser.name} (${targetUser.email}) berhasil direset menjadi default: ${resetPw}.`,
+      });
+    } catch (err) {
+      setActionBanner({
+        tone: 'error',
+        message: err instanceof Error ? err.message : 'Gagal mereset kata sandi pengguna.',
+      });
     }
   };
 
@@ -2798,9 +2815,18 @@ export const AdminDashboard: React.FC = () => {
                                 {/* Aksi Manajemen Akun */}
                                 <div className="flex items-center gap-2 shrink-0 self-start md:self-center flex-wrap">
                                   {isSelf ? (
-                                    <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-500 font-semibold text-xs border border-slate-200">
-                                      Sesi Aktif
-                                    </span>
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowChangePassword(true)}
+                                        className="min-h-[42px] px-3.5 py-2 rounded-xl border border-emerald-200 bg-emerald-50/70 text-emerald-800 hover:bg-emerald-100 text-xs font-bold transition-colors cursor-pointer"
+                                      >
+                                        Ubah Kata Sandi
+                                      </button>
+                                      <span className="px-3 py-1.5 rounded-xl bg-slate-100 text-slate-500 font-semibold text-xs border border-slate-200">
+                                        Sesi Aktif
+                                      </span>
+                                    </>
                                   ) : cannotManage ? (
                                     <div
                                       className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-semibold"
@@ -2811,6 +2837,34 @@ export const AdminDashboard: React.FC = () => {
                                     </div>
                                   ) : (
                                     <>
+                                      <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                          <button
+                                            type="button"
+                                            className="min-h-[42px] px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-bold transition-colors cursor-pointer"
+                                          >
+                                            Reset Sandi ({DEFAULT_ACCOUNT_PASSWORD})
+                                          </button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                          <AlertDialogHeader>
+                                            <AlertDialogTitle>Reset Kata Sandi {u.name}?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                              Kata sandi untuk akun <strong>{u.email}</strong> akan dikembalikan menjadi default <strong>{DEFAULT_ACCOUNT_PASSWORD}</strong>. Pengguna dapat mengubahnya kembali setelah masuk.
+                                            </AlertDialogDescription>
+                                          </AlertDialogHeader>
+                                          <AlertDialogFooter>
+                                            <AlertDialogCancel className="font-medium">Batalkan</AlertDialogCancel>
+                                            <AlertDialogAction
+                                              onClick={() => void handleResetPasswordToDefault(u)}
+                                              className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold"
+                                            >
+                                              Ya, Reset ke {DEFAULT_ACCOUNT_PASSWORD}
+                                            </AlertDialogAction>
+                                          </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                      </AlertDialog>
+
                                       {u.is_active ? (
                                         <AlertDialog>
                                           <AlertDialogTrigger asChild>
@@ -3081,13 +3135,23 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t border-[var(--border-subtle)]">
+                  <div className="pt-4 border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-3">
                     <button
                       type="button"
                       onClick={() => setShowChangePassword(true)}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-sm font-bold rounded-lg transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs sm:text-sm font-bold rounded-xl transition-colors cursor-pointer"
                     >
-                      Ubah Kata Sandi
+                      <Lock size={15} aria-hidden="true" />
+                      <span>Ubah Kata Sandi</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={logout}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs sm:text-sm font-bold rounded-xl transition-colors cursor-pointer"
+                    >
+                      <LogOut size={15} aria-hidden="true" />
+                      <span>Keluar Akun (Logout)</span>
                     </button>
                   </div>
                 </div>

@@ -17,7 +17,7 @@ const Shell = () => {
     }
 
     if (status === 'unauthenticated' || !user) {
-        return <LoginForm />;
+        return <Navigate to="/login" replace />;
     }
 
     if (user.role === 'TEKNISI_LAPANGAN') {
