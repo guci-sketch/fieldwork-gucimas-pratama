@@ -290,99 +290,83 @@ export function AppLayout({
                         )}
                     </div>
 
-                    <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2.5 space-y-2.5 no-scrollbar" aria-label="Daftar modul aplikasi">
-                        {groupedItems.map((group, groupIdx) => (
-                            <div key={group.name} className="space-y-1">
-                                <div className="h-5 flex items-center px-2 overflow-hidden">
-                                    {isExpanded ? (
-                                        <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#9bc4a9]/85 whitespace-nowrap">
-                                            {group.name.replace(/^\d+\.\s*/, '')}
-                                        </span>
-                                    ) : groupIdx > 0 ? (
-                                        <div className="w-full h-px bg-white/10" />
-                                    ) : (
-                                        <div className="w-2 h-1 rounded-full bg-white/20 mx-auto" />
+                    <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4 px-3 space-y-1 no-scrollbar" aria-label="Daftar modul aplikasi">
+                        {sidebarItems.map(item => {
+                            const active = activeTab === item.id;
+                            const danger = item.danger;
+                            return (
+                                <button
+                                    key={item.id}
+                                    type="button"
+                                    onClick={() => handleTabClick(item.id)}
+                                    aria-current={active ? 'page' : undefined}
+                                    aria-label={item.label}
+                                    title={!isExpanded ? item.label : undefined}
+                                    className={cn(
+                                        'w-full min-h-[42px] flex items-center rounded-[10px] text-[13px] transition-colors duration-180 relative group/item cursor-pointer select-none',
+                                        active
+                                            ? 'bg-white/12 text-white font-semibold'
+                                            : 'text-[#c9d8cf] hover:bg-white/8 hover:text-white font-medium'
                                     )}
-                                </div>
-
-                                {group.items.map(item => {
-                                    const active = activeTab === item.id;
-                                    const danger = item.danger;
-                                    return (
-                                        <button
-                                            key={item.id}
-                                            type="button"
-                                            onClick={() => handleTabClick(item.id)}
-                                            aria-current={active ? 'page' : undefined}
-                                            aria-label={item.label}
-                                            title={!isExpanded ? item.label : undefined}
-                                            className={cn(
-                                                'w-full min-h-[42px] flex items-center rounded-[10px] text-[13px] transition-colors duration-180 relative group/item cursor-pointer select-none',
-                                                active
-                                                    ? 'bg-white/12 text-white font-semibold'
-                                                    : 'text-[#c9d8cf] hover:bg-white/8 hover:text-white font-medium'
-                                            )}
-                                        >
-                                            {active && (
-                                                <>
-                                                    <motion.div
-                                                        layoutId="active-nav-indicator"
-                                                        transition={{ type: 'spring', stiffness: 450, damping: 32 }}
-                                                        className="absolute inset-0 rounded-[10px] bg-white/10 pointer-events-none -z-10"
-                                                    />
-                                                    <span
-                                                        aria-hidden="true"
-                                                        className={cn(
-                                                            'absolute left-1 top-2.5 bottom-2.5 w-[3px] rounded-full',
-                                                            danger ? 'bg-rose-400' : 'bg-[#a9c9b4]'
-                                                        )}
-                                                    />
-                                                </>
-                                            )}
-
-                                            <div
+                                >
+                                    {active && (
+                                        <>
+                                            <motion.div
+                                                layoutId="active-nav-indicator"
+                                                transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+                                                className="absolute inset-0 rounded-[10px] bg-white/10 pointer-events-none -z-10"
+                                            />
+                                            <span
+                                                aria-hidden="true"
                                                 className={cn(
-                                                    'w-10 h-10 flex items-center justify-center shrink-0 [&_svg]:w-[18px] [&_svg]:h-[18px] transition-transform duration-150',
-                                                    active
-                                                        ? danger
-                                                            ? 'text-rose-300'
-                                                            : 'text-white'
-                                                        : 'text-[#9bc4a9] group-hover/item:text-white'
+                                                    'absolute left-1 top-2.5 bottom-2.5 w-[3px] rounded-full',
+                                                    danger ? 'bg-rose-400' : 'bg-[#a9c9b4]'
+                                                )}
+                                            />
+                                        </>
+                                    )}
+
+                                    <div
+                                        className={cn(
+                                            'w-10 h-10 flex items-center justify-center shrink-0 [&_svg]:w-[18px] [&_svg]:h-[18px] transition-transform duration-150',
+                                            active
+                                                ? danger
+                                                    ? 'text-rose-300'
+                                                    : 'text-white'
+                                                : 'text-[#9bc4a9] group-hover/item:text-white'
+                                        )}
+                                    >
+                                        {item.icon}
+                                    </div>
+
+                                    <div
+                                        className={cn(
+                                            'flex-1 flex items-center justify-between pr-2.5 min-w-0 overflow-hidden whitespace-nowrap transition-all duration-150 ease-out',
+                                            isExpanded
+                                                ? 'opacity-100 translate-x-0'
+                                                : 'opacity-0 -translate-x-1.5 pointer-events-none'
+                                        )}
+                                    >
+                                        <span className="truncate">{item.label}</span>
+
+                                        {item.badge !== undefined && item.badge !== 0 && item.badge !== '0' && (
+                                            <span
+                                                className={cn(
+                                                    'ml-1.5 px-1.5 py-0.5 rounded-full text-[10.5px] font-bold shrink-0 leading-none tabular-nums',
+                                                    danger
+                                                        ? 'bg-rose-500/25 text-rose-200 border border-rose-400/30'
+                                                        : active
+                                                        ? 'bg-[#a9c9b4] text-[#173f30]'
+                                                        : 'bg-white/12 text-[#dbe8df]'
                                                 )}
                                             >
-                                                {item.icon}
-                                            </div>
-
-                                            <div
-                                                className={cn(
-                                                    'flex-1 flex items-center justify-between pr-2.5 min-w-0 overflow-hidden whitespace-nowrap transition-all duration-150 ease-out',
-                                                    isExpanded
-                                                        ? 'opacity-100 translate-x-0'
-                                                        : 'opacity-0 -translate-x-1.5 pointer-events-none'
-                                                )}
-                                            >
-                                                <span className="truncate">{item.label}</span>
-
-                                                {item.badge !== undefined && item.badge !== 0 && item.badge !== '0' && (
-                                                    <span
-                                                        className={cn(
-                                                            'ml-1.5 px-1.5 py-0.5 rounded-full text-[10.5px] font-bold shrink-0 leading-none tabular-nums',
-                                                            danger
-                                                                ? 'bg-rose-500/25 text-rose-200 border border-rose-400/30'
-                                                                : active
-                                                                ? 'bg-[#a9c9b4] text-[#173f30]'
-                                                                : 'bg-white/12 text-[#dbe8df]'
-                                                        )}
-                                                    >
-                                                        {item.badge}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        ))}
+                                                {item.badge}
+                                            </span>
+                                        )}
+                                    </div>
+                                </button>
+                            );
+                        })}
                     </nav>
 
                     {/* Sidebar Footer (Collapse / Stay Open Toggle) */}

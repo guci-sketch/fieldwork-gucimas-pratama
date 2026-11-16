@@ -718,7 +718,7 @@ export function buildRealisticWorkReports(): WorkReport[] {
       checkOutValid: true,
       durationSeconds: 7080,
       riskScore: 55,
-      riskLevel: 'MEDIUM',
+      riskLevel: 'REVIEW',
       riskEvents: [
         {
           id: 're-indofood-01',
@@ -971,21 +971,19 @@ export function buildRealisticUserLocations(): UserLocation[] {
   return [
     {
       userId: DEMO_TEKNISI_ID,
-      name: 'Budi Santoso (Teknisi Lapangan)',
-      email: 'teknisi@gucimaspratama.co.id',
+      userName: 'Budi Santoso (Teknisi Lapangan)',
       latitude: -6.241525,
       longitude: 106.797895,
       accuracy: 9.4,
-      updatedAt: getOffsetIso(0, 9, 25),
+      trackedAt: getOffsetIso(0, 9, 25),
     },
     {
       userId: '44444444-4444-4444-8444-444444444444',
-      name: 'Rian Setiawan (Teknisi Lapangan)',
-      email: 'rian.teknisi@gucimaspratama.co.id',
+      userName: 'Rian Setiawan (Teknisi Lapangan)',
       latitude: -6.224515,
       longitude: 106.809635,
       accuracy: 11.0,
-      updatedAt: getOffsetIso(0, 9, 10),
+      trackedAt: getOffsetIso(0, 9, 10),
     },
   ];
 }
@@ -1087,10 +1085,10 @@ export function getRealisticFieldIssues(): FieldIssueEntry[] {
     projectName: r.projectName,
     address: r.projectAddress,
     executorName: r.executorName,
-    issueType: r.riskEvents?.[0]?.ruleCode === "CHECK_IN_OUTSIDE_RADIUS"
+    issueType: r.riskEvents?.[0]?.eventType === "OUTSIDE_RADIUS_CHECKIN"
       ? "Check-In Luar Radius Haversine (142m)"
       : "Kendala Lapangan & Verifikasi GPS",
-    note: r.workNotes || r.notes || "Check-in di gerbang kargo luar (142m dari titik pusat gudang).",
+    note: r.notes || "Check-in di gerbang kargo luar (142m dari titik pusat gudang).",
     reportId: r.id,
     createdAt: r.createdAt,
   }));

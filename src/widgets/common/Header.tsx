@@ -127,9 +127,9 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <header className="min-h-[64px] bg-[var(--bg-card)] border-b border-[var(--border-subtle)] text-[var(--text-primary)] sticky top-0 z-40 px-4 sm:px-7 flex items-center">
-        <div className="w-full max-w-[1510px] mx-auto flex items-center justify-between gap-3">
-          {/* Left: Hamburger + Title + Divider + Group Tag (Gaya Topbar RedesignFieldworkGuciMasLite) */}
+      <header className="min-h-[60px] bg-[var(--bg-card)] border-b border-[var(--border-subtle)] text-[var(--text-primary)] sticky top-0 z-40 px-4 sm:px-7 flex items-center">
+        <div className="w-full max-w-[1510px] mx-auto flex items-center justify-between gap-4">
+          {/* Left: Hamburger + Clean Page Title */}
           <div className="flex items-center gap-3 min-w-0">
             {!hideMobileMenu && (
               <button
@@ -143,22 +143,12 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            <div className="flex items-center gap-2.5 min-w-0">
-              <strong className="font-bold text-[13.5px] sm:text-[14.5px] text-[var(--text-primary)] truncate">
-                {pageTitle}
-              </strong>
-              {(pageGroup || pageSubtitle) && (
-                <>
-                  <span className="hidden sm:block w-px h-5 bg-[var(--border-subtle)] shrink-0" />
-                  <span className="hidden sm:inline-flex items-center h-6 px-2 rounded-md bg-[#f1f4f2] text-[var(--text-secondary)] text-[10.5px] font-semibold whitespace-nowrap">
-                    {pageGroup ? pageGroup.replace(/^\d+\.\s*/, '') : pageSubtitle}
-                  </span>
-                </>
-              )}
-            </div>
+            <strong className="font-bold text-[15px] sm:text-base tracking-[-0.015em] text-[var(--text-primary)] truncate">
+              {pageTitle}
+            </strong>
           </div>
 
-          {/* Right: Top Actions (Search, Theme, Refresh, Profile Avatar + Name + ChevronDown) */}
+          {/* Right: Refresh + Profile Menu */}
           <div className="flex items-center gap-2 shrink-0 text-[var(--text-secondary)]">
             {pendingCount > 0 && (
               <button
@@ -172,43 +162,13 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
-            {/* Quick Search (Ctrl+K) */}
-            {!isMasterSuper && modules.length > 1 && onSelectModule && (
-              <button
-                type="button"
-                onClick={() => {
-                  setJumpQuery('');
-                  setShowQuickJump(true);
-                }}
-                aria-label="Cari halaman atau menu (Ctrl+K)"
-                className="hidden sm:flex items-center gap-2 px-3 h-9 rounded-[9px] border border-[var(--border-subtle)] bg-[var(--bg-primary)] hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-medium transition-colors cursor-pointer"
-              >
-                <Search size={14} className="text-[var(--text-muted)]" aria-hidden="true" />
-                <span>Cari menu...</span>
-                <kbd className="hidden lg:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono text-[var(--text-muted)] bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded">
-                  Ctrl K
-                </kbd>
-              </button>
-            )}
-
-            {/* Theme Quick Toggle */}
-            <button
-              type="button"
-              onClick={cycleTheme}
-              aria-label={`Ubah tampilan tema (saat ini ${resolvedTheme === 'dark' ? 'Gelap' : 'Terang'})`}
-              title={`Tema: ${resolvedTheme === 'dark' ? 'Gelap' : 'Terang'}`}
-              className="w-9 h-9 rounded-[9px] hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-colors cursor-pointer"
-            >
-              {resolvedTheme === 'dark' ? <Moon size={17} /> : <Sun size={17} />}
-            </button>
-
             {/* Refresh Button */}
             <button
               type="button"
               onClick={handleRefreshClick}
               aria-label="Muat ulang data"
               title="Muat ulang data halaman ini"
-              className="w-9 h-9 rounded-[9px] hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-colors cursor-pointer border-r border-[var(--border-subtle)] pr-2 mr-1 rounded-r-none"
+              className="w-9 h-9 rounded-[9px] hover:bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] flex items-center justify-center transition-colors cursor-pointer"
             >
               <RefreshCw
                 size={16}
@@ -217,7 +177,7 @@ export const Header: React.FC<HeaderProps> = ({
               />
             </button>
 
-            {/* Profile Dropdown Menu (Gaya RedesignFieldworkGuciMasLite: Avatar + Name + ChevronDown) */}
+            {/* Profile Dropdown Menu */}
             <div className="relative">
               <button
                 type="button"

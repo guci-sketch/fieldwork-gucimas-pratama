@@ -686,7 +686,7 @@ export async function reportFieldIssueToDb(
     ...current,
     status: 'FLAGGED',
     riskScore: nextScore,
-    riskLevel: 'MEDIUM',
+    riskLevel: 'REVIEW',
     notes: mergedNotes,
     riskEvents: [newEvent, ...(current.riskEvents || [])],
     updatedAt: nowIso,

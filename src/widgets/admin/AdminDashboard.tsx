@@ -790,64 +790,61 @@ export const AdminDashboard: React.FC = () => {
     roles: string[];
     keywords?: string[];
   }[] = [
-    // GRUP 1: GEOLOCATION HAVERSINE & DIGITAL REPORT
     {
       id: 'dashboard',
-      label: 'Dashboard & Eskalasi Kendala',
+      label: 'Dashboard',
       shortLabel: 'Dashboard',
-      group: '1. GEOLOCATION & DIGITAL REPORT',
+      group: '',
       icon: <LayoutDashboard size={16} />,
       roles: ['ADMIN', 'SUPERADMIN'],
-      keywords: ['dashboard', 'perlu tindakan', 'kendala', 'haversine'],
+      keywords: ['dashboard', 'ringkasan', 'kpi'],
     },
     {
       id: 'reports',
-      label: 'Verifikasi Digital Report (LHP)',
-      shortLabel: 'Digital Report',
-      group: '1. GEOLOCATION & DIGITAL REPORT',
+      label: 'Laporan Kerja',
+      shortLabel: 'Laporan Kerja',
+      group: '',
       icon: kpi.flaggedJobs > 0 ? <ShieldAlert size={16} /> : <CheckCircle2 size={16} />,
       danger: kpi.flaggedJobs > 0,
       badge: kpi.flaggedJobs > 0 ? kpi.flaggedJobs : undefined,
       roles: ['ADMIN', 'SUPERADMIN'],
-      keywords: ['laporan hasil pekerjaan', 'digital report', 'haversine', 'evaluasi pic', 'anomali'],
+      keywords: ['laporan kerja', 'digital report', 'verifikasi', 'pdf'],
     },
     {
       id: 'tracking',
-      label: 'Geolocation Haversine & Peta',
-      shortLabel: 'Geolocation & Peta',
-      group: '1. GEOLOCATION & DIGITAL REPORT',
+      label: 'Peta Lokasi',
+      shortLabel: 'Peta Lokasi',
+      group: '',
       icon: <MapPin size={16} />,
       roles: ['ADMIN', 'SUPERADMIN'],
-      keywords: ['lokasi teknisi', 'gps', 'haversine', 'radius', 'peta'],
+      keywords: ['lokasi teknisi', 'gps', 'peta'],
     },
     {
       id: 'customers',
-      label: 'Lokasi Klien & Titik Geofence',
-      shortLabel: 'Lokasi & Geofence',
-      group: '1. GEOLOCATION & DIGITAL REPORT',
+      label: 'Pelanggan',
+      shortLabel: 'Pelanggan',
+      group: '',
       icon: <Users size={16} />,
       roles: ['ADMIN', 'SUPERADMIN'],
-      keywords: ['pelanggan', 'koordinat', 'pin peta', 'radius'],
+      keywords: ['pelanggan', 'klien', 'koordinat', 'radius'],
     },
-
-    // GRUP 2: TIM TEKNISI & PENGATURAN RADIUS
     {
       id: 'approval',
-      label: 'Tim Teknisi & Akun Lapangan',
-      shortLabel: 'Tim Teknisi',
-      group: '2. TIM TEKNISI & PENGATURAN',
+      label: 'Tim & Akun',
+      shortLabel: 'Tim & Akun',
+      group: '',
       icon: <UserCheck size={16} />,
       roles: ['ADMIN', 'SUPERADMIN'],
-      keywords: ['teknisi', 'anggota', 'target kunjungan'],
+      keywords: ['teknisi', 'anggota', 'akun', 'tim'],
     },
     {
       id: 'templates',
-      label: 'Aturan Radius Haversine & Audit',
-      shortLabel: 'Radius & Audit',
-      group: '2. TIM TEKNISI & PENGATURAN',
+      label: 'Pengaturan',
+      shortLabel: 'Pengaturan',
+      group: '',
       icon: <Settings2 size={16} />,
       roles: ['ADMIN', 'SUPERADMIN'],
-      keywords: ['radius', 'risiko', 'retensi foto', 'audit', 'tema'],
+      keywords: ['pengaturan', 'kop', 'radius', 'audit', 'profil'],
     },
   ];
 
@@ -928,16 +925,11 @@ export const AdminDashboard: React.FC = () => {
       dynamicIslandItems={showFloatingBottom ? [] : []}
       sidebarHeader={
         <div>
-          <h2 className="text-xs font-black tracking-tight text-[var(--text-primary)] leading-tight mb-0.5">
-            Field<span className="text-[var(--accent-text)]">work</span>
-          </h2>
-          <p className="text-[11px] text-[var(--text-muted)]">
-            {new Date().toLocaleDateString('id-ID', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-            })}
+          <strong className="block text-sm leading-tight font-bold text-white">
+            Fieldwork
+          </strong>
+          <p className="text-[11px] text-white/75 mt-0.5">
+            PT Guci Emas Pratama
           </p>
           {isSuper && <CompanyPicker />}
         </div>
