@@ -1,29 +1,32 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, Save, Eye, RotateCcw, Upload, Trash2, FileText } from 'lucide-react';
+import { Loader2, Upload, Trash2 } from 'lucide-react';
 import { useAuth } from '@/app/providers/AuthContext';
 import { useAuthStore } from '@/app/store/authStore';
 import { getCompanySettings, saveCompanySettings } from '@/shared/api/settingsService';
 import type { CompanySettings } from '@/shared/api/settingsService';
 import { identityFromSettings } from '@/shared/api/documentConfig';
 import {
-  applyTemplatesToQuotation, buildLetterhead, defaultDocumentTemplates, reportOptionsFromTemplates, sanitizeTemplates,
+  buildLetterhead, defaultDocumentTemplates, reportOptionsFromTemplates, sanitizeTemplates,
 } from '@/shared/lib/documentTemplates';
 import type { DocumentTemplates } from '@/shared/lib/documentTemplates';
 import { GUCI_IDENTITY, guciTemplates, isGuciName } from '@/shared/lib/documentPresets';
-import { generateQuotationPDF } from '@/shared/lib/pdfGenerator';
 import { generateVisitReportPDF } from '@/shared/lib/visitReportPdf';
-import { PREVIEW_LABELS, previewQuotation, previewVisitReport } from '@/shared/lib/sampleDocuments';
-import type { PreviewKind } from '@/shared/lib/sampleDocuments';
+import { previewVisitReport } from '@/shared/lib/sampleDocuments';
 import { fileToImageDataUrl } from '@/shared/utils/imageUpload';
 
-type Section = 'identitas' | 'surat' | 'rayap' | 'pest' | 'laporan';
+type Section = 'identitas' | 'rayap' | 'pest' | 'laporan';
 const SECTIONS: { id: Section; label: string }[] = [
   { id: 'identitas', label: 'Identitas & Kop' },
-  { id: 'surat', label: 'Surat Penawaran' },
   { id: 'rayap', label: 'Anti Rayap' },
-  { id: 'pest', label: 'Pest & Rodent' },
+  { id: 'pest', label: 'Pest Control' },
   { id: 'laporan', label: 'Laporan Kunjungan' },
 ];
+
+type ReportPreviewKind = 'laporan-pest' | 'laporan-rayap';
+const REPORT_PREVIEW_LABELS: Record<ReportPreviewKind, string> = {
+  'laporan-pest': 'Laporan Kunjungan — Pest Control',
+  'laporan-rayap': 'Laporan Kunjungan — Anti Rayap',
+};
 
 const inputCls = 'w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/40';
 const lines = (s: string) => s.split('\n');
@@ -59,8 +62,8 @@ export function TemplateSettingsPanel() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const [section, setSection] = useState<Section>('identitas');
-  const [previewKind, setPreviewKind] = useState<PreviewKind>('anti-rayap');
+  const [section, setSection] = useState<Section>('laporan');
+  const [previewKind, setPreviewKind] = useState<ReportPreviewKind>('laporan-pest');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewBusy, setPreviewBusy] = useState(false);
   const previewRef = useRef<string | null>(null);
@@ -109,24 +112,28 @@ export function TemplateSettingsPanel() {
     try {
       await saveCompanySettings(companyId, { ...settings, documents: sanitizeTemplates(settings.documents) }, user.uid);
       await load();
-      setMsg({ ok: true, text: 'Pengaturan & template tersimpan. Dokumen berikutnya otomatis memakai template ini.' });
+      setMsg({ ok: true, text: 'Pengaturan & template tersimpan. Dokumen laporan kunjungan berikutnya otomatis memakai template ini.' });
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : 'Gagal menyimpan.' });
     } finally { setSaving(false); }
   };
 
-  const handlePreview = async (kind: PreviewKind = previewKind) => {
+  const handlePreview = async (kind: ReportPreviewKind = previewKind) => {
     if (!settings || !identity) return;
     setPreviewBusy(true); setMsg(null);
     try {
       const tpl = sanitizeTemplates(settings.documents);
-      let blob: Blob;
-      if (kind === 'laporan') {
-        const ro = reportOptionsFromTemplates(tpl);
-        blob = generateVisitReportPDF(previewVisitReport(buildLetterhead(tpl, identity), { judul: ro.judul, jenisPekerjaan: ro.jenisPekerjaan, saran: ro.saran, tampilkanFooter: ro.tampilkanFooter }));
-      } else {
-        blob = generateQuotationPDF(applyTemplatesToQuotation(previewQuotation(kind, tpl, identity), tpl, identity));
-      }
+      const ro = reportOptionsFromTemplates(tpl);
+      const kategori = kind === 'laporan-rayap' ? 'Anti Rayap' : 'Pest Control';
+      const blob = generateVisitReportPDF(
+        previewVisitReport(buildLetterhead(tpl, identity), {
+          judul: ro.judul,
+          jenisPekerjaan: ro.jenisPekerjaan,
+          saran: ro.saran,
+          tampilkanFooter: ro.tampilkanFooter,
+          kategori,
+        })
+      );
       if (previewRef.current) URL.revokeObjectURL(previewRef.current);
       const url = URL.createObjectURL(blob);
       previewRef.current = url; setPreviewUrl(url);
@@ -159,33 +166,51 @@ export function TemplateSettingsPanel() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-lg font-bold text-slate-800">Template & Pengaturan Perusahaan</h3>
+          <h3 className="text-lg font-bold text-slate-800">Template &amp; Pengaturan Perusahaan</h3>
           <p className="text-xs text-slate-500 max-w-2xl">
-            Atur kop, footer, isi surat, dan program pekerjaan untuk dokumen perusahaan Anda. Perubahan hanya berlaku untuk
-            perusahaan ini dan dipakai otomatis oleh Penawaran dan Laporan Kunjungan. Hanya admin perusahaan yang dapat menyimpan.
+            Atur kop dokumen, footer, standar layanan Anti Rayap &amp; Pest Control, serta format Laporan Kunjungan perusahaan Anda.
+            Perubahan otomatis diterapkan pada cetakan PDF Laporan Kunjungan.
           </p>
         </div>
         <div className="flex items-center gap-2">
           {(isGuciName(settings.companyName) || (user?.role === 'MASTER_SUPER_ADMIN' || user?.role === 'SUPERADMIN')) && (
-            <button onClick={loadGuciPreset} className="px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 hover:bg-slate-50">Muat contoh Guci</button>
+            <button onClick={loadGuciPreset} className="px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 hover:bg-slate-50 cursor-pointer">
+              Muat Preset Standar
+            </button>
           )}
-          <button onClick={handleSave} disabled={saving || !dirty}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50">
-            {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Simpan
+          <button
+            onClick={handleSave}
+            disabled={saving || !dirty}
+            className="px-4 py-2 text-xs font-bold rounded-lg bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-50 cursor-pointer transition-colors"
+          >
+            {saving ? 'Menyimpan...' : 'Simpan Pengaturan'}
           </button>
         </div>
       </div>
 
       {msg && <div className={`p-3 rounded-lg text-sm border ${msg.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-700'}`}>{msg.text}</div>}
-      {!settings.hasSaved && <div className="p-3 rounded-lg text-xs border border-blue-200 bg-blue-50 text-blue-800">Perusahaan ini belum pernah menyimpan pengaturan. Nilai di bawah adalah bawaan netral — lengkapi lalu klik Simpan.</div>}
+      {!settings.hasSaved && <div className="p-3 rounded-lg text-xs border border-blue-200 bg-blue-50 text-blue-800">Perusahaan ini belum pernah menyimpan pengaturan. Nilai di bawah adalah bawaan netral — lengkapi lalu klik Simpan Pengaturan.</div>}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         {/* ── Editor ── */}
         <div className="rounded-xl border border-slate-200 bg-white">
-          <div className="flex flex-wrap gap-1 p-2 border-b border-slate-200 bg-slate-50 rounded-t-xl">
+          <div className="flex flex-wrap gap-1.5 p-2 border-b border-slate-200 bg-slate-50 rounded-t-xl">
             {SECTIONS.map(s => (
-              <button key={s.id} onClick={() => setSection(s.id)}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors ${section === s.id ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-200'}`}>{s.label}</button>
+              <button
+                key={s.id}
+                onClick={() => {
+                  setSection(s.id);
+                  if (s.id === 'rayap') setPreviewKind('laporan-rayap');
+                  if (s.id === 'pest') setPreviewKind('laporan-pest');
+                }}
+                className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
+                  section === s.id
+                    ? 'bg-[var(--accent)] text-white shadow-2xs'
+                    : 'text-slate-600 hover:bg-slate-200/70'
+                }`}
+              >
+                {s.label}
+              </button>
             ))}
           </div>
 
@@ -193,18 +218,18 @@ export function TemplateSettingsPanel() {
             {section === 'identitas' && (<>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field label="Nama perusahaan *"><input className={inputCls} value={settings.companyName} onChange={e => setIdentity('companyName', e.target.value)} /></Field>
-                <Field label="Kota penerbit surat" hint='Tampil: "Kota, 12 Januari 2026"'><input className={inputCls} value={settings.kota ?? ''} onChange={e => setIdentity('kota', e.target.value)} /></Field>
+                <Field label="Kota penerbit laporan" hint='Tampil: "Jakarta, 18 November 2026"'><input className={inputCls} value={settings.kota ?? ''} onChange={e => setIdentity('kota', e.target.value)} /></Field>
                 <Field label="Kantor pusat"><input className={inputCls} value={settings.headOffice} onChange={e => setIdentity('headOffice', e.target.value)} /></Field>
                 <Field label="Kantor cabang (opsional)"><input className={inputCls} value={settings.branchOffice ?? ''} onChange={e => setIdentity('branchOffice', e.target.value)} /></Field>
                 <Field label="Telepon"><input className={inputCls} value={settings.telp} onChange={e => setIdentity('telp', e.target.value)} /></Field>
                 <Field label="WhatsApp"><input className={inputCls} value={settings.wa} onChange={e => setIdentity('wa', e.target.value)} /></Field>
                 <Field label="Email"><input className={inputCls} value={settings.email} onChange={e => setIdentity('email', e.target.value)} /></Field>
                 <Field label="Website"><input className={inputCls} value={settings.website} onChange={e => setIdentity('website', e.target.value)} /></Field>
-                <Field label="Prefix nomor surat" hint="Kosong = inisial nama perusahaan. Contoh: GP → GP-PCO/PH/2026/10/0001"><input className={inputCls} value={settings.nomorPrefix} onChange={e => setIdentity('nomorPrefix', e.target.value.toUpperCase())} /></Field>
-                <Field label="Nama penandatangan"><input className={inputCls} value={settings.ttdNama ?? ''} onChange={e => setIdentity('ttdNama', e.target.value)} /></Field>
+                <Field label="Prefix kode dokumen" hint="Kosong = inisial perusahaan. Contoh: GP → GP-LKP/2026/11/0001"><input className={inputCls} value={settings.nomorPrefix} onChange={e => setIdentity('nomorPrefix', e.target.value.toUpperCase())} /></Field>
+                <Field label="Nama penandatangan / supervisor"><input className={inputCls} value={settings.ttdNama ?? ''} onChange={e => setIdentity('ttdNama', e.target.value)} /></Field>
               </div>
 
-              <h4 className="text-sm font-bold text-slate-800 pt-2 border-t border-slate-200">Kop surat</h4>
+              <h4 className="text-sm font-bold text-slate-800 pt-2 border-t border-slate-200">Kop Dokumen</h4>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 text-sm"><input type="radio" checked={lh.mode === 'text'} onChange={() => patchDocs(d => { d.letterhead.mode = 'text'; })} /> Teks (nama + tagline)</label>
                 <label className="flex items-center gap-2 text-sm"><input type="radio" checked={lh.mode === 'image'} onChange={() => patchDocs(d => { d.letterhead.mode = 'image'; })} /> Gambar kop</label>
@@ -230,7 +255,23 @@ export function TemplateSettingsPanel() {
                 </div>
               )}
 
-              <h4 className="text-sm font-bold text-slate-800 pt-2 border-t border-slate-200">Footer</h4>
+              <h4 className="text-sm font-bold text-slate-800 pt-2 border-t border-slate-200">Tanda Tangan &amp; Stempel Bawaan</h4>
+              <div className="space-y-2">
+                <p className="text-[11px] text-slate-500">Dipakai otomatis pada cetakan dokumen laporan jika diperlukan. Gunakan format PNG transparan.</p>
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 hover:bg-slate-50 cursor-pointer">
+                    <Upload size={14} /> Unggah TTD / Stempel
+                    <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+                      onChange={e => { void upload(e.target.files?.[0], { maxWidth: 700, maxHeight: 280 }, url => patchDocs(d => { d.surat.signatureImage = url; })); e.target.value = ''; }} />
+                  </label>
+                  {docs.surat.signatureImage && (<>
+                    <img src={docs.surat.signatureImage} alt="Tanda tangan" className="h-14 border border-slate-200 rounded bg-white p-1" />
+                    <button onClick={() => patchDocs(d => { d.surat.signatureImage = ''; })} className="text-xs text-red-600 flex items-center gap-1"><Trash2 size={12} /> Hapus</button>
+                  </>)}
+                </div>
+              </div>
+
+              <h4 className="text-sm font-bold text-slate-800 pt-2 border-t border-slate-200">Footer Dokumen</h4>
               <Field label="Baris footer kustom" hint="Satu baris per teks (maks. 6). Kosongkan untuk disusun otomatis dari alamat, telepon, email, dan cabang di atas.">
                 <textarea rows={4} className={inputCls} value={lh.footerLines.join('\n')} onChange={e => patchDocs(d => { d.letterhead.footerLines = lines(e.target.value).slice(0, 6); })} />
               </Field>
@@ -255,59 +296,43 @@ export function TemplateSettingsPanel() {
               </div>
             </>)}
 
-            {section === 'surat' && (<>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Masa berlaku penawaran (hari)"><input type="number" min={1} max={365} className={inputCls} value={docs.surat.masaBerlakuHari} onChange={e => patchDocs(d => { d.surat.masaBerlakuHari = Number(e.target.value); })} /></Field>
-                <span />
-                <Field label="Salam penutup — Anti Rayap"><input className={inputCls} value={docs.surat.salamAntiRayap} onChange={e => patchDocs(d => { d.surat.salamAntiRayap = e.target.value; })} /></Field>
-                <Field label="Salam penutup — Pest/Rodent"><input className={inputCls} value={docs.surat.salamPest} onChange={e => patchDocs(d => { d.surat.salamPest = e.target.value; })} /></Field>
-                <Field label="Kontak kantor di bagian Penutup" hint="Kosong = telepon perusahaan"><input className={inputCls} value={docs.surat.kontakKantor} onChange={e => patchDocs(d => { d.surat.kontakKantor = e.target.value; })} /></Field>
-                <Field label="WhatsApp di bagian Penutup" hint="Kosong = WhatsApp perusahaan"><input className={inputCls} value={docs.surat.kontakWa} onChange={e => patchDocs(d => { d.surat.kontakWa = e.target.value; })} /></Field>
-              </div>
-              <div className="space-y-2 pt-2 border-t border-slate-200">
-                <span className="text-xs font-bold text-slate-700">Tanda tangan & stempel bawaan (opsional)</span>
-                <p className="text-[11px] text-slate-500">Dipakai di surat yang belum ditandatangani lewat fitur tanda tangan. Gunakan PNG transparan. Simpan hanya bila Anda berwenang atas tanda tangan tersebut.</p>
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg border border-slate-300 hover:bg-slate-50 cursor-pointer">
-                    <Upload size={14} /> Unggah
-                    <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
-                      onChange={e => { void upload(e.target.files?.[0], { maxWidth: 700, maxHeight: 280 }, url => patchDocs(d => { d.surat.signatureImage = url; })); e.target.value = ''; }} />
-                  </label>
-                  {docs.surat.signatureImage && (<>
-                    <img src={docs.surat.signatureImage} alt="Tanda tangan" className="h-14 border border-slate-200 rounded bg-white p-1" />
-                    <button onClick={() => patchDocs(d => { d.surat.signatureImage = ''; })} className="text-xs text-red-600 flex items-center gap-1"><Trash2 size={12} /> Hapus</button>
-                  </>)}
-                </div>
-              </div>
-            </>)}
-
             {section === 'rayap' && (<>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Garansi bebas rayap (tahun)"><input type="number" min={0} max={30} className={inputCls} value={docs.antiRayap.garansiTahun} onChange={e => patchDocs(d => { d.antiRayap.garansiTahun = Number(e.target.value); })} /></Field>
-                <div className="flex items-end pb-2"><Toggle checked={docs.antiRayap.tampilkanPengontrolan} onChange={v => patchDocs(d => { d.antiRayap.tampilkanPengontrolan = v; })} label="Tampilkan bagian Pengontrolan" /></div>
+                <Field label="Masa garansi standar Anti Rayap (tahun)">
+                  <input type="number" min={0} max={30} className={inputCls} value={docs.antiRayap.garansiTahun} onChange={e => patchDocs(d => { d.antiRayap.garansiTahun = Number(e.target.value); })} />
+                </Field>
+                <div className="flex items-end pb-2">
+                  <Toggle checked={docs.antiRayap.tampilkanPengontrolan} onChange={v => patchDocs(d => { d.antiRayap.tampilkanPengontrolan = v; })} label="Tampilkan rincian jadwal pengontrolan berkala" />
+                </div>
               </div>
-              <Field label="Skema pembayaran" hint="Satu butir per baris."><textarea rows={3} className={inputCls} value={docs.antiRayap.skemaPembayaran.join('\n')} onChange={e => patchDocs(d => { d.antiRayap.skemaPembayaran = lines(e.target.value); })} /></Field>
-              <Field label="Daftar pengontrolan" hint="Satu butir per baris. Tag <b>…</b> untuk tebal."><textarea rows={5} className={inputCls} value={docs.antiRayap.pengontrolan.join('\n')} onChange={e => patchDocs(d => { d.antiRayap.pengontrolan = lines(e.target.value); })} /></Field>
-              <Field label="Catatan di bawah Garansi" hint='Contoh: "Garansi tidak termasuk penggantian barang/material yang dirusak oleh serangan rayap." Kosong = tidak ditampilkan.'><textarea rows={2} className={inputCls} value={docs.antiRayap.garansiCatatan} onChange={e => patchDocs(d => { d.antiRayap.garansiCatatan = e.target.value; })} /></Field>
-              <Field label="Catatan pajak di bawah tabel biaya" hint="Kosong = kalimat bawaan (biaya belum termasuk PPN)."><input className={inputCls} value={docs.antiRayap.catatanPajak} onChange={e => patchDocs(d => { d.antiRayap.catatanPajak = e.target.value; })} /></Field>
+              <Field label="Daftar jadwal & tahapan pengontrolan berkala" hint="Satu butir per baris. Tag <b>…</b> untuk teks tebal.">
+                <textarea rows={5} className={inputCls} value={docs.antiRayap.pengontrolan.join('\n')} onChange={e => patchDocs(d => { d.antiRayap.pengontrolan = lines(e.target.value); })} />
+              </Field>
+              <Field label="Catatan teknis garansi & layanan Anti Rayap" hint='Contoh: "Garansi mencakup pengontrolan berkala dan injeksi ulang apabila ditemukan indikasi koloni rayap baru."'>
+                <textarea rows={3} className={inputCls} value={docs.antiRayap.garansiCatatan} onChange={e => patchDocs(d => { d.antiRayap.garansiCatatan = e.target.value; })} />
+              </Field>
             </>)}
 
             {section === 'pest' && (<>
               <p className="text-[11px] text-slate-500 leading-relaxed">{PEST_HELP}</p>
               {([
-                ['programPest', 'Program Pest Control'],
-                ['programRodentKontrak', 'Program Rodent Control (paket kontrak)'],
-                ['programRodentStandalone', 'Program Rodent Control (berdiri sendiri)'],
+                ['programPest', 'Standar Program Pekerjaan Pest Control'],
+                ['programRodentKontrak', 'Standar Program Pekerjaan Rodent Control (Terpadu)'],
+                ['programRodentStandalone', 'Standar Program Pekerjaan Rodent Control (Khusus)'],
               ] as const).map(([key, label]) => (
                 <div key={key}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-bold text-slate-700">{label}</span>
-                    <button onClick={() => patchDocs(d => { d.pest[key] = defaultDocumentTemplates().pest[key]; })} className="text-[11px] text-slate-500 hover:text-slate-800 flex items-center gap-1"><RotateCcw size={11} /> Bawaan</button>
+                    <button
+                      onClick={() => patchDocs(d => { d.pest[key] = defaultDocumentTemplates().pest[key]; })}
+                      className="text-[11px] text-slate-500 hover:text-slate-800 cursor-pointer"
+                    >
+                      Reset ke Bawaan
+                    </button>
                   </div>
-                  <textarea rows={10} spellCheck={false} className={`${inputCls} font-mono text-xs`} value={docs.pest[key]} onChange={e => patchDocs(d => { d.pest[key] = e.target.value; })} />
+                  <textarea rows={8} spellCheck={false} className={`${inputCls} font-mono text-xs`} value={docs.pest[key]} onChange={e => patchDocs(d => { d.pest[key] = e.target.value; })} />
                 </div>
               ))}
-              <Field label="Sistem pembayaran (Rodent berdiri sendiri)" hint="Kosong = kalimat bawaan."><textarea rows={2} className={inputCls} value={docs.pest.sistemPembayaran} onChange={e => patchDocs(d => { d.pest.sistemPembayaran = e.target.value; })} /></Field>
             </>)}
 
             {section === 'laporan' && (<>
@@ -315,33 +340,47 @@ export function TemplateSettingsPanel() {
                 <Field label="Judul dokumen"><input className={inputCls} value={docs.laporan.judul} onChange={e => patchDocs(d => { d.laporan.judul = e.target.value; })} /></Field>
                 <Field label="Jenis pekerjaan bawaan"><input className={inputCls} value={docs.laporan.jenisPekerjaan} onChange={e => patchDocs(d => { d.laporan.jenisPekerjaan = e.target.value; })} /></Field>
               </div>
-              <Field label="Saran & rekomendasi bawaan" hint="Teks awal pada kolom Saran dan Rekomendasi."><textarea rows={4} className={inputCls} value={docs.laporan.saranDefault} onChange={e => patchDocs(d => { d.laporan.saranDefault = e.target.value; })} /></Field>
-              <Toggle checked={docs.laporan.tampilkanFooter} onChange={v => patchDocs(d => { d.laporan.tampilkanFooter = v; })} label='Tampilkan baris "created by … datetime …" di setiap halaman' />
+              <Field label="Saran & rekomendasi bawaan" hint="Teks awal pada kolom Saran dan Rekomendasi di Laporan Kunjungan.">
+                <textarea rows={4} className={inputCls} value={docs.laporan.saranDefault} onChange={e => patchDocs(d => { d.laporan.saranDefault = e.target.value; })} />
+              </Field>
+              <Toggle checked={docs.laporan.tampilkanFooter} onChange={v => patchDocs(d => { d.laporan.tampilkanFooter = v; })} label='Tampilkan baris "created by … datetime …" di setiap halaman laporan' />
             </>)}
 
             <div className="pt-3 border-t border-slate-200">
-              <button onClick={() => { if (confirm('Kembalikan SEMUA template dokumen ke bawaan? (Identitas perusahaan tidak berubah.)')) patchDocs(d => Object.assign(d, defaultDocumentTemplates())); }}
-                className="text-xs text-slate-500 hover:text-red-600 flex items-center gap-1"><RotateCcw size={12} /> Kembalikan semua template ke bawaan</button>
+              <button
+                onClick={() => { if (confirm('Kembalikan SEMUA template dokumen ke bawaan? (Identitas perusahaan tidak berubah.)')) patchDocs(d => Object.assign(d, defaultDocumentTemplates())); }}
+                className="text-xs font-medium text-slate-500 hover:text-red-600 cursor-pointer"
+              >
+                Kembalikan semua template ke bawaan
+              </button>
             </div>
           </div>
         </div>
 
-        {/* ── Pratinjau ── */}
+        {/* ── Pratinjau Laporan Kunjungan ── */}
         <div className="rounded-xl border border-slate-200 bg-white flex flex-col">
           <div className="flex flex-wrap items-center gap-2 p-3 border-b border-slate-200 bg-slate-50 rounded-t-xl">
-            <FileText size={14} className="text-slate-500" />
-            <select value={previewKind} onChange={e => setPreviewKind(e.target.value as PreviewKind)} className="px-2 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 bg-white">
-              {(Object.keys(PREVIEW_LABELS) as PreviewKind[]).map(k => <option key={k} value={k}>{PREVIEW_LABELS[k]}</option>)}
+            <select
+              value={previewKind}
+              onChange={e => setPreviewKind(e.target.value as ReportPreviewKind)}
+              className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 bg-white text-slate-800 focus:outline-none"
+            >
+              {(Object.keys(REPORT_PREVIEW_LABELS) as ReportPreviewKind[]).map(k => (
+                <option key={k} value={k}>{REPORT_PREVIEW_LABELS[k]}</option>
+              ))}
             </select>
-            <button onClick={() => void handlePreview()} disabled={previewBusy}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-800 text-white hover:bg-slate-700 disabled:opacity-50">
-              {previewBusy ? <Loader2 size={12} className="animate-spin" /> : <Eye size={12} />} Pratinjau PDF
+            <button
+              onClick={() => void handlePreview()}
+              disabled={previewBusy}
+              className="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)] disabled:opacity-50 cursor-pointer transition-colors"
+            >
+              {previewBusy ? 'Memuat PDF...' : 'Pratinjau PDF'}
             </button>
             <span className="text-[11px] text-slate-500">Memakai isian saat ini (belum perlu disimpan).</span>
           </div>
           {previewUrl
             ? <iframe title="Pratinjau dokumen" src={previewUrl} className="w-full flex-1 min-h-[70vh] rounded-b-xl" />
-            : <div className="flex-1 min-h-[40vh] flex items-center justify-center text-sm text-slate-400 p-6 text-center">Klik "Pratinjau PDF" untuk melihat hasil dokumen dengan kop dan template Anda.</div>}
+            : <div className="flex-1 min-h-[40vh] flex items-center justify-center text-sm text-slate-400 p-6 text-center">Klik "Pratinjau PDF" untuk melihat hasil dokumen Laporan Kunjungan dengan kop dan template Anda.</div>}
         </div>
       </div>
     </div>

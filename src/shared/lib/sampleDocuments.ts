@@ -71,16 +71,37 @@ export function previewQuotation(kind: Exclude<PreviewKind, 'laporan'>, tpl: Doc
     };
 }
 
-export function previewVisitReport(letterhead: VisitReportData['letterhead'], o: { judul: string; jenisPekerjaan: string; saran?: string; tampilkanFooter: boolean }): VisitReportData {
+export function previewVisitReport(
+    letterhead: VisitReportData['letterhead'],
+    o: { judul: string; jenisPekerjaan: string; saran?: string; tampilkanFooter: boolean; kategori?: 'Pest Control' | 'Anti Rayap' }
+): VisitReportData {
+    const isAntiRayap = o.kategori === 'Anti Rayap';
     return {
-        letterhead, judul: o.judul, tampilkanFooter: o.tampilkanFooter,
-        idCustomer: 'CUST-001', customerName: KLIEN, kategori: 'Pest Control', alamat: 'Jl. Contoh Raya No. 10, Jakarta Selatan 12345',
-        tanggal: new Date(), petugas: 'Nama Teknisi', jenisPekerjaan: o.jenisPekerjaan,
-        findings: [
-            { hama: 'Kecoa', quantity: '-', penanganan: 'Spraying (Cypermethrin)', lokasi: 'Dapur, Pantry', notes: 'Treatment residual pada titik harborage.' },
-            { hama: 'Tikus', quantity: '-', penanganan: 'Baiting', lokasi: 'Gudang', notes: 'Umpan dipasang dan dikontrol berkala.' },
-        ],
-        catatan: 'Contoh catatan kunjungan.', saran: o.saran, customerNama: 'Perwakilan Klien',
-        photos: [{}, {}], createdBy: 'Nama Teknisi',
+        letterhead,
+        judul: o.judul,
+        tampilkanFooter: o.tampilkanFooter,
+        idCustomer: 'CUST-001',
+        customerName: KLIEN,
+        kategori: isAntiRayap ? 'Anti Rayap' : 'Pest Control',
+        alamat: 'Jl. Contoh Raya No. 10, Jakarta Selatan 12345',
+        tanggal: new Date(),
+        petugas: 'Nama Teknisi',
+        jenisPekerjaan: o.jenisPekerjaan,
+        findings: isAntiRayap
+            ? [
+                { hama: 'Rayap Tanah (Coptotermes)', quantity: '-', penanganan: 'Injeksi & Soil Treatment', lokasi: 'Perimeter Pondasi & Jalur Pipa', notes: 'Injeksi larutan termitisida pada titik bor lantai dan dinding.' },
+                { hama: 'Inspeksi Umpan Rayap', quantity: '-', penanganan: 'Monitoring & Pengontrolan', lokasi: 'Area Taman & Gudang', notes: 'Kondisi stasiun umpan aman dan bebas aktivitas koloni baru.' },
+            ]
+            : [
+                { hama: 'Kecoa & Semut', quantity: '-', penanganan: 'Spraying (Cypermethrin)', lokasi: 'Dapur, Pantry & Koridor', notes: 'Treatment residual pada titik persembunyian hama.' },
+                { hama: 'Tikus (Rodent)', quantity: '-', penanganan: 'Baiting & Trapping', lokasi: 'Gudang & Area Luar', notes: 'Umpan dipasang dan dikontrol secara berkala.' },
+            ],
+        catatan: isAntiRayap
+            ? 'Pelaksanaan treatment & pengontrolan Anti Rayap berjalan lancar sesuai standar teknis.'
+            : 'Pelaksanaan treatment Pest Control rutin berjalan lancar sesuai jadwal.',
+        saran: o.saran,
+        customerNama: 'Perwakilan Pelanggan',
+        photos: [{}, {}],
+        createdBy: 'Nama Teknisi',
     };
 }
