@@ -588,11 +588,18 @@ function CustomerCard({ customer, indexNumber, expanded, onToggle, onAddChecklis
     const initials = getSmartCustomerInitials(customer.name);
     const codeLabel = `CUST-${String(indexNumber).padStart(3, "0")}`;
 
+    const hasTermite = customer.jasaDigunakan.some(j => j.toLowerCase().includes("rayap")) || customer.services.some(s => s.kategori === "AR");
+    const hasPest = customer.jasaDigunakan.some(j => j.toLowerCase().includes("pest") || j.toLowerCase().includes("hama")) || customer.services.some(s => s.kategori === "PCO");
+
+    const avatarToneCls = hasTermite
+        ? "bg-amber-50/90 border-amber-200/80 text-amber-800"
+        : "bg-sky-50/90 border-sky-200/80 text-sky-800";
+
     const cardBorderCls = isOverdue
         ? "border-red-200/90 bg-white hover:border-red-300"
         : isExpiring
         ? "border-amber-200/90 bg-white hover:border-amber-300"
-        : "border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--accent)]/40";
+        : "border-slate-200/85 bg-white hover:border-slate-300";
 
     const warrantyStatusDot = !latestW
         ? "bg-slate-400"
@@ -611,7 +618,7 @@ function CustomerCard({ customer, indexNumber, expanded, onToggle, onAddChecklis
         : "Garansi Aktif";
 
     const warrantySubtext = !latestW
-        ? "Tanpa masa garansi"
+        ? "Kunjungan reguler"
         : !latestW.isActive
         ? "Perlu jadwal ulang"
         : latestW.daysRemaining >= 365
@@ -625,37 +632,37 @@ function CustomerCard({ customer, indexNumber, expanded, onToggle, onAddChecklis
                 role="button"
                 tabIndex={0}
                 onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
-                className="w-full p-4 sm:px-5 sm:py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-left hover:bg-[var(--bg-tertiary)]/35 transition-colors cursor-pointer"
+                className="w-full p-4 sm:px-5 sm:py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-left hover:bg-slate-50/70 transition-colors cursor-pointer"
             >
                 {/* ZONA 1: Identitas & Alamat Pelanggan */}
                 <div className="flex items-start gap-3.5 min-w-0 lg:w-[40%] xl:w-[42%]">
-                    <div className="w-11 h-11 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] flex flex-col items-center justify-center shrink-0">
-                        <span className="text-xs font-extrabold tracking-tight text-[var(--accent)] leading-none">
+                    <div className={`w-11 h-11 rounded-xl border flex flex-col items-center justify-center shrink-0 ${avatarToneCls}`}>
+                        <span className="text-xs font-extrabold tracking-tight leading-none">
                             {initials}
                         </span>
-                        <span className="text-[9px] font-mono text-[var(--text-muted)] mt-0.5 leading-none">
+                        <span className="text-[9px] font-mono opacity-75 mt-0.5 leading-none">
                             #{String(indexNumber).padStart(2, "0")}
                         </span>
                     </div>
 
                     <div className="min-w-0 flex-1 space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm font-bold text-[var(--text-primary)] leading-snug truncate">
+                            <p className="text-sm font-bold text-slate-900 leading-snug truncate">
                                 {customer.name}
                             </p>
                             {customer.wilayah && customer.wilayah !== "Tidak Diketahui" && (
-                                <span className="px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border border-[var(--border-subtle)] shrink-0">
+                                <span className="px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-slate-100 text-slate-600 border border-slate-200/80 shrink-0">
                                     {customer.wilayah}
                                 </span>
                             )}
                         </div>
 
-                        <p className="text-xs text-[var(--text-secondary)] line-clamp-1">
+                        <p className="text-xs text-slate-500 line-clamp-1">
                             {customer.address || "Alamat lokasi belum dilengkapi"}
                         </p>
 
                         <div className="flex items-center gap-3 flex-wrap pt-0.5">
-                            <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                            <span className="text-[11px] font-mono text-slate-400">
                                 {codeLabel}
                             </span>
                             {customer.wa ? (
@@ -669,12 +676,12 @@ function CustomerCard({ customer, indexNumber, expanded, onToggle, onAddChecklis
                                     WA: {customer.wa}
                                 </a>
                             ) : (
-                                <span className="text-[11px] text-[var(--text-muted)]">
+                                <span className="text-[11px] text-slate-400">
                                     Kontak belum diisi
                                 </span>
                             )}
                             {customer.up && (
-                                <span className="text-[11px] text-[var(--text-secondary)]">
+                                <span className="text-[11px] text-slate-500">
                                     · PIC: {customer.up}
                                 </span>
                             )}
@@ -682,33 +689,42 @@ function CustomerCard({ customer, indexNumber, expanded, onToggle, onAddChecklis
                     </div>
                 </div>
 
-                {/* ZONA 2: Ringkasan Operasional & Pelaporan (3 Kolom Rapi) */}
-                <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:flex-1 bg-[var(--bg-tertiary)]/55 border border-[var(--border-subtle)]/80 rounded-xl px-3.5 py-2.5">
+                {/* ZONA 2: Ringkasan Operasional & Pelaporan (3 Kolom Rapi dengan Tone Lembut) */}
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:flex-1 bg-slate-50/90 border border-slate-200/75 rounded-xl px-3.5 py-2.5">
                     {/* Kolom Layanan & Kunjungan */}
                     <div className="min-w-0">
-                        <span className="block text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                        <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             Layanan
                         </span>
-                        <p className="text-xs font-bold text-[var(--text-primary)] truncate mt-0.5">
-                            {customer.jasaDigunakan.join(", ") || "Pest Control"}
-                        </p>
-                        <p className="text-[11px] font-mono font-semibold text-[var(--accent)] mt-0.5">
-                            {customer.services.length}x kunjungan
+                        <div className="flex flex-wrap items-center gap-1 mt-1">
+                            {hasTermite && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80">
+                                    Anti Rayap
+                                </span>
+                            )}
+                            {(hasPest || !hasTermite) && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-sky-50 text-sky-800 border border-sky-200/80">
+                                    Pest Control
+                                </span>
+                            )}
+                        </div>
+                        <p className="text-[11px] font-mono font-semibold text-slate-600 mt-1">
+                            {customer.services.length}x laporan kunjungan
                         </p>
                     </div>
 
                     {/* Kolom Status Pin Peta GPS */}
-                    <div className="min-w-0 border-l border-[var(--border-subtle)] pl-2.5 sm:pl-3">
-                        <span className="block text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                    <div className="min-w-0 border-l border-slate-200/80 pl-2.5 sm:pl-3">
+                        <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             Titik Lokasi
                         </span>
-                        <div className="flex items-center gap-1.5 mt-0.5">
+                        <div className="flex items-center gap-1.5 mt-1">
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${customer.latitude && customer.longitude ? "bg-emerald-500" : "bg-amber-500"}`} />
-                            <p className="text-xs font-bold text-[var(--text-primary)] truncate">
+                            <p className="text-xs font-bold text-slate-800 truncate">
                                 {customer.latitude && customer.longitude ? "Pin GPS Aktif" : "Belum Ada Pin"}
                             </p>
                         </div>
-                        <p className="text-[10.5px] font-mono text-[var(--text-secondary)] truncate mt-0.5">
+                        <p className="text-[10.5px] font-mono text-slate-500 truncate mt-0.5">
                             {customer.latitude && customer.longitude
                                 ? `${customer.latitude.toFixed(4)}, ${customer.longitude.toFixed(4)}`
                                 : "Perlu ditandai"}
@@ -716,28 +732,28 @@ function CustomerCard({ customer, indexNumber, expanded, onToggle, onAddChecklis
                     </div>
 
                     {/* Kolom Status Garansi & Kontrol */}
-                    <div className="min-w-0 border-l border-[var(--border-subtle)] pl-2.5 sm:pl-3">
-                        <span className="block text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                    <div className="min-w-0 border-l border-slate-200/80 pl-2.5 sm:pl-3">
+                        <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             Masa Garansi
                         </span>
-                        <div className="flex items-center gap-1.5 mt-0.5">
+                        <div className="flex items-center gap-1.5 mt-1">
                             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${warrantyStatusDot}`} />
-                            <p className="text-xs font-bold text-[var(--text-primary)] truncate">
+                            <p className="text-xs font-bold text-slate-800 truncate">
                                 {warrantyHeadline}
                             </p>
                         </div>
-                        <p className="text-[10.5px] text-[var(--text-secondary)] truncate mt-0.5">
+                        <p className="text-[10.5px] text-slate-500 truncate mt-0.5">
                             {lastCl ? `Kontrol: ${formatDate(lastCl.tanggal)}` : warrantySubtext}
                         </p>
                     </div>
                 </div>
 
                 {/* ZONA 3: Tombol Aksi Cepat */}
-                <div className="shrink-0 flex items-center justify-end gap-2 pt-1 lg:pt-0 border-t lg:border-t-0 border-[var(--border-subtle)]/60">
+                <div className="shrink-0 flex items-center justify-end gap-2 pt-1 lg:pt-0 border-t lg:border-t-0 border-slate-200/60">
                     <button
                         type="button"
                         onClick={e => { e.stopPropagation(); onEditProfile(); }}
-                        className="h-8 px-3 rounded-lg bg-white hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] border border-[var(--border-subtle)] text-xs font-semibold cursor-pointer transition-colors"
+                        className="h-8 px-3 rounded-lg bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-semibold cursor-pointer transition-colors"
                         title="Edit profil pelanggan & titik koordinat GPS"
                     >
                         Atur Lokasi
@@ -750,7 +766,7 @@ function CustomerCard({ customer, indexNumber, expanded, onToggle, onAddChecklis
                     >
                         Catat Kontrol
                     </button>
-                    <span className="w-8 h-8 rounded-lg border border-[var(--border-subtle)] bg-white flex items-center justify-center text-[var(--text-secondary)]">
+                    <span className="w-8 h-8 rounded-lg border border-slate-200 bg-white flex items-center justify-center text-slate-500">
                         {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                     </span>
                 </div>
@@ -1277,8 +1293,12 @@ export type CustomerHubTab = "master" | "garansi" | "analisis" | "pengaturan";
 
 export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: CustomerHubTab } = {}) {
     const { user } = useAuthStore();
-    const [hubTab, setHubTab] = useState<CustomerHubTab>(initialSubTab);
+    const [hubTab, setHubTab] = useState<CustomerHubTab>(
+        initialSubTab === "analisis" ? "master" : initialSubTab === "pengaturan" ? "garansi" : initialSubTab
+    );
     const [onlyMissingPin, setOnlyMissingPin] = useState(false);
+    const [serviceFilter, setServiceFilter] = useState<"ALL" | "AR" | "PCO">("ALL");
+    const [showReminderSettings, setShowReminderSettings] = useState(false);
     const [customerViewMode, setCustomerViewMode] = useState<'card' | 'table'>('card');
     const [copiedCodeId, setCopiedCodeId] = useState<string | null>(null);
     const [contractReminderEnabled, setContractReminderEnabled] = useState(true);
@@ -1287,7 +1307,14 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
     const [reminderSaved, setReminderSaved] = useState(false);
 
     useEffect(() => {
-        setHubTab(initialSubTab);
+        if (initialSubTab === "analisis") {
+            setHubTab("master");
+        } else if (initialSubTab === "pengaturan") {
+            setHubTab("garansi");
+            setShowReminderSettings(true);
+        } else {
+            setHubTab(initialSubTab);
+        }
     }, [initialSubTab]);
     const [quotations, setQuotations] = useState<Quotation[]>([]);
     const [fieldProjects, setFieldProjects] = useState<any[]>([]);
@@ -1635,6 +1662,17 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
 
     const customers = useMemo(() => {
         let result = Array.from(customerMap.values());
+        if (serviceFilter === "AR") {
+            result = result.filter(c =>
+                c.services.some(s => s.kategori === "AR") ||
+                c.jasaDigunakan.some(j => j.toLowerCase().includes("rayap"))
+            );
+        } else if (serviceFilter === "PCO") {
+            result = result.filter(c =>
+                c.services.some(s => s.kategori === "PCO") ||
+                c.jasaDigunakan.some(j => !j.toLowerCase().includes("rayap"))
+            );
+        }
         if (filterWarranty) result = result.filter(c => c.activeWarranty?.isActive);
         if (onlyMissingPin) result = result.filter(c => !c.latitude || !c.longitude);
         const s = debouncedSearch.trim().toLowerCase();
@@ -1651,7 +1689,7 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
             : (b.services[0]?.tanggal?.getTime() ?? 0) - (a.services[0]?.tanggal?.getTime() ?? 0)
         );
         return result;
-    }, [customerMap, filterWarranty, onlyMissingPin, debouncedSearch, sortBy]);
+    }, [customerMap, serviceFilter, filterWarranty, onlyMissingPin, debouncedSearch, sortBy]);
     const pagedCustomers = useMemo(
         () => customers.slice((page - 1) * pageSize, page * pageSize),
         [customers, page, pageSize],
@@ -1661,13 +1699,21 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
         if (page > customerTotalPages) setPage(customerTotalPages);
     }, [page, customerTotalPages]);
 
-    const { totalCustomers, withDeal, activeWarranties, expiringWarranties } = useMemo(() => {
+    const { totalCustomers, activeWarranties, expiringWarranties, arCustomerCount, pcoCustomerCount, pinnedCustomerCount } = useMemo(() => {
         const allCustomers = Array.from(customerMap.values());
         return {
             totalCustomers: customerMap.size,
-            withDeal: allCustomers.filter(c => c.totalDeal > 0).length,
             activeWarranties: allCustomers.filter(c => c.activeWarranty?.isActive).length,
             expiringWarranties: allCustomers.filter(c => c.activeWarranty?.isActive && c.activeWarranty.daysRemaining <= 90).length,
+            arCustomerCount: allCustomers.filter(c =>
+                c.services.some(s => s.kategori === "AR") ||
+                c.jasaDigunakan.some(j => j.toLowerCase().includes("rayap"))
+            ).length,
+            pcoCustomerCount: allCustomers.filter(c =>
+                c.services.some(s => s.kategori === "PCO") ||
+                c.jasaDigunakan.some(j => !j.toLowerCase().includes("rayap"))
+            ).length,
+            pinnedCustomerCount: allCustomers.filter(c => Boolean(c.latitude && c.longitude)).length,
         };
     }, [customerMap]);
 
@@ -1730,233 +1776,173 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                 </div>
             </div>
 
-            {/* ── Sub-Tab Navigasi Pelanggan (Clean & Fokus Pelaporan Kerja) ── */}
-            <div className="flex flex-wrap items-center gap-1.5 bg-[var(--bg-card)] p-1.5 rounded-xl border border-[var(--border-subtle)]">
-                {([
-                    { id: "master", label: `Daftar Pelanggan (${totalCustomers})` },
-                    { id: "garansi", label: `Jadwal Kontrol & Garansi (${activeWarranties})` },
-                    { id: "analisis", label: `Lokasi Belum Lengkap (${missingPinCustomers.length})` },
-                    { id: "pengaturan", label: "Pengingat Jadwal Kontrol" },
-                ] as const).map(t => (
+            {/* ── Sub-Tab Navigasi Pelanggan (2 Tab Fokus & Tidak Membingungkan) ── */}
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-[var(--bg-card)] p-1.5 rounded-xl border border-[var(--border-subtle)]">
+                <div className="flex flex-wrap items-center gap-1.5">
+                    {([
+                        { id: "master", label: `Daftar & Lokasi Pelanggan (${totalCustomers})` },
+                        { id: "garansi", label: `Jadwal Kontrol & Garansi (${activeWarranties})` },
+                    ] as const).map(t => (
+                        <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => setHubTab(t.id)}
+                            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                                hubTab === t.id
+                                    ? "bg-[var(--accent)] text-white shadow-2xs"
+                                    : "text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]"
+                            }`}
+                        >
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
+
+                {hubTab === "garansi" && (
                     <button
-                        key={t.id}
                         type="button"
-                        onClick={() => setHubTab(t.id)}
-                        className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                            hubTab === t.id
-                                ? "bg-[var(--accent)] text-white shadow-2xs"
-                                : "text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]"
+                        onClick={() => setShowReminderSettings(v => !v)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors cursor-pointer ${
+                            showReminderSettings
+                                ? "bg-amber-50 text-amber-800 border-amber-200"
+                                : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100"
                         }`}
                     >
-                        {t.label}
+                        Pengaturan Pengingat ({contractReminderEnabled ? `Aktif: H-${reminderDays2} & H-${reminderDays1}` : "Nonaktif"})
                     </button>
-                ))}
+                )}
             </div>
 
-            {hubTab === "garansi" && <KontrolRayapPage />}
-
-            {hubTab === "analisis" && (
+            {hubTab === "garansi" && (
                 <div className="space-y-4">
-                    {/* 3 Kartu Ringkasan Minimalis (Tanpa gradasi warna mencolok) */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div className="clean-card p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] space-y-1">
-                            <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                                    Pelanggan Aktif
-                                </span>
-                                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                            </div>
-                            <div className="text-2xl font-bold font-mono text-[var(--text-primary)]">{withDeal}</div>
-                            <p className="text-xs text-[var(--text-secondary)]">Memiliki riwayat layanan aktif</p>
-                        </div>
-
-                        <div className="clean-card p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] space-y-1">
-                            <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                                    Garansi Aktif
-                                </span>
-                                <span className="w-2 h-2 rounded-full bg-[var(--accent)]" />
-                            </div>
-                            <div className="text-2xl font-bold font-mono text-[var(--text-primary)]">{activeWarranties}</div>
-                            <p className="text-xs text-[var(--text-secondary)]">{expiringWarranties} garansi mendekati jadwal kontrol</p>
-                        </div>
-
-                        <div className="clean-card p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] space-y-2 flex flex-col justify-between">
-                            <div>
-                                <div className="flex items-center justify-between">
-                                    <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                                        Titik Peta Belum Diatur
-                                    </span>
-                                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    {showReminderSettings && (
+                        <div className="clean-card p-4 sm:p-5 bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl space-y-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div>
+                                    <h3 className="text-sm font-bold text-[var(--text-primary)]">
+                                        Pengaturan Pengingat Jadwal Kontrol &amp; Garansi
+                                    </h3>
+                                    <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                                        Tampilkan pengingat otomatis sebelum jadwal kunjungan berkala Pest Control atau masa garansi Anti Rayap berakhir.
+                                    </p>
                                 </div>
-                                <div className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1">
-                                    {missingPinCustomers.length} Pelanggan
+                                <button
+                                    type="button"
+                                    onClick={() => setContractReminderEnabled(v => !v)}
+                                    className={`self-start sm:self-auto px-3.5 py-1.5 rounded-full text-xs font-bold cursor-pointer ${
+                                        contractReminderEnabled ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-700"
+                                    }`}
+                                >
+                                    {contractReminderEnabled ? "Status: Aktif" : "Status: Nonaktif"}
+                                </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                                    <label className="block text-xs font-bold text-[var(--text-primary)]">Pengingat Pertama</label>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            value={reminderDays2}
+                                            onChange={e => setReminderDays2(Number(e.target.value))}
+                                            className="w-20 px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-sm font-mono font-bold"
+                                        />
+                                        <span className="text-xs text-[var(--text-secondary)]">hari sebelum jadwal berakhir</span>
+                                    </div>
                                 </div>
-                                <p className="text-xs text-[var(--text-secondary)]">
-                                    Belum memiliki titik koordinat GPS untuk lokasi kerja teknisi
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setOnlyMissingPin(true);
-                                    setHubTab("master");
-                                }}
-                                className="self-start px-3 py-1.5 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold cursor-pointer"
-                            >
-                                Lihat Daftar Pelanggan
-                            </button>
-                        </div>
-                    </div>
 
-                    {/* Grid Pelanggan Teratas & Mendekati Jadwal Kontrol */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="clean-card p-5 space-y-3">
-                            <h3 className="text-sm font-bold text-[var(--text-primary)]">Pelanggan Teratas (Berdasarkan Frekuensi Kunjungan)</h3>
-                            <div className="space-y-2">
-                                {Array.from(customerMap.values())
-                                    .sort((a, b) => b.services.length - a.services.length)
-                                    .slice(0, 5)
-                                    .map((c, idx) => (
-                                        <div key={c.id} className="p-3 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] flex items-center justify-between text-xs">
-                                            <div className="flex items-center gap-2.5 min-w-0">
-                                                <span className="w-6 h-6 rounded-full bg-[var(--accent)] text-white font-bold flex items-center justify-center shrink-0">
-                                                    {idx + 1}
-                                                </span>
-                                                <div className="min-w-0">
-                                                    <p className="font-bold text-[var(--text-primary)] truncate">{c.name}</p>
-                                                    <p className="text-[11px] text-[var(--text-muted)] truncate">{c.wilayah}</p>
-                                                </div>
-                                            </div>
-                                            <span className="font-mono font-bold text-emerald-600 shrink-0">{c.services.length} Kunjungan</span>
-                                        </div>
-                                    ))}
-                            </div>
-                        </div>
-
-                        <div className="clean-card p-5 space-y-3">
-                            <h3 className="text-sm font-bold text-[var(--text-primary)]">Pelanggan yang Mendekati Jadwal Kontrol / Garansi Berakhir</h3>
-                            <div className="space-y-2">
-                                {Array.from(customerMap.values())
-                                    .filter(c => c.activeWarranty?.isActive)
-                                    .sort((a, b) => (a.activeWarranty?.daysRemaining ?? 9999) - (b.activeWarranty?.daysRemaining ?? 9999))
-                                    .slice(0, 5)
-                                    .map(c => (
-                                        <div key={c.id} className="p-3 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] flex items-center justify-between text-xs">
-                                            <div className="min-w-0">
-                                                <p className="font-bold text-[var(--text-primary)] truncate">{c.name}</p>
-                                                <p className="text-[11px] text-[var(--text-muted)] truncate">Kode: {c.activeWarranty?.noSurat}</p>
-                                            </div>
-                                            <span className="px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-600 font-mono font-bold shrink-0">
-                                                {c.activeWarranty?.daysRemaining} hari lagi
-                                            </span>
-                                        </div>
-                                    ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {hubTab === "pengaturan" && (
-                <div className="clean-card p-5 sm:p-6 grid grid-cols-1 md:grid-cols-12 gap-6">
-                    <div className="md:col-span-4 border-b md:border-b-0 md:border-r border-[var(--border-subtle)] pb-4 md:pb-0 md:pr-4 space-y-2">
-                        <div className="p-3 rounded-xl bg-[var(--accent-glow)] border border-[var(--accent)] flex items-center justify-between">
-                            <div>
-                                <p className="text-xs font-extrabold text-[var(--text-primary)]">Pengingat Kontrol Berkala</p>
-                                <p className="text-[11px] text-[var(--text-secondary)]">Notifikasi jadwal kunjungan kontrol &amp; garansi</p>
-                            </div>
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 text-[10px] font-bold">
-                                {contractReminderEnabled ? "Aktif" : "Nonaktif"}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="md:col-span-8 space-y-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <h3 className="text-sm font-extrabold text-[var(--text-primary)]">Pengaturan Pengingat Jadwal Kontrol &amp; Garansi</h3>
-                                <p className="text-xs text-[var(--text-secondary)]">
-                                    Tampilkan pengingat otomatis sebelum jadwal kunjungan berkala Pest Control atau masa garansi Anti Rayap berakhir
-                                </p>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setContractReminderEnabled(v => !v)}
-                                className={`px-3.5 py-1.5 rounded-full text-xs font-bold cursor-pointer ${
-                                    contractReminderEnabled ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-700"
-                                }`}
-                            >
-                                {contractReminderEnabled ? "Status: Aktif" : "Status: Nonaktif"}
-                            </button>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                            <div className="p-3.5 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] space-y-1.5">
-                                <label className="block text-xs font-bold text-[var(--text-primary)]">Pengingat Pertama</label>
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="number"
-                                        value={reminderDays2}
-                                        onChange={e => setReminderDays2(Number(e.target.value))}
-                                        className="w-24 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] text-sm font-mono font-bold"
-                                    />
-                                    <span className="text-xs text-[var(--text-secondary)]">hari sebelum jadwal berakhir</span>
+                                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 space-y-1">
+                                    <label className="block text-xs font-bold text-[var(--text-primary)]">Pengingat Kedua (Mendesak)</label>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="number"
+                                            value={reminderDays1}
+                                            onChange={e => setReminderDays1(Number(e.target.value))}
+                                            className="w-20 px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-sm font-mono font-bold"
+                                        />
+                                        <span className="text-xs text-[var(--text-secondary)]">hari sebelum jadwal berakhir</span>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="p-3.5 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] space-y-1.5">
-                                <label className="block text-xs font-bold text-[var(--text-primary)]">Pengingat Kedua (Mendesak)</label>
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="number"
-                                        value={reminderDays1}
-                                        onChange={e => setReminderDays1(Number(e.target.value))}
-                                        className="w-24 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] text-sm font-mono font-bold"
-                                    />
-                                    <span className="text-xs text-[var(--text-secondary)]">hari sebelum jadwal berakhir</span>
-                                </div>
+                            <div className="flex items-center justify-end gap-3">
+                                {reminderSaved && (
+                                    <span className="text-xs font-bold text-emerald-600">Pengaturan pengingat kontrol tersimpan.</span>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setReminderSaved(true);
+                                        setTimeout(() => setReminderSaved(false), 2500);
+                                    }}
+                                    className="px-4 py-1.5 rounded-lg bg-[var(--accent)] text-white text-xs font-bold cursor-pointer"
+                                >
+                                    Simpan Pengaturan
+                                </button>
                             </div>
                         </div>
+                    )}
 
-                        <div className="flex items-center justify-end gap-3 pt-2">
-                            {reminderSaved && (
-                                <span className="text-xs font-bold text-emerald-600">Pengaturan pengingat kontrol tersimpan.</span>
-                            )}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setReminderSaved(true);
-                                    setTimeout(() => setReminderSaved(false), 2500);
-                                }}
-                                className="px-5 py-2 rounded-xl bg-[var(--accent)] text-white text-xs font-bold cursor-pointer"
-                            >
-                                Simpan Pengaturan
-                            </button>
-                        </div>
-                    </div>
+                    <KontrolRayapPage />
                 </div>
             )}
 
             {hubTab === "master" && (
             <>
 
+            {/* ── 3 Kartu Ringkasan dengan Aksen Warna Semantik yang Nyaman di Mata ── */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="clean-card bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-4">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">Total Pelanggan</span>
+                <div className="clean-card bg-[var(--bg-card)] border border-[var(--border-subtle)] border-l-4 border-l-sky-500 rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            Total Pelanggan &amp; Lokasi
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200/70 text-[10px] font-semibold">
+                            {pinnedCustomerCount}/{totalCustomers} Pin GPS
+                        </span>
+                    </div>
                     <p className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1">{totalCustomers}</p>
-                    <p className="text-xs text-[var(--text-secondary)] mt-0.5">Terdaftar di sistem</p>
+                    <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                        {missingPinCustomers.length === 0
+                            ? "Seluruh lokasi kerja sudah memiliki koordinat GPS"
+                            : `${missingPinCustomers.length} pelanggan belum memiliki titik GPS`}
+                    </p>
                 </div>
-                <div className="clean-card bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-4">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">Pelanggan Aktif</span>
-                    <p className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1">{withDeal}</p>
-                    <p className="text-xs text-[var(--text-secondary)] mt-0.5">Memiliki riwayat layanan</p>
+
+                <div className="clean-card bg-[var(--bg-card)] border border-[var(--border-subtle)] border-l-4 border-l-amber-500 rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            Cakupan Layanan
+                        </span>
+                        <div className="flex items-center gap-1">
+                            <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200/80 text-[10px] font-semibold">
+                                {arCustomerCount} Anti Rayap
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md bg-sky-50 text-sky-800 border border-sky-200/80 text-[10px] font-semibold">
+                                {pcoCustomerCount} Pest Control
+                            </span>
+                        </div>
+                    </div>
+                    <p className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1">
+                        {arCustomerCount + pcoCustomerCount}
+                    </p>
+                    <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                        Riwayat pengerjaan Anti Rayap &amp; Pest Control
+                    </p>
                 </div>
-                <div className="clean-card bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-4">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">Garansi Aktif</span>
+
+                <div className="clean-card bg-[var(--bg-card)] border border-[var(--border-subtle)] border-l-4 border-l-emerald-500 rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            Garansi &amp; Kontrol Aktif
+                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/70 text-[10px] font-semibold">
+                            Terpantau
+                        </span>
+                    </div>
                     <p className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1">{activeWarranties}</p>
                     <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                        {expiringWarranties > 0 ? `${expiringWarranties} mendekati jadwal kontrol` : "Masa garansi berjalan"}
+                        {expiringWarranties > 0 ? `${expiringWarranties} mendekati jadwal kontrol` : "Masa garansi berjalan normal"}
                     </p>
                 </div>
             </div>
@@ -1974,11 +1960,11 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
             )}
 
             {/* ── Search bar — full width ── */}
-            <div className="flex items-center gap-2 w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-300 transition-all">
+            <div className="flex items-center gap-2 w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 focus-within:ring-2 focus-within:ring-emerald-100 focus-within:border-emerald-400 transition-all">
                 <Search size={16} className="text-slate-400 shrink-0" />
                 <input
                     className="flex-1 text-sm bg-transparent outline-none text-slate-800 placeholder:text-slate-400"
-                    placeholder="Cari nama klien, alamat, wilayah, atau jenis jasa..."
+                    placeholder="Cari nama pelanggan, alamat lokasi, wilayah, atau layanan..."
                     value={searchQ}
                     onChange={e => { setSearchQ(e.target.value); setPage(1); }}
                     autoComplete="off"
@@ -1990,32 +1976,72 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                 )}
             </div>
 
-            {/* ── Filter chips row (Clean tanpa ikon dekoratif) ── */}
+            {/* ── Filter chips row dengan Aksen Layanan (Warm Amber untuk Anti Rayap, Calm Sky untuk Pest Control) ── */}
             <div className="flex items-center gap-2 flex-wrap">
+                <button
+                    type="button"
+                    onClick={() => { setServiceFilter("ALL"); setPage(1); }}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
+                        serviceFilter === "ALL"
+                            ? "bg-[var(--accent)] text-white border-[var(--accent)]"
+                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    }`}
+                >
+                    Semua Layanan ({totalCustomers})
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => { setServiceFilter(v => v === "AR" ? "ALL" : "AR"); setPage(1); }}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
+                        serviceFilter === "AR"
+                            ? "bg-amber-600 text-white border-amber-600"
+                            : "bg-amber-50/70 text-amber-800 border-amber-200 hover:bg-amber-100/70"
+                    }`}
+                >
+                    Anti Rayap ({arCustomerCount})
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => { setServiceFilter(v => v === "PCO" ? "ALL" : "PCO"); setPage(1); }}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
+                        serviceFilter === "PCO"
+                            ? "bg-sky-600 text-white border-sky-600"
+                            : "bg-sky-50/70 text-sky-800 border-sky-200 hover:bg-sky-100/70"
+                    }`}
+                >
+                    Pest Control ({pcoCustomerCount})
+                </button>
+
+                <span className="h-4 w-px bg-slate-200 mx-0.5 hidden sm:inline-block" />
+
                 <button
                     onClick={() => { setFilterWarranty(v => !v); setPage(1); }}
                     className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
                         filterWarranty
-                            ? "bg-[var(--accent)] text-white border-[var(--accent)]"
+                            ? "bg-emerald-600 text-white border-emerald-600"
                             : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                     }`}>
-                    Bergaransi
+                    Bergaransi ({activeWarranties})
                 </button>
 
-                <button
-                    onClick={() => { setOnlyMissingPin(v => !v); setPage(1); }}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
-                        onlyMissingPin
-                            ? "bg-amber-600 text-white border-amber-600"
-                            : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                    }`}>
-                    Tanpa Pin Peta ({missingPinCustomers.length})
-                </button>
+                {missingPinCustomers.length > 0 && (
+                    <button
+                        onClick={() => { setOnlyMissingPin(v => !v); setPage(1); }}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
+                            onlyMissingPin
+                                ? "bg-amber-600 text-white border-amber-600"
+                                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                        }`}>
+                        Belum Ada Pin GPS ({missingPinCustomers.length})
+                    </button>
+                )}
 
                 <select
                     value={sortBy}
                     onChange={e => { setSortBy(e.target.value as typeof sortBy); setPage(1); }}
-                    className="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                    className="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-100">
                     <option value="date">Terbaru</option>
                     <option value="deal">Terbanyak Kunjungan</option>
                     <option value="name">Nama A-Z</option>
@@ -2029,9 +2055,9 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                     {loading ? "Memuat..." : "Muat Ulang"}
                 </button>
 
-                {(searchQ || filterWarranty || onlyMissingPin) && (
+                {(searchQ || serviceFilter !== "ALL" || filterWarranty || onlyMissingPin) && (
                     <button
-                        onClick={() => { setSearchQ(""); setFilterWarranty(false); setOnlyMissingPin(false); setPage(1); }}
+                        onClick={() => { setSearchQ(""); setServiceFilter("ALL"); setFilterWarranty(false); setOnlyMissingPin(false); setPage(1); }}
                         className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg border border-slate-200 transition-colors cursor-pointer">
                         Reset Filter
                     </button>

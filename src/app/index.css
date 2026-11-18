@@ -102,34 +102,34 @@ input[type="number"] {
   /* RedesignFieldworkGuciMasLite Design System Tokens */
   --green: #1A5C38;
   --green-hover: #13462A;
-  --green-soft: #e8f1eb;
-  --canvas: #F4F6F4;
+  --green-soft: #EAF3EE;
+  --canvas: #F7F9F8;
   --surface: #FFFFFF;
-  --subtle: #EDF2EE;
-  --text: #17231C;
-  --secondary: #66736B;
-  --muted: #87928B;
+  --subtle: #F2F6F3;
+  --text: #16241C;
+  --secondary: #5A6960;
+  --muted: #7C8A81;
 
-  /* Whole-App Design Spec Light Tokens (#1A5C38 / #F4F6F4 / #DCE5DE) */
+  /* Whole-App Design Spec Light Tokens (Warm Alabaster & Soft Sage — Eye-Comforting) */
   --brand-primary: #1A5C38;
   --brand-hover: #13462A;
-  --bg-primary: #F4F6F4;
-  --bg-secondary: #EDF2EE;
-  --bg-tertiary: #DCE5DE;
+  --bg-primary: #F7F9F8;
+  --bg-secondary: #F2F6F3;
+  --bg-tertiary: #EBF1ED;
   --bg-card: #FFFFFF;
   --bg-elevated: #FFFFFF;
-  --bg-skeleton: #DCE5DE;
+  --bg-skeleton: #E4ECE7;
 
   /* Content & Typography */
-  --text-primary: #17231C;
-  --text-secondary: #66736B;
-  --text-muted: #66736B;
+  --text-primary: #16241C;
+  --text-secondary: #536359;
+  --text-muted: #6E7D73;
   --text-inverse: #FFFFFF;
 
   /* Brand & Interactive Accents */
   --accent: #1A5C38;
   --accent-hover: #13462A;
-  --accent-glow: #EDF2EE;
+  --accent-glow: #EEF5F0;
   --accent-muted: rgba(26, 92, 56, 0.08);
   --accent-text: #1A5C38;
 
@@ -147,32 +147,32 @@ input[type="number"] {
   --brand-gold-soft: #fff4df;
 
   /* Semantic Status Tokens */
-  --status-draft-bg: #eff2f0;
-  --status-draft-text: #626e66;
-  --status-draft-border: #d8e0da;
+  --status-draft-bg: #F3F6F4;
+  --status-draft-text: #5C6860;
+  --status-draft-border: #DCE4DF;
 
-  --status-ready-bg: #eaf2f8;
-  --status-ready-text: #356c91;
-  --status-ready-border: #c5d9e8;
+  --status-ready-bg: #eef5fa;
+  --status-ready-text: #2d6285;
+  --status-ready-border: #cde0ee;
 
-  --status-working-bg: #eaf2f8;
-  --status-working-text: #356c91;
-  --status-working-border: #bfdbfe;
+  --status-working-bg: #eef5fa;
+  --status-working-text: #2d6285;
+  --status-working-border: #c5dcf0;
 
-  --status-completed-bg: #e8f4ec;
-  --status-completed-text: #257a4b;
-  --status-completed-border: #b8dcc6;
+  --status-completed-bg: #ecf6f0;
+  --status-completed-text: #1f6f43;
+  --status-completed-border: #c1e2ce;
 
-  --status-reviewed-bg: #e7f3f0;
-  --status-reviewed-text: #287267;
-  --status-reviewed-border: #b2d8d2;
+  --status-reviewed-bg: #ebf5f3;
+  --status-reviewed-text: #246a60;
+  --status-reviewed-border: #bce0da;
 
-  --status-flagged-bg: #fcecec;
+  --status-flagged-bg: #fdf0f0;
   --status-flagged-text: #b54141;
-  --status-flagged-border: #f5c2c2;
+  --status-flagged-border: #f5c8c8;
 
-  --status-approved-bg: #e8f4ec;
-  --status-approved-text: #257a4b;
+  --status-approved-bg: #ecf6f0;
+  --status-approved-text: #1f6f43;
 
   --success: #237A4B;
   --warning: #a96b16;
@@ -188,14 +188,14 @@ input[type="number"] {
   --chart-ready: #66736b;
   --chart-draft: #a96b16;
   --chart-reviewed: #287267;
-  --chart-grid: #e1e8e2;
+  --chart-grid: #e5ece7;
   --tooltip-bg: #ffffff;
-  --tooltip-border: #cbd4ce;
+  --tooltip-border: #d2dcd5;
 
   /* Borders, Radius, Shadows */
-  --border: #DCE5DE;
-  --border-subtle: #DCE5DE;
-  --border-light: #eff3f0;
+  --border: #E1E8E3;
+  --border-subtle: #E2E9E4;
+  --border-light: #F1F5F2;
   --border-focus: rgba(36, 92, 69, 0.32);
 
   --radius-sm: 6px;
