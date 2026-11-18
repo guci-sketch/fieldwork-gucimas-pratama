@@ -90,22 +90,42 @@ const STATUS_LABEL: Record<string, string> = {
     rejected: "Dibatalkan", sent_to_client: "Dilaporkan", deal: "Selesai Dilaporkan", cancelled: "Batal",
 };
 
+function getSmartCustomerInitials(rawName: string): string {
+    const cleaned = rawName
+        .replace(/\([^)]*\)/g, " ")
+        .replace(/\b(PT\.?|CV\.?|UD\.?|RS\.?|RSUD|Bpk\.?|Bapak|Ibu|Dr\.?|Prof\.?|Persero|Tbk\.?|KC|UP3)\b/gi, " ")
+        .trim();
+    const parts = cleaned.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+        return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    if (parts.length === 1 && parts[0].length >= 2) {
+        return parts[0].slice(0, 2).toUpperCase();
+    }
+    return rawName.trim().slice(0, 2).toUpperCase() || "PL";
+}
+
 function WarrantyBadge({ w }: { w: WarrantyInfo | null }) {
     if (!w) return null;
     const expiring = w.isActive && w.daysRemaining <= 60;
     const cls = !w.isActive
-        ? "bg-red-600 border-red-700 text-white shadow-2xs"
+        ? "bg-red-50 border-red-200 text-red-700"
         : expiring
-        ? "bg-amber-500 border-amber-600 text-white shadow-2xs"
-        : "bg-emerald-100 border-emerald-300 text-emerald-800";
+        ? "bg-amber-50 border-amber-200 text-amber-700"
+        : "bg-emerald-50 border-emerald-200 text-emerald-700";
+    const dotCls = !w.isActive
+        ? "bg-red-500"
+        : expiring
+        ? "bg-amber-500"
+        : "bg-emerald-500";
     return (
-        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${cls}`}>
-            {!w.isActive ? <AlertTriangle size={10} /> : expiring ? <Clock size={10} /> : <Shield size={10} />}
+        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-[10.5px] font-semibold border ${cls}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${dotCls}`} />
             {!w.isActive
-                ? "MERAH: Garansi Terlewat / Habis"
+                ? "Garansi Habis"
                 : expiring
-                ? `KUNING: Segera Habis (${w.daysRemaining} hari lagi)`
-                : `HIJAU: Garansi Aktif (${w.daysRemaining} hari lagi)`}
+                ? `Segera Kontrol (${w.daysRemaining} hr)`
+                : `Garansi Aktif (${w.daysRemaining} hr)`}
         </span>
     );
 }
@@ -558,104 +578,183 @@ function EditCustomerProfileModal({
     );
 }
 
-function CustomerCard({ customer, expanded, onToggle, onAddChecklist, onEditProfile }: {
-    customer: DerivedCustomer; expanded: boolean; onToggle: () => void; onAddChecklist: () => void; onEditProfile: () => void;
+function CustomerCard({ customer, indexNumber, expanded, onToggle, onAddChecklist, onEditProfile }: {
+    customer: DerivedCustomer; indexNumber: number; expanded: boolean; onToggle: () => void; onAddChecklist: () => void; onEditProfile: () => void;
 }) {
     const lastCl = [...customer.checklists].sort((a, b) => b.tanggal.getTime() - a.tanggal.getTime())[0];
     const latestW = customer.activeWarranty ?? customer.warranties[0] ?? null;
     const isOverdue = (latestW && !latestW.isActive) || lastCl?.hasilKontrol === "darurat";
     const isExpiring = (latestW && latestW.isActive && latestW.daysRemaining <= 60) || lastCl?.hasilKontrol === "perlu_tindak_lanjut";
-    const borderColorCls = isOverdue
-        ? "border-l-4 border-l-red-600 border-red-200 bg-red-50/20"
+    const initials = getSmartCustomerInitials(customer.name);
+    const codeLabel = `CUST-${String(indexNumber).padStart(3, "0")}`;
+
+    const cardBorderCls = isOverdue
+        ? "border-red-200/90 bg-white hover:border-red-300"
         : isExpiring
-        ? "border-l-4 border-l-amber-500 border-amber-200 bg-amber-50/20"
-        : latestW?.isActive
-        ? "border-l-4 border-l-emerald-500 border-slate-200 bg-white"
-        : "border-slate-200 bg-white";
+        ? "border-amber-200/90 bg-white hover:border-amber-300"
+        : "border-[var(--border-subtle)] bg-[var(--bg-card)] hover:border-[var(--accent)]/40";
+
+    const warrantyStatusDot = !latestW
+        ? "bg-slate-400"
+        : !latestW.isActive
+        ? "bg-red-500"
+        : latestW.daysRemaining <= 60
+        ? "bg-amber-500"
+        : "bg-emerald-500";
+
+    const warrantyHeadline = !latestW
+        ? "Standar"
+        : !latestW.isActive
+        ? "Garansi Habis"
+        : latestW.daysRemaining <= 60
+        ? "Segera Kontrol"
+        : "Garansi Aktif";
+
+    const warrantySubtext = !latestW
+        ? "Tanpa masa garansi"
+        : !latestW.isActive
+        ? "Perlu jadwal ulang"
+        : latestW.daysRemaining >= 365
+        ? `Sisa ~${(latestW.daysRemaining / 365).toFixed(1)} tahun (${latestW.daysRemaining} hr)`
+        : `Sisa ${latestW.daysRemaining} hari lagi`;
+
     return (
-        <div className={`border rounded-2xl overflow-hidden shadow-sm ${borderColorCls}`}>
-            <button onClick={onToggle} className="w-full px-5 py-4 flex items-start gap-4 text-left hover:bg-slate-50 transition-colors">
-                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center text-blue-700 font-bold text-sm shrink-0">
-                    {customer.name.charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                        <p className="text-sm font-bold text-slate-900">{customer.name}</p>
-                        <WarrantyBadge w={customer.activeWarranty ?? customer.warranties[0] ?? null} />
-                        {(customer.needsAdminDetails || (!customer.up && !customer.wa)) && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                                Input Teknisi • Lengkapi Detail Admin
-                            </span>
-                        )}
+        <div className={`border rounded-2xl overflow-hidden transition-all duration-150 shadow-2xs ${cardBorderCls}`}>
+            <div
+                onClick={onToggle}
+                role="button"
+                tabIndex={0}
+                onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
+                className="w-full p-4 sm:px-5 sm:py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 text-left hover:bg-[var(--bg-tertiary)]/35 transition-colors cursor-pointer"
+            >
+                {/* ZONA 1: Identitas & Alamat Pelanggan */}
+                <div className="flex items-start gap-3.5 min-w-0 lg:w-[40%] xl:w-[42%]">
+                    <div className="w-11 h-11 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] flex flex-col items-center justify-center shrink-0">
+                        <span className="text-xs font-extrabold tracking-tight text-[var(--accent)] leading-none">
+                            {initials}
+                        </span>
+                        <span className="text-[9px] font-mono text-[var(--text-muted)] mt-0.5 leading-none">
+                            #{String(indexNumber).padStart(2, "0")}
+                        </span>
                     </div>
-                    {customer.address && (
-                        <p className="text-xs text-slate-400 truncate flex items-center gap-1 mb-0.5">
-                            <MapPin size={10} className="shrink-0" /> {customer.address}
+
+                    <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-bold text-[var(--text-primary)] leading-snug truncate">
+                                {customer.name}
+                            </p>
                             {customer.wilayah && customer.wilayah !== "Tidak Diketahui" && (
-                                <span className="ml-1 text-[10px] font-semibold bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full shrink-0">
+                                <span className="px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border border-[var(--border-subtle)] shrink-0">
                                     {customer.wilayah}
                                 </span>
                             )}
+                        </div>
+
+                        <p className="text-xs text-[var(--text-secondary)] line-clamp-1">
+                            {customer.address || "Alamat lokasi belum dilengkapi"}
                         </p>
-                    )}
-                    {customer.wa && (
-                        <a href={`https://wa.me/${customer.wa.replace(/^0/, "62").replace(/\D/g, "")}`}
-                            target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                            className="inline-flex items-center gap-1 text-[10px] text-green-600 hover:text-green-700 font-medium mb-1">
-                            <MessageCircle size={10} /> {customer.wa}
-                        </a>
-                    )}
-                    <div className="flex items-center gap-1.5 flex-wrap mt-1">
-                        {customer.jasaDigunakan.map(j => (
-                            <span key={j} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{j}</span>
-                        ))}
-                        {customer.services.length > 0 && (
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center gap-0.5">
-                                <CheckCircle2 size={9} /> {customer.services.length}x kunjungan
+
+                        <div className="flex items-center gap-3 flex-wrap pt-0.5">
+                            <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                                {codeLabel}
                             </span>
-                        )}
-                        {customer.latitude && customer.longitude ? (
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1" title={`GPS: ${customer.latitude.toFixed(6)}, ${customer.longitude.toFixed(6)}`}>
-                                <MapPin size={9} /> GPS Terdata
-                            </span>
-                        ) : (
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200 flex items-center gap-1" title="Titik GPS belum diatur">
-                                <MapPin size={9} className="opacity-50" /> Belum Ada Pin
-                            </span>
-                        )}
-                        {lastCl && (
-                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-0.5
-                                ${lastCl.hasilKontrol === "baik" ? "bg-emerald-100 text-emerald-700"
-                                : lastCl.hasilKontrol === "darurat" ? "bg-red-100 text-red-700"
-                                : "bg-amber-100 text-amber-700"}`}>
-                                <ClipboardCheck size={9} /> Kontrol {formatDate(lastCl.tanggal)}
-                            </span>
-                        )}
+                            {customer.wa ? (
+                                <a
+                                    href={`https://wa.me/${customer.wa.replace(/^0/, "62").replace(/\D/g, "")}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={e => e.stopPropagation()}
+                                    className="text-[11px] font-mono font-semibold text-emerald-700 hover:underline"
+                                >
+                                    WA: {customer.wa}
+                                </a>
+                            ) : (
+                                <span className="text-[11px] text-[var(--text-muted)]">
+                                    Kontak belum diisi
+                                </span>
+                            )}
+                            {customer.up && (
+                                <span className="text-[11px] text-[var(--text-secondary)]">
+                                    · PIC: {customer.up}
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
-                <div className="shrink-0 flex items-center gap-2 mt-1">
+
+                {/* ZONA 2: Ringkasan Operasional & Pelaporan (3 Kolom Rapi) */}
+                <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:flex-1 bg-[var(--bg-tertiary)]/55 border border-[var(--border-subtle)]/80 rounded-xl px-3.5 py-2.5">
+                    {/* Kolom Layanan & Kunjungan */}
+                    <div className="min-w-0">
+                        <span className="block text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                            Layanan
+                        </span>
+                        <p className="text-xs font-bold text-[var(--text-primary)] truncate mt-0.5">
+                            {customer.jasaDigunakan.join(", ") || "Pest Control"}
+                        </p>
+                        <p className="text-[11px] font-mono font-semibold text-[var(--accent)] mt-0.5">
+                            {customer.services.length}x kunjungan
+                        </p>
+                    </div>
+
+                    {/* Kolom Status Pin Peta GPS */}
+                    <div className="min-w-0 border-l border-[var(--border-subtle)] pl-2.5 sm:pl-3">
+                        <span className="block text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                            Titik Lokasi
+                        </span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${customer.latitude && customer.longitude ? "bg-emerald-500" : "bg-amber-500"}`} />
+                            <p className="text-xs font-bold text-[var(--text-primary)] truncate">
+                                {customer.latitude && customer.longitude ? "Pin GPS Aktif" : "Belum Ada Pin"}
+                            </p>
+                        </div>
+                        <p className="text-[10.5px] font-mono text-[var(--text-secondary)] truncate mt-0.5">
+                            {customer.latitude && customer.longitude
+                                ? `${customer.latitude.toFixed(4)}, ${customer.longitude.toFixed(4)}`
+                                : "Perlu ditandai"}
+                        </p>
+                    </div>
+
+                    {/* Kolom Status Garansi & Kontrol */}
+                    <div className="min-w-0 border-l border-[var(--border-subtle)] pl-2.5 sm:pl-3">
+                        <span className="block text-[10px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                            Masa Garansi
+                        </span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${warrantyStatusDot}`} />
+                            <p className="text-xs font-bold text-[var(--text-primary)] truncate">
+                                {warrantyHeadline}
+                            </p>
+                        </div>
+                        <p className="text-[10.5px] text-[var(--text-secondary)] truncate mt-0.5">
+                            {lastCl ? `Kontrol: ${formatDate(lastCl.tanggal)}` : warrantySubtext}
+                        </p>
+                    </div>
+                </div>
+
+                {/* ZONA 3: Tombol Aksi Cepat */}
+                <div className="shrink-0 flex items-center justify-end gap-2 pt-1 lg:pt-0 border-t lg:border-t-0 border-[var(--border-subtle)]/60">
                     <button
                         type="button"
                         onClick={e => { e.stopPropagation(); onEditProfile(); }}
-                        className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[10.5px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                        className="h-8 px-3 rounded-lg bg-white hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] border border-[var(--border-subtle)] text-xs font-semibold cursor-pointer transition-colors"
                         title="Edit profil pelanggan & titik koordinat GPS"
                     >
-                        <Edit3 size={11} /> Edit Profil &amp; Peta
+                        Atur Lokasi
                     </button>
-                    <span
-                        role="button"
-                        tabIndex={0}
+                    <button
+                        type="button"
                         onClick={e => { e.stopPropagation(); onAddChecklist(); }}
-                        className="px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-[10.5px] font-bold flex items-center gap-1 cursor-pointer"
+                        className="h-8 px-3 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold cursor-pointer transition-colors shadow-2xs"
                         title="Catat / Handle Jadwal Kontrol Pelanggan"
                     >
-                        <ClipboardCheck size={11} /> Handle Kontrol
-                    </span>
-                    <span className="text-slate-400">
-                        {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        Catat Kontrol
+                    </button>
+                    <span className="w-8 h-8 rounded-lg border border-[var(--border-subtle)] bg-white flex items-center justify-center text-[var(--text-secondary)]">
+                        {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                     </span>
                 </div>
-            </button>
+            </div>
 
             {expanded && (
                 <div className="border-t border-slate-100">
@@ -1196,6 +1295,7 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
     const [loading, setLoading] = useState(true);
     const [searchQ, setSearchQ] = useState("");
     const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState<number>(4);
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [sortBy, setSortBy] = useState<"date" | "name" | "deal" | "area">("date");
     const [filterWarranty, setFilterWarranty] = useState(false);
@@ -1553,10 +1653,10 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
         return result;
     }, [customerMap, filterWarranty, onlyMissingPin, debouncedSearch, sortBy]);
     const pagedCustomers = useMemo(
-        () => customers.slice((page - 1) * CUSTOMER_PAGE_SIZE, page * CUSTOMER_PAGE_SIZE),
-        [customers, page],
+        () => customers.slice((page - 1) * pageSize, page * pageSize),
+        [customers, page, pageSize],
     );
-    const customerTotalPages = Math.max(1, Math.ceil(customers.length / CUSTOMER_PAGE_SIZE));
+    const customerTotalPages = Math.max(1, Math.ceil(customers.length / pageSize));
     useEffect(() => {
         if (page > customerTotalPages) setPage(customerTotalPages);
     }, [page, customerTotalPages]);
@@ -2001,7 +2101,7 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                                 </thead>
                                 <tbody className="divide-y divide-[var(--border-subtle)]">
                                     {pagedCustomers.map((c, idx) => {
-                                        const code = `CUST-${String((page - 1) * CUSTOMER_PAGE_SIZE + idx + 1).padStart(4, "0")}`;
+                                        const code = `CUST-${String((page - 1) * pageSize + idx + 1).padStart(4, "0")}`;
                                         return (
                                             <tr key={c.id} className="hover:bg-[var(--bg-tertiary)]/50">
                                                 <td className="py-3 px-3.5 whitespace-nowrap">
@@ -2056,7 +2156,7 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                                                         onClick={() => setEditCustomerTarget(c)}
                                                         className="px-2.5 py-1 rounded-lg bg-[var(--accent)] text-white font-bold text-[11px] cursor-pointer"
                                                     >
-                                                        Atur Profil &amp; Pin
+                                                        Atur Lokasi
                                                     </button>
                                                 </td>
                                             </tr>
@@ -2066,19 +2166,84 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                             </table>
                         </div>
                     ) : (
-                        pagedCustomers.map(c => (
-                            <CustomerCard key={c.id} customer={c}
+                        pagedCustomers.map((c, idx) => (
+                            <CustomerCard
+                                key={c.id}
+                                customer={c}
+                                indexNumber={(page - 1) * pageSize + idx + 1}
                                 expanded={expandedId === c.id}
                                 onToggle={() => setExpandedId(prev => prev === c.id ? null : c.id)}
                                 onAddChecklist={() => setChecklistTarget(c)}
-                                onEditProfile={() => setEditCustomerTarget(c)} />
+                                onEditProfile={() => setEditCustomerTarget(c)}
+                            />
                         ))
                     )}
-                    <p className="text-xs text-slate-400 text-center pt-1">
-                        {customers.length} hasil filter dari {totalCustomers} klien
-                    </p>
-                    <Pagination page={page} pageSize={CUSTOMER_PAGE_SIZE} totalItems={customers.length}
-                        onPageChange={setPage} itemLabel="klien" />
+
+                    {/* ── Bar Pagination Lengkap & Nyaman ── */}
+                    <div className="bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-2xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                        <div className="flex items-center gap-3 flex-wrap text-xs text-[var(--text-secondary)]">
+                            <span>
+                                Menampilkan{" "}
+                                <strong className="font-mono text-[var(--text-primary)]">
+                                    {customers.length === 0 ? 0 : (page - 1) * pageSize + 1}–{Math.min(page * pageSize, customers.length)}
+                                </strong>{" "}
+                                dari <strong className="font-mono text-[var(--text-primary)]">{customers.length}</strong> pelanggan
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-[var(--text-muted)]">· Tampilkan:</span>
+                                <select
+                                    value={pageSize}
+                                    onChange={e => {
+                                        setPageSize(Number(e.target.value));
+                                        setPage(1);
+                                    }}
+                                    className="px-2 py-1 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] text-xs font-semibold text-[var(--text-primary)] focus:outline-none cursor-pointer"
+                                >
+                                    <option value={4}>4 / halaman</option>
+                                    <option value={8}>8 / halaman</option>
+                                    <option value={12}>12 / halaman</option>
+                                    <option value={20}>20 / halaman</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-center sm:justify-end gap-1.5">
+                            <button
+                                type="button"
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page <= 1}
+                                className="h-8 px-3 rounded-lg border border-[var(--border-subtle)] bg-white hover:bg-[var(--bg-tertiary)] text-xs font-semibold text-[var(--text-secondary)] disabled:opacity-40 disabled:pointer-events-none cursor-pointer transition-colors"
+                            >
+                                Sebelumnya
+                            </button>
+
+                            <div className="flex items-center gap-1">
+                                {Array.from({ length: customerTotalPages }, (_, i) => i + 1).map(pNum => (
+                                    <button
+                                        key={pNum}
+                                        type="button"
+                                        onClick={() => setPage(pNum)}
+                                        className={`w-8 h-8 rounded-lg text-xs font-mono font-bold transition-colors cursor-pointer ${
+                                            pNum === page
+                                                ? "bg-[var(--accent)] text-white shadow-2xs"
+                                                : "bg-white border border-[var(--border-subtle)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]"
+                                        }`}
+                                    >
+                                        {pNum}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => setPage(p => Math.min(customerTotalPages, p + 1))}
+                                disabled={page >= customerTotalPages}
+                                className="h-8 px-3 rounded-lg border border-[var(--border-subtle)] bg-white hover:bg-[var(--bg-tertiary)] text-xs font-semibold text-[var(--text-secondary)] disabled:opacity-40 disabled:pointer-events-none cursor-pointer transition-colors"
+                            >
+                                Berikutnya
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 
