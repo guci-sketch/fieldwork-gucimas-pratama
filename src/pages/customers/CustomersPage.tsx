@@ -1491,18 +1491,21 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
         <div className="space-y-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                    <h1 className="text-xl font-extrabold text-[var(--text-primary)]">
-                        Master Pelanggan
+                    <h1 className="text-lg sm:text-xl font-bold text-[var(--text-primary)]">
+                        Data Pelanggan
                     </h1>
+                    <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                        Kelola daftar pelanggan, titik koordinat lokasi, dan masa berlaku garansi layanan.
+                    </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     {user?.role !== "MARKETING" && (
                         <button
                             type="button"
                             onClick={() => setShowAddManualModal(true)}
-                            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold bg-[var(--accent)] text-white rounded-xl hover:bg-[var(--accent-hover)] transition-colors cursor-pointer shadow-xs"
+                            className="h-9 px-3.5 text-xs font-semibold bg-[var(--accent)] text-white rounded-lg hover:bg-[var(--accent-hover)] transition-colors cursor-pointer shadow-2xs"
                         >
-                            <Plus size={14} /> Tambah Pelanggan
+                            Tambah Pelanggan
                         </button>
                     )}
                     <button
@@ -1525,36 +1528,40 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                             XLSX.utils.book_append_sheet(wb, ws, "Data_Pelanggan");
                             XLSX.writeFile(wb, "Daftar_Pelanggan_Guci_Emas.xlsx");
                         }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl hover:bg-emerald-100 transition-colors cursor-pointer"
+                        className="h-9 px-3 text-xs font-semibold bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
                     >
-                        <Download size={13} /> Unduh Pelanggan ({customers.length})
+                        Unduh Excel ({customers.length})
                     </button>
-                    <button onClick={downloadTemplate} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer">
-                        <Download size={13} /> Template Excel
+                    <button
+                        type="button"
+                        onClick={downloadTemplate}
+                        className="h-9 px-3 text-xs font-semibold bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
+                    >
+                        Contoh Format Excel
                     </button>
-                    <label className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[var(--accent)] text-white rounded-xl hover:bg-[var(--accent-hover)] cursor-pointer transition-colors shadow-xs">
-                        <UploadCloud size={13} /> Import Bulk
+                    <label className="inline-flex items-center h-9 px-3 text-xs font-semibold bg-[var(--bg-card)] text-[var(--text-primary)] border border-[var(--border-subtle)] rounded-lg hover:bg-[var(--bg-tertiary)] cursor-pointer transition-colors">
+                        Impor Excel
                         <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileSelect} />
                     </label>
                 </div>
             </div>
 
-            {/* ── In-Page Consolidated Tabs (Master Pelanggan | Garansi Rayap | Analisis Peta | Pengaturan Kontrak) ── */}
-            <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--border-subtle)] pb-2.5">
+            {/* ── Sub-Tab Navigasi Pelanggan (Clean & Bahasa Mudah Dipahami) ── */}
+            <div className="flex flex-wrap items-center gap-1.5 bg-[var(--bg-card)] p-1.5 rounded-xl border border-[var(--border-subtle)]">
                 {([
-                    { id: "master", label: `Master Pelanggan (${totalCustomers})` },
+                    { id: "master", label: `Daftar Pelanggan (${totalCustomers})` },
                     { id: "garansi", label: `Jadwal Garansi (${activeWarranties})` },
-                    { id: "analisis", label: `Analisis Peta (${missingPinCustomers.length} Tanpa Pin)` },
-                    { id: "pengaturan", label: "Pengaturan Kontrak" },
+                    { id: "analisis", label: `Lokasi Belum Lengkap (${missingPinCustomers.length})` },
+                    { id: "pengaturan", label: "Pengingat Kontrak" },
                 ] as const).map(t => (
                     <button
                         key={t.id}
                         type="button"
                         onClick={() => setHubTab(t.id)}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                        className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                             hubTab === t.id
-                                ? "bg-[var(--accent)] text-white border-[var(--accent)] shadow-2xs"
-                                : "bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:bg-[var(--bg-tertiary)]"
+                                ? "bg-[var(--accent)] text-white shadow-2xs"
+                                : "text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]"
                         }`}
                     >
                         {t.label}
@@ -1566,30 +1573,43 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
 
             {hubTab === "analisis" && (
                 <div className="space-y-4">
-                    {/* Dual Gradient Banners: Pelanggan Aktif vs Tidak Aktif + Detektor Tanpa Pin Point Map (Screenshot 3: beta.jarivis.com/customer/analysis) */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="p-5 rounded-2xl bg-gradient-to-r from-[#1e3a8a] to-[#2563eb] text-white shadow-sm space-y-1">
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-200">PELANGGAN AKTIF (DEAL)</span>
-                            <div className="text-3xl font-black font-mono">{withDeal}</div>
-                            <p className="text-xs text-blue-100">Memiliki riwayat kontrak / layanan aktif</p>
-                        </div>
-
-                        <div className="p-5 rounded-2xl bg-gradient-to-r from-[#065f46] to-[#10b981] text-white shadow-sm space-y-1">
-                            <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-100">GARANSI RAYAP AKTIF</span>
-                            <div className="text-3xl font-black font-mono">{activeWarranties}</div>
-                            <p className="text-xs text-emerald-100">{expiringWarranties} garansi mendekati jadwal kontrol</p>
-                        </div>
-
-                        <div className="p-5 rounded-2xl bg-[var(--bg-card)] border-2 border-amber-400/80 space-y-2 flex flex-col justify-between">
-                            <div>
-                                <span className="text-[11px] font-bold uppercase tracking-wider text-amber-600 block">
-                                    JUMLAH PELANGGAN TIDAK ADA PIN POINT MAP
+                    {/* 3 Kartu Ringkasan Minimalis (Tanpa gradasi warna mencolok) */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="clean-card p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] space-y-1">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                                    Pelanggan Aktif
                                 </span>
-                                <div className="text-2xl font-black font-mono text-[var(--text-primary)] mt-1">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                            </div>
+                            <div className="text-2xl font-bold font-mono text-[var(--text-primary)]">{withDeal}</div>
+                            <p className="text-xs text-[var(--text-secondary)]">Memiliki riwayat layanan aktif</p>
+                        </div>
+
+                        <div className="clean-card p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] space-y-1">
+                            <div className="flex items-center justify-between">
+                                <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                                    Garansi Aktif
+                                </span>
+                                <span className="w-2 h-2 rounded-full bg-[var(--accent)]" />
+                            </div>
+                            <div className="text-2xl font-bold font-mono text-[var(--text-primary)]">{activeWarranties}</div>
+                            <p className="text-xs text-[var(--text-secondary)]">{expiringWarranties} garansi mendekati jadwal kontrol</p>
+                        </div>
+
+                        <div className="clean-card p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] space-y-2 flex flex-col justify-between">
+                            <div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                                        Titik Peta Belum Diatur
+                                    </span>
+                                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                                </div>
+                                <div className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1">
                                     {missingPinCustomers.length} Pelanggan
                                 </div>
                                 <p className="text-xs text-[var(--text-secondary)]">
-                                    Belum memiliki titik koordinat GPS untuk geofence teknisi
+                                    Belum memiliki titik koordinat GPS untuk lokasi kerja teknisi
                                 </p>
                             </div>
                             <button
@@ -1598,9 +1618,9 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                                     setOnlyMissingPin(true);
                                     setHubTab("master");
                                 }}
-                                className="self-start px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-extrabold cursor-pointer"
+                                className="self-start px-3 py-1.5 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold cursor-pointer"
                             >
-                                Cek Pelanggan &nearr;
+                                Lihat Daftar Pelanggan
                             </button>
                         </div>
                     </div>
@@ -1608,7 +1628,7 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                     {/* Grid Pelanggan Teratas & Mendekati Kontrak Berakhir */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="clean-card p-5 space-y-3">
-                            <h3 className="text-sm font-bold text-[var(--text-primary)]">Pelanggan Teratas (Berdasarkan Total Kontrak Deal)</h3>
+                            <h3 className="text-sm font-bold text-[var(--text-primary)]">Pelanggan Teratas (Berdasarkan Total Layanan)</h3>
                             <div className="space-y-2">
                                 {Array.from(customerMap.values())
                                     .sort((a, b) => b.totalDeal - a.totalDeal)
@@ -1624,7 +1644,7 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                                                     <p className="text-[11px] text-[var(--text-muted)] truncate">{c.wilayah}</p>
                                                 </div>
                                             </div>
-                                            <span className="font-mono font-bold text-emerald-600 shrink-0">{c.totalDeal} Deal</span>
+                                            <span className="font-mono font-bold text-emerald-600 shrink-0">{c.totalDeal} Layanan</span>
                                         </div>
                                     ))}
                             </div>
@@ -1659,7 +1679,7 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                     <div className="md:col-span-4 border-b md:border-b-0 md:border-r border-[var(--border-subtle)] pb-4 md:pb-0 md:pr-4 space-y-2">
                         <div className="p-3 rounded-xl bg-[var(--accent-glow)] border border-[var(--accent)] flex items-center justify-between">
                             <div>
-                                <p className="text-xs font-extrabold text-[var(--text-primary)]">Manajemen Kontrak</p>
+                                <p className="text-xs font-extrabold text-[var(--text-primary)]">Pengingat Kontrak</p>
                                 <p className="text-[11px] text-[var(--text-secondary)]">Pengingat masa berlaku kontrak &amp; garansi</p>
                             </div>
                             <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 text-[10px] font-bold">
@@ -1671,9 +1691,9 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                     <div className="md:col-span-8 space-y-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h3 className="text-sm font-extrabold text-[var(--text-primary)]">Manajemen Kontrak &amp; Notifikasi Berakhir</h3>
+                                <h3 className="text-sm font-extrabold text-[var(--text-primary)]">Pengaturan Pengingat Kontrak &amp; Garansi</h3>
                                 <p className="text-xs text-[var(--text-secondary)]">
-                                    Kirim pengingat otomatis sebelum masa kontrak PCO atau garansi anti-rayap berakhir
+                                    Tampilkan pengingat otomatis sebelum masa kontrak Pest Control atau garansi Anti Rayap berakhir
                                 </p>
                             </div>
                             <button
@@ -1689,7 +1709,7 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                             <div className="p-3.5 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] space-y-1.5">
-                                <label className="block text-xs font-bold text-[var(--text-primary)]">Pengingat Tahap Pertama (H-30)</label>
+                                <label className="block text-xs font-bold text-[var(--text-primary)]">Pengingat Pertama</label>
                                 <div className="flex items-center gap-2">
                                     <input
                                         type="number"
@@ -1697,12 +1717,12 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                                         onChange={e => setReminderDays2(Number(e.target.value))}
                                         className="w-24 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] text-sm font-mono font-bold"
                                     />
-                                    <span className="text-xs text-[var(--text-secondary)]">hari sebelum kontrak berakhir</span>
+                                    <span className="text-xs text-[var(--text-secondary)]">hari sebelum berakhir</span>
                                 </div>
                             </div>
 
                             <div className="p-3.5 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] space-y-1.5">
-                                <label className="block text-xs font-bold text-[var(--text-primary)]">Pengingat Mendesak (H-14)</label>
+                                <label className="block text-xs font-bold text-[var(--text-primary)]">Pengingat Kedua (Mendesak)</label>
                                 <div className="flex items-center gap-2">
                                     <input
                                         type="number"
@@ -1710,7 +1730,7 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                                         onChange={e => setReminderDays1(Number(e.target.value))}
                                         className="w-24 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] text-sm font-mono font-bold"
                                     />
-                                    <span className="text-xs text-[var(--text-secondary)]">hari sebelum kontrak berakhir</span>
+                                    <span className="text-xs text-[var(--text-secondary)]">hari sebelum berakhir</span>
                                 </div>
                             </div>
                         </div>
@@ -1727,7 +1747,7 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                                 }}
                                 className="px-5 py-2 rounded-xl bg-[var(--accent)] text-white text-xs font-bold cursor-pointer"
                             >
-                                Simpan Pengaturan Kontrak
+                                Simpan Pengaturan
                             </button>
                         </div>
                     </div>
@@ -1737,19 +1757,22 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
             {hubTab === "master" && (
             <>
 
-            <div className="grid grid-cols-3 gap-3">
-                <div className="bg-white border border-slate-200 rounded-xl p-3">
-                    <p className="text-2xl font-bold text-slate-800">{totalCustomers}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Total Klien</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="clean-card bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-4">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">Total Pelanggan</span>
+                    <p className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1">{totalCustomers}</p>
+                    <p className="text-xs text-[var(--text-secondary)] mt-0.5">Terdaftar di sistem</p>
                 </div>
-                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3">
-                    <p className="text-2xl font-bold text-emerald-700">{withDeal}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Pernah Deal</p>
+                <div className="clean-card bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-4">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">Pelanggan Aktif</span>
+                    <p className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1">{withDeal}</p>
+                    <p className="text-xs text-[var(--text-secondary)] mt-0.5">Memiliki riwayat layanan</p>
                 </div>
-                <div className={`border rounded-xl p-3 ${expiringWarranties > 0 ? "bg-amber-50 border-amber-100" : "bg-purple-50 border-purple-100"}`}>
-                    <p className={`text-2xl font-bold ${expiringWarranties > 0 ? "text-amber-700" : "text-purple-700"}`}>{activeWarranties}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                        Garansi Aktif{expiringWarranties > 0 ? ` · ${expiringWarranties} segera habis` : ""}
+                <div className="clean-card bg-[var(--bg-card)] border border-[var(--border-subtle)] rounded-xl p-4">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">Garansi Aktif</span>
+                    <p className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1">{activeWarranties}</p>
+                    <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                        {expiringWarranties > 0 ? `${expiringWarranties} mendekati jadwal kontrol` : "Masa garansi berjalan"}
                     </p>
                 </div>
             </div>

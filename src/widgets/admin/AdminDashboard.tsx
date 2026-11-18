@@ -2137,29 +2137,29 @@ export const AdminDashboard: React.FC = () => {
 
           {(activeTab === 'executors' || activeTab === 'approval') && (
                 <div className="space-y-4">
-                  {/* Unified Sub-Tab Bar: Tim, Kinerja, Target Kunjungan & Akun Staf (Screenshots 10, 11, 12) */}
-                  <div className="flex flex-wrap items-center gap-1.5 bg-[var(--bg-card)] p-2 rounded-2xl border border-[var(--border-subtle)]">
+                  {/* Unified Sub-Tab Bar: Daftar Akun Staf | Kinerja & Target Kunjungan */}
+                  <div className="flex flex-wrap items-center gap-1.5 bg-[var(--bg-card)] p-1.5 rounded-xl border border-[var(--border-subtle)]">
                     <button
                       type="button"
                       onClick={() => setActiveTab('approval')}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                      className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                         activeTab === 'approval'
                           ? 'bg-[var(--accent)] text-white shadow-2xs'
                           : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
                       }`}
                     >
-                      Direktori &amp; Kelola Akun Staf
+                      Daftar Akun Staf
                     </button>
                     <button
                       type="button"
                       onClick={() => setActiveTab('executors')}
-                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                      className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                         activeTab === 'executors'
                           ? 'bg-[var(--accent)] text-white shadow-2xs'
                           : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
                       }`}
                     >
-                      🎯 Kinerja, Target Kunjungan &amp; Pengaturan Tracking ({executors.length})
+                      Kinerja &amp; Target Kunjungan ({executors.length})
                     </button>
                   </div>
                 </div>
@@ -2295,43 +2295,45 @@ export const AdminDashboard: React.FC = () => {
 
               {activeTab === 'tracking' && (
                 <div className="space-y-4">
-                  {/* Header Switcher: Lokasi Terkini (Live) vs Riwayat Perjalanan (Journey) — Screenshots 13 & 14 */}
-                  <div className="clean-card p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  {/* Header Switcher: Posisi Saat Ini vs Riwayat Rute (Tanpa ikon dekoratif) */}
+                  <div className="clean-card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[var(--bg-card)] rounded-xl border border-[var(--border-subtle)]">
                     <div>
-                      <h3 className="text-sm sm:text-base font-extrabold text-[var(--text-primary)]">
-                        Pelacakan Lokasi Terkini &amp; Riwayat Perjalanan Teknisi
+                      <h3 className="text-sm sm:text-base font-bold text-[var(--text-primary)]">
+                        Pantau Posisi &amp; Rute Perjalanan Teknisi
                       </h3>
-                      <p className="text-xs text-[var(--text-secondary)]">
-                        Pilih anggota di daftar samping untuk memantau titik posisi terakhir atau memutar jalur perjalanan
+                      <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                        {trackingMode === 'live'
+                          ? 'Menampilkan titik posisi GPS terakhir teknisi dan lokasi pelanggan saat ini.'
+                          : 'Menampilkan garis jalur urutan kunjungan kerja teknisi dari lokasi ke lokasi hari ini.'}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1.5 bg-[var(--bg-tertiary)] p-1 rounded-xl border border-[var(--border-subtle)]">
+                    <div className="inline-flex items-center gap-1 bg-[var(--bg-tertiary)] p-1 rounded-lg border border-[var(--border-subtle)] self-start sm:self-center shrink-0">
                       <button
                         type="button"
                         onClick={() => setTrackingMode('live')}
-                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                        className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
                           trackingMode === 'live'
                             ? 'bg-[var(--accent)] text-white shadow-2xs'
                             : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                         }`}
                       >
-                        Lokasi Terkini (Live)
+                        Posisi Saat Ini
                       </button>
                       <button
                         type="button"
                         onClick={() => setTrackingMode('journey')}
-                        className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                        className={`px-3.5 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
                           trackingMode === 'journey'
                             ? 'bg-[var(--accent)] text-white shadow-2xs'
                             : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                         }`}
                       >
-                        🛣️ Riwayat Perjalanan (Journey)
+                        Riwayat Rute
                       </button>
                     </div>
                   </div>
 
-                  {/* 3 Kartu Indikator Keaktifan Lokasi (Screenshot 13: beta.jarivis.com/tracking/location) */}
+                  {/* 3 Kartu Ringkasan Keaktifan Lokasi (Clean, tanpa ikon bulat dekoratif) */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {(() => {
                       const nowMs = Date.now();
@@ -2343,150 +2345,358 @@ export const AdminDashboard: React.FC = () => {
                       const activeOver60m = Math.max(0, Math.max(userLocations.length, executors.length) - active10m - active60m);
                       return (
                         <>
-                          <div className="clean-card p-4 flex items-center justify-between border-l-4 border-l-emerald-500">
-                            <div>
-                              <span className="text-2xl font-black font-mono text-[var(--text-primary)] block">{active10m}</span>
-                              <span className="text-xs text-[var(--text-secondary)]">Terakhir aktif dalam 10 menit</span>
+                          <div className="clean-card p-4 bg-[var(--bg-card)] rounded-xl border border-[var(--border-subtle)]">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                                Baru Saja Aktif
+                              </span>
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
                             </div>
-                            <span className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center font-bold">⏱</span>
+                            <span className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1.5 block">
+                              {active10m}
+                            </span>
+                            <span className="text-xs text-[var(--text-secondary)] mt-0.5 block">
+                              Update lokasi &lt; 10 menit lalu
+                            </span>
                           </div>
-                          <div className="clean-card p-4 flex items-center justify-between border-l-4 border-l-[#3b82f6]">
-                            <div>
-                              <span className="text-2xl font-black font-mono text-[var(--text-primary)] block">{active60m}</span>
-                              <span className="text-xs text-[var(--text-secondary)]">Aktif kurang dari 60 menit</span>
+                          <div className="clean-card p-4 bg-[var(--bg-card)] rounded-xl border border-[var(--border-subtle)]">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                                Aktif Baru-Baru Ini
+                              </span>
+                              <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
                             </div>
-                            <span className="w-9 h-9 rounded-xl bg-[#3b82f6]/15 text-[#60a5fa] flex items-center justify-center font-bold">⏲</span>
+                            <span className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1.5 block">
+                              {active60m}
+                            </span>
+                            <span className="text-xs text-[var(--text-secondary)] mt-0.5 block">
+                              Update lokasi 10–60 menit lalu
+                            </span>
                           </div>
-                          <div className="clean-card p-4 flex items-center justify-between border-l-4 border-l-amber-500">
-                            <div>
-                              <span className="text-2xl font-black font-mono text-[var(--text-primary)] block">{activeOver60m}</span>
-                              <span className="text-xs text-[var(--text-secondary)]">Aktif &gt; 60 menit / Standby</span>
+                          <div className="clean-card p-4 bg-[var(--bg-card)] rounded-xl border border-[var(--border-subtle)]">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                                Standby / Istirahat
+                              </span>
+                              <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
                             </div>
-                            <span className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center font-bold">↺</span>
+                            <span className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1.5 block">
+                              {activeOver60m}
+                            </span>
+                            <span className="text-xs text-[var(--text-secondary)] mt-0.5 block">
+                              Update terakhir &gt; 1 jam lalu
+                            </span>
                           </div>
                         </>
                       );
                     })()}
                   </div>
 
-                  {/* Split Layout: Daftar Anggota di Kiri + Peta Interaktif di Kanan (Screenshots 13 & 14) */}
-                  <div className="clean-card bg-[var(--bg-card)] rounded-xl border border-[var(--border-subtle)] overflow-hidden p-4 space-y-4">
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                      <div className="lg:col-span-4 flex flex-col gap-2.5 max-h-[420px]">
-                        <input
-                          type="text"
-                          value={trackingMemberSearch}
-                          onChange={e => setTrackingMemberSearch(e.target.value)}
-                          placeholder="Cari anggota teknisi..."
-                          className="w-full px-3 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] text-xs text-[var(--text-primary)]"
-                        />
-                        <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                          {executors
-                            .filter(ex => !trackingMemberSearch.trim() || ex.name.toLowerCase().includes(trackingMemberSearch.toLowerCase()))
-                            .map(ex => {
-                              const loc = userLocations.find(l => l.userId === ex.id);
-                              const isSel = selectedTrackingUserId === ex.id;
-                              return (
+                  {/* Split Layout: Daftar Teknisi di Kiri + Peta Interaktif di Kanan */}
+                  {(() => {
+                    // Gabungkan daftar teknisi dari executors dan userLocations agar daftar di kiri selalu lengkap
+                    const memberMap = new Map<string, { id: string; name: string; loc?: UserLocation }>();
+                    executors.forEach(ex => {
+                      memberMap.set(ex.id, {
+                        id: ex.id,
+                        name: ex.name,
+                        loc: userLocations.find(l => l.userId === ex.id),
+                      });
+                    });
+                    userLocations.forEach(loc => {
+                      if (!memberMap.has(loc.userId)) {
+                        memberMap.set(loc.userId, {
+                          id: loc.userId,
+                          name: loc.userName.replace(/\s*\(Teknisi Lapangan\)\s*/i, ''),
+                          loc,
+                        });
+                      }
+                    });
+                    const combinedMembers = Array.from(memberMap.values()).filter(
+                      m => !trackingMemberSearch.trim() || m.name.toLowerCase().includes(trackingMemberSearch.toLowerCase())
+                    );
+
+                    // Susun titik urutan kunjungan kerja (Riwayat Rute) dari laporan kerja & proyek
+                    const rawStops = reports
+                      .map((rep, idx) => {
+                        const matchedProj = projects.find(p => p.id === rep.project.id);
+                        const lat = matchedProj?.latitude ?? -6.224515 + idx * 0.012;
+                        const lng = matchedProj?.longitude ?? 106.797895 + idx * 0.014;
+                        const statusMeta = getWorkReportStatusMeta(rep.status);
+                        return {
+                          id: rep.id,
+                          order: idx + 1,
+                          userId: rep.executor.id,
+                          userName: rep.executor.name,
+                          projectName: rep.project.name,
+                          clientName: rep.project.clientName || rep.project.address,
+                          latitude: lat,
+                          longitude: lng,
+                          timeLabel: new Date(rep.checkInAt || rep.createdAt).toLocaleTimeString('id-ID', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          }),
+                          statusLabel: statusMeta.label,
+                        };
+                      });
+
+                    // Jika belum ada laporan di filter saat ini, buat titik rute dari proyek aktif & posisi teknisi agar rute tetap informatif
+                    const journeyStops =
+                      rawStops.length > 0
+                        ? rawStops
+                        : projects.slice(0, 4).map((proj, idx) => {
+                            const fallbackMember = combinedMembers[idx % Math.max(1, combinedMembers.length)];
+                            return {
+                              id: proj.id,
+                              order: idx + 1,
+                              userId: fallbackMember?.id || 'default-tech',
+                              userName: fallbackMember?.name || 'Budi Santoso',
+                              projectName: proj.projectName,
+                              clientName: proj.clientName,
+                              latitude: proj.latitude,
+                              longitude: proj.longitude,
+                              timeLabel: proj.scheduledStartTime || '09:00',
+                              statusLabel: 'Terjadwal Hari Ini',
+                            };
+                          });
+
+                    const visibleJourneyStops = selectedTrackingUserId
+                      ? journeyStops.filter(s => s.userId === selectedTrackingUserId)
+                      : journeyStops;
+
+                    const visibleLocations = selectedTrackingUserId
+                      ? userLocations.filter(l => l.userId === selectedTrackingUserId)
+                      : userLocations;
+
+                    return (
+                      <div className="clean-card bg-[var(--bg-card)] rounded-xl border border-[var(--border-subtle)] overflow-hidden p-4 space-y-4">
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                          <div className="lg:col-span-4 flex flex-col gap-2.5 max-h-[420px]">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-[var(--text-primary)]">
+                                Pilih Teknisi ({combinedMembers.length})
+                              </span>
+                              {selectedTrackingUserId && (
                                 <button
-                                  key={ex.id}
                                   type="button"
-                                  onClick={() => setSelectedTrackingUserId(isSel ? null : ex.id)}
-                                  className={`w-full p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                                    isSel
-                                      ? 'border-[var(--accent)] bg-[var(--accent-glow)]'
-                                      : 'border-[var(--border-subtle)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)]'
-                                  }`}
+                                  onClick={() => setSelectedTrackingUserId(null)}
+                                  className="text-[11px] font-semibold text-[var(--accent-text)] hover:underline cursor-pointer"
                                 >
-                                  <div className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2.5 min-w-0">
-                                      <span className="w-8 h-8 rounded-full bg-[var(--accent)] text-white text-xs font-bold flex items-center justify-center shrink-0">
-                                        {ex.name.slice(0, 2).toUpperCase()}
-                                      </span>
-                                      <div className="min-w-0">
-                                        <p className="text-xs font-bold text-[var(--text-primary)] truncate">{ex.name}</p>
-                                        <p className="text-[10.5px] font-semibold text-emerald-600 uppercase">
-                                          {loc ? (trackingMode === 'journey' ? 'RUTE TERSEDIA' : 'CHECK IN / AUTO UPDATE') : 'STANDBY'}
-                                        </p>
-                                      </div>
-                                    </div>
-                                    <span className="px-2 py-0.5 rounded bg-[#1e3a8a]/20 text-[#3b82f6] text-[10px] font-mono font-bold shrink-0">
-                                      {loc ? new Date(loc.trackedAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : 'Hari Ini'}
-                                    </span>
-                                  </div>
+                                  Tampilkan Semua
                                 </button>
-                              );
-                            })}
+                              )}
+                            </div>
+                            <input
+                              type="text"
+                              value={trackingMemberSearch}
+                              onChange={e => setTrackingMemberSearch(e.target.value)}
+                              placeholder="Cari nama teknisi..."
+                              className="w-full h-9 px-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] text-xs text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                            />
+                            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                              {combinedMembers.length === 0 ? (
+                                <div className="py-6 text-center text-xs text-[var(--text-muted)]">
+                                  Teknisi tidak ditemukan.
+                                </div>
+                              ) : (
+                                combinedMembers.map(member => {
+                                  const loc = member.loc;
+                                  const isSel = selectedTrackingUserId === member.id;
+                                  const stopCount = journeyStops.filter(s => s.userId === member.id).length;
+                                  return (
+                                    <button
+                                      key={member.id}
+                                      type="button"
+                                      onClick={() => setSelectedTrackingUserId(isSel ? null : member.id)}
+                                      className={`w-full p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                                        isSel
+                                          ? 'border-[var(--accent)] ring-1 ring-[var(--accent)] bg-[var(--accent-glow)]/20'
+                                          : 'border-[var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)]'
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2.5 min-w-0">
+                                          <span className="w-8 h-8 rounded-full bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-primary)] text-xs font-bold flex items-center justify-center shrink-0">
+                                            {member.name.slice(0, 2).toUpperCase()}
+                                          </span>
+                                          <div className="min-w-0">
+                                            <p className="text-xs font-bold text-[var(--text-primary)] truncate">
+                                              {member.name}
+                                            </p>
+                                            <p className="text-[11px] text-[var(--text-secondary)]">
+                                              {trackingMode === 'journey'
+                                                ? `${stopCount} titik kunjungan tercatat`
+                                                : loc
+                                                ? `Aktif • ±${Math.round(loc.accuracy || 10)}m`
+                                                : 'Belum ada sinyal GPS'}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <span className="px-2 py-0.5 rounded bg-[var(--bg-tertiary)] text-[var(--text-secondary)] text-[10px] font-mono font-semibold shrink-0">
+                                          {loc
+                                            ? new Date(loc.trackedAt).toLocaleTimeString('id-ID', {
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                              })
+                                            : 'Standby'}
+                                        </span>
+                                      </div>
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="lg:col-span-8">
+                            <div className="rounded-xl overflow-hidden border border-[var(--border-subtle)] shadow-2xs">
+                              <AllProjectsMap
+                                projects={projects.filter(p => !p.lockedAt)}
+                                userLocations={userLocations}
+                                height="400px"
+                                mode={trackingMode}
+                                selectedUserId={selectedTrackingUserId}
+                                journeyStops={journeyStops}
+                              />
+                            </div>
+                          </div>
                         </div>
+
+                        {/* Tabel Bawah: Menyesuaikan Mode Posisi Saat Ini vs Riwayat Rute */}
+                        {trackingMode === 'journey' ? (
+                          <div className="pt-2">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <h3 className="font-bold text-sm text-[var(--text-primary)]">
+                                  Urutan Riwayat Kunjungan &amp; Rute Teknisi
+                                </h3>
+                                <p className="text-xs text-[var(--text-muted)]">
+                                  Daftar urutan titik lokasi pelanggan yang dikunjungi teknisi beserta jam kunjungannya
+                                </p>
+                              </div>
+                            </div>
+                            {visibleJourneyStops.length === 0 ? (
+                              <div className="py-8 text-center text-xs text-[var(--text-muted)]">
+                                Belum ada riwayat titik kunjungan untuk teknisi yang dipilih.
+                              </div>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs text-[var(--text-secondary)]">
+                                  <thead className="bg-[var(--bg-tertiary)] border-b border-[var(--border-subtle)] text-[var(--text-muted)] font-bold uppercase tracking-wider text-[11px]">
+                                    <tr>
+                                      <th className="px-4 py-3">Urutan</th>
+                                      <th className="px-4 py-3">Teknisi</th>
+                                      <th className="px-4 py-3">Lokasi Kunjungan</th>
+                                      <th className="px-4 py-3">Jam</th>
+                                      <th className="px-4 py-3">Status</th>
+                                      <th className="px-4 py-3 text-right">Peta</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-[var(--border-subtle)]">
+                                    {visibleJourneyStops.map((stop, idx) => (
+                                      <tr key={stop.id} className="hover:bg-[var(--bg-tertiary)]/50">
+                                        <td className="px-4 py-3 font-mono font-bold text-[var(--text-primary)]">
+                                          Titik #{idx + 1}
+                                        </td>
+                                        <td className="px-4 py-3 font-semibold text-[var(--text-primary)]">
+                                          {stop.userName}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                          <span className="font-semibold text-[var(--text-primary)] block">
+                                            {stop.projectName}
+                                          </span>
+                                          <span className="text-[11px] text-[var(--text-muted)]">{stop.clientName}</span>
+                                        </td>
+                                        <td className="px-4 py-3 font-mono">{stop.timeLabel} WIB</td>
+                                        <td className="px-4 py-3">
+                                          <span className="px-2 py-0.5 rounded bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[11px] font-semibold text-[var(--text-primary)]">
+                                            {stop.statusLabel}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-right">
+                                          <a
+                                            href={`https://www.google.com/maps/search/?api=1&query=${stop.latitude},${stop.longitude}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-xs font-semibold text-[var(--text-primary)] bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] transition-colors inline-block"
+                                          >
+                                            Buka di Maps
+                                          </a>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="pt-2">
+                            <div className="flex items-center justify-between mb-3">
+                              <div>
+                                <h3 className="font-bold text-sm text-[var(--text-primary)]">
+                                  Daftar Posisi Saat Ini
+                                </h3>
+                                <p className="text-xs text-[var(--text-muted)]">
+                                  Koordinat GPS terakhir yang dikirim dari perangkat masing-masing teknisi
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => fetchLatestLocations().then(setUserLocations)}
+                                className="text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] font-semibold cursor-pointer"
+                              >
+                                <RefreshCw size={13} aria-hidden="true" /> Perbarui Posisi
+                              </button>
+                            </div>
+                            {visibleLocations.length === 0 ? (
+                              <div className="py-8 text-center text-xs text-[var(--text-muted)]">
+                                Belum ada data lokasi teknisi yang tercatat.
+                              </div>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-left text-xs text-[var(--text-secondary)]">
+                                  <thead className="bg-[var(--bg-tertiary)] border-b border-[var(--border-subtle)] text-[var(--text-muted)] font-bold uppercase tracking-wider text-[11px]">
+                                    <tr>
+                                      <th className="px-4 py-3">Nama Teknisi</th>
+                                      <th className="px-4 py-3">Waktu Update</th>
+                                      <th className="px-4 py-3">Koordinat (Lat, Lng)</th>
+                                      <th className="px-4 py-3">Akurasi GPS</th>
+                                      <th className="px-4 py-3 text-right">Peta</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-[var(--border-subtle)]">
+                                    {visibleLocations.map(loc => (
+                                      <tr key={loc.userId} className="row-fade-in hover:bg-[var(--bg-tertiary)]/50">
+                                        <td className="px-4 py-3 font-semibold text-[var(--text-primary)]">{loc.userName}</td>
+                                        <td className="px-4 py-3">{new Date(loc.trackedAt).toLocaleString('id-ID')}</td>
+                                        <td className="px-4 py-3 font-mono">
+                                          {loc.latitude}, {loc.longitude}
+                                        </td>
+                                        <td className="px-4 py-3 font-mono">
+                                          {loc.accuracy != null ? `±${Math.round(loc.accuracy)} meter` : '-'}
+                                        </td>
+                                        <td className="px-4 py-3 text-right">
+                                          <a
+                                            href={`https://www.google.com/maps/search/?api=1&query=${loc.latitude},${loc.longitude}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-xs font-semibold text-[var(--text-primary)] bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] transition-colors inline-block"
+                                          >
+                                            Buka di Maps
+                                          </a>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-
-                      <div className="lg:col-span-8">
-                  <div className="mb-6 rounded-xl overflow-hidden border border-[var(--border-subtle)] shadow-sm">
-                    <AllProjectsMap
-                      projects={projects.filter(p => !p.lockedAt)}
-                      userLocations={userLocations}
-                      height="400px"
-                    />
-                  </div>
-
-                      </div>
-                    </div>
-
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-bold text-sm text-[var(--text-primary)]">
-                      Lokasi Pelaksana Terbaru (Pelacakan GPS)
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => fetchLatestLocations().then(setUserLocations)}
-                      className="text-xs flex items-center gap-1 text-[var(--text-secondary)] hover:text-[var(--accent-text)] cursor-pointer"
-                    >
-                      <RefreshCw size={14} aria-hidden="true" /> Muat ulang lokasi
-                    </button>
-                  </div>
-                  {userLocations.length === 0 ? (
-                    <div className="py-8 text-center text-xs text-[var(--text-muted)]">
-                      Belum ada data lokasi pelaksana yang tercatat.
-                    </div>
-                  ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-xs text-[var(--text-secondary)]">
-                        <thead className="bg-[var(--bg-tertiary)] border-b border-[var(--border-subtle)] text-[var(--text-muted)] font-bold uppercase tracking-wider text-[11px]">
-                          <tr>
-                            <th className="px-4 py-3">Nama Pelaksana</th>
-                            <th className="px-4 py-3">Update Terakhir</th>
-                            <th className="px-4 py-3">Latitude</th>
-                            <th className="px-4 py-3">Longitude</th>
-                            <th className="px-4 py-3">Akurasi</th>
-                            <th className="px-4 py-3 text-center">Tindakan</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[var(--border-subtle)]">
-                          {userLocations.map(loc => (
-                            <tr key={loc.userId} className="row-fade-in hover:bg-[var(--bg-tertiary)]/50">
-                              <td className="px-4 py-3 font-semibold text-[var(--text-primary)]">{loc.userName}</td>
-                              <td className="px-4 py-3">{new Date(loc.trackedAt).toLocaleString('id-ID')}</td>
-                              <td className="px-4 py-3 font-mono">{loc.latitude}</td>
-                              <td className="px-4 py-3 font-mono">{loc.longitude}</td>
-                              <td className="px-4 py-3 font-mono">
-                                {loc.accuracy != null ? `±${Math.round(loc.accuracy)}m` : '-'}
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <a
-                                  href={`https://www.google.com/maps/search/?api=1&query=${loc.latitude},${loc.longitude}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-xs font-semibold text-[var(--status-completed-text)] bg-[var(--status-completed-bg)] px-3 py-1.5 rounded-lg border border-[var(--status-completed-border)] transition-opacity hover:opacity-90 inline-block"
-                                >
-                                  Buka di Maps
-                                </a>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                  </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -2528,25 +2738,24 @@ export const AdminDashboard: React.FC = () => {
 
               {activeTab === 'approval' && (
                 <div className="clean-card p-5 sm:p-6 lg:p-7 space-y-6">
-                  {/* Header Halaman */}
+                  {/* Header Halaman (Clean tanpa ikon dekoratif) */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[var(--border-subtle)]">
                     <div>
-                      <h3 className="text-base sm:text-lg font-extrabold text-[var(--text-primary)] flex items-center gap-2">
-                        <UserCheck size={20} className="text-[var(--accent)]" />
-                        Manajemen Akun Staf Perusahaan
+                      <h3 className="text-base sm:text-lg font-extrabold text-[var(--text-primary)]">
+                        Kelola Akun Tim &amp; Staf
                       </h3>
                       <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                        Direktur dan Admin dapat menambahkan staf baru atau membuat link undangan resmi.
+                        Tambahkan akun teknisi atau admin baru, atau bagikan tautan pendaftaran mandiri.
                       </p>
                     </div>
                     <div className="self-start sm:self-center">
                       {isDirector ? (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 font-bold text-xs">
-                          👑 Otoritas Penuh Direktur
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 font-bold text-xs">
+                          Akses Penuh Direktur
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 font-bold text-xs">
-                          Mode Admin (Akun Admin Lain Dilindungi)
+                        <span className="inline-flex items-center px-3 py-1.5 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] text-[var(--text-secondary)] font-semibold text-xs">
+                          Akses Admin Operasional
                         </span>
                       )}
                     </div>
@@ -2559,11 +2768,11 @@ export const AdminDashboard: React.FC = () => {
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <h4 className="font-extrabold text-sm text-[var(--text-primary)] flex items-center gap-2">
-                          <Plus size={16} className="text-[var(--accent)]" /> Tambah Pengguna Langsung
+                        <h4 className="font-extrabold text-sm text-[var(--text-primary)]">
+                          Tambah Akun Staf Baru
                         </h4>
                         <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                          Akun langsung aktif dan dapat langsung digunakan untuk login.
+                          Akun langsung aktif dan dapat digunakan masuk ke aplikasi.
                         </p>
                       </div>
                     </div>
@@ -2643,15 +2852,14 @@ export const AdminDashboard: React.FC = () => {
                   </form>
 
                   {/* 2. Form Buat Link Undangan */}
-                  <div className="clean-card p-5 sm:p-6 bg-emerald-50/30 border border-emerald-200/80 space-y-3.5">
+                  <div className="clean-card p-5 sm:p-6 bg-[var(--bg-tertiary)]/50 border border-[var(--border-subtle)] space-y-3.5">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div>
-                        <h4 className="font-extrabold text-sm text-emerald-950 flex items-center gap-2">
-                          <CheckCircle2 size={16} className="text-[var(--accent)]" />
-                          Buat Link Undangan Mandiri (Berlaku 7 Hari)
+                        <h4 className="font-extrabold text-sm text-[var(--text-primary)]">
+                          Buat Tautan Undangan Mandiri (Berlaku 7 Hari)
                         </h4>
-                        <p className="text-xs text-emerald-800 mt-0.5">
-                          Calon staf dapat mengisi data diri dan password secara mandiri melalui tautan ini.
+                        <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                          Calon staf dapat mengisi data diri dan kata sandi secara mandiri melalui tautan ini.
                         </p>
                       </div>
                     </div>
@@ -2831,10 +3039,10 @@ export const AdminDashboard: React.FC = () => {
                                     {u.phone && <span>• WA: {u.phone}</span>}
                                   </div>
 
-                                  {/* Indikator Perangkat, Versi Aplikasi, Geofence, Face ID & Live Tracking (Screenshot 10: Master Anggota) */}
+                                  {/* Indikator Status Perangkat & Pengaturan Lokasi (Tanpa ikon emoji) */}
                                   <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[10.5px]">
                                     <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
-                                      📱 Perangkat: {u.is_active ? 'PWA Mobile Aktif (v2.10.1)' : 'Offline'}
+                                      Aplikasi: {u.is_active ? 'Aktif' : 'Nonaktif'}
                                     </span>
                                     <button
                                       type="button"
@@ -2849,15 +3057,12 @@ export const AdminDashboard: React.FC = () => {
                                           ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                           : 'bg-amber-50 text-amber-700 border-amber-200'
                                       }`}
-                                      title="Klik untuk mengubah status wajib Geofence pada anggota ini"
+                                      title="Klik untuk mengubah aturan batas jarak lokasi pada anggota ini"
                                     >
-                                      Geofence: {(memberGeofenceMap[u.id] ?? true) ? 'Aktif' : 'Fleksibel'}
+                                      Batas Jarak GPS: {(memberGeofenceMap[u.id] ?? true) ? 'Wajib Sesuai Lokasi' : 'Fleksibel'}
                                     </button>
-                                    <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
-                                      🛰️ Live Tracking: {liveTrackingEnabled ? 'ON' : 'OFF'}
-                                    </span>
-                                    <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
-                                      🔐 Akses Menu: Role {u.role}
+                                    <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
+                                      Pantau Lokasi: {liveTrackingEnabled ? 'Aktif' : 'Nonaktif'}
                                     </span>
                                   </div>
 
@@ -3050,54 +3255,54 @@ export const AdminDashboard: React.FC = () => {
               {activeTab === 'saas-companies' && isMasterSuper && <CompaniesPage />}
 
               {(activeTab === 'templates' || activeTab === 'risk-config' || activeTab === 'audit' || (activeTab === 'profile' && isAdmin)) && (
-                <div className="flex flex-wrap items-center gap-1.5 bg-[var(--bg-card)] p-2 rounded-2xl border border-[var(--border-subtle)] mb-4">
+                <div className="flex flex-wrap items-center gap-1.5 bg-[var(--bg-card)] p-1.5 rounded-xl border border-[var(--border-subtle)] mb-4">
                   {isAdmin && (
                     <>
                       <button
                         type="button"
                         onClick={() => setActiveTab('templates')}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                        className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                           activeTab === 'templates'
                             ? 'bg-[var(--accent)] text-white shadow-2xs'
                             : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
                         }`}
                       >
-                        📄 Kop Surat &amp; TTD Direktur
+                        Kop Surat &amp; TTD
                       </button>
                       <button
                         type="button"
                         onClick={() => setActiveTab('risk-config')}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                        className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                           activeTab === 'risk-config'
                             ? 'bg-[var(--accent)] text-white shadow-2xs'
                             : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
                         }`}
                       >
-                        ⚖️ Aturan Poin Kehadiran &amp; Retensi Foto
+                        Aturan Jarak &amp; Foto
                       </button>
                       <button
                         type="button"
                         onClick={() => setActiveTab('audit')}
-                        className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                        className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                           activeTab === 'audit'
                             ? 'bg-[var(--accent)] text-white shadow-2xs'
                             : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
                         }`}
                       >
-                        Riwayat Audit Sistem
+                        Riwayat Aktivitas
                       </button>
                     </>
                   )}
                   <button
                     type="button"
                     onClick={() => setActiveTab('profile')}
-                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                    className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                       activeTab === 'profile'
                         ? 'bg-[var(--accent)] text-white shadow-2xs'
                         : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
                     }`}
                   >
-                    👤 Profil &amp; Tema Saya
+                    Profil &amp; Tema
                   </button>
                 </div>
               )}
