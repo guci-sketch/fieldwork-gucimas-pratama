@@ -23,6 +23,8 @@ import type { Quotation } from '@/entities/types';
 import { MapPicker } from '@/widgets/common/MapPicker';
 import { KontrolRayapPage } from './KontrolRayapPage';
 import { searchAddressSuggestions, type AddressSuggestion } from '@/shared/utils/geocoding';
+import { fetchMyProjects } from '@/shared/api/projects';
+import { getLocalRealisticReports } from '@/shared/data/realisticFieldworkSeed';
 
 interface ControlChecklist {
     id: string; tanggal: Date; teknisi: string; catatan: string;
@@ -78,14 +80,14 @@ interface DerivedCustomer {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-    draft: "bg-slate-100 text-slate-500", pending: "bg-amber-100 text-amber-700",
+    draft: "bg-slate-100 text-slate-600", pending: "bg-amber-100 text-amber-700",
     approved: "bg-blue-100 text-blue-700", rejected: "bg-red-100 text-red-600",
-    sent_to_client: "bg-yellow-100 text-yellow-700", deal: "bg-emerald-100 text-emerald-700",
+    sent_to_client: "bg-cyan-100 text-cyan-700", deal: "bg-emerald-100 text-emerald-700",
     cancelled: "bg-slate-100 text-slate-400",
 };
 const STATUS_LABEL: Record<string, string> = {
-    draft: "Draft", pending: "Menunggu", approved: "Disetujui",
-    rejected: "Ditolak", sent_to_client: "Dikirim", deal: "Deal", cancelled: "Batal",
+    draft: "Terdaftar", pending: "Terjadwal", approved: "Terverifikasi",
+    rejected: "Dibatalkan", sent_to_client: "Dilaporkan", deal: "Selesai Dilaporkan", cancelled: "Batal",
 };
 
 function WarrantyBadge({ w }: { w: WarrantyInfo | null }) {
@@ -607,9 +609,9 @@ function CustomerCard({ customer, expanded, onToggle, onAddChecklist, onEditProf
                         {customer.jasaDigunakan.map(j => (
                             <span key={j} className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{j}</span>
                         ))}
-                        {customer.totalDeal > 0 && (
+                        {customer.services.length > 0 && (
                             <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 flex items-center gap-0.5">
-                                <CheckCircle2 size={9} /> {customer.totalDeal}x deal
+                                <CheckCircle2 size={9} /> {customer.services.length}x kunjungan
                             </span>
                         )}
                         {customer.latitude && customer.longitude ? (
@@ -806,10 +808,10 @@ function CustomerCard({ customer, expanded, onToggle, onAddChecklist, onEditProf
                         )}
                     </div>
 
-                    {/* Riwayat Pekerjaan */}
+                    {/* Riwayat Kunjungan & Pelaporan Kerja */}
                     <div className="px-5 py-4">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3 flex items-center gap-1">
-                            <FileText size={10} /> Riwayat Pekerjaan
+                            <FileText size={10} /> Riwayat Kunjungan &amp; Laporan Kerja
                         </p>
                         <div className="space-y-2">
                             {customer.services.sort((a, b) => b.tanggal.getTime() - a.tanggal.getTime()).map(s => (
@@ -819,13 +821,13 @@ function CustomerCard({ customer, expanded, onToggle, onAddChecklist, onEditProf
                                             {s.noSurat}
                                         </code>
                                         <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${STATUS_COLOR[s.status] ?? "bg-slate-100 text-slate-500"}`}>
-                                            {STATUS_LABEL[s.status] ?? s.status}
+                                            {STATUS_LABEL[s.status] ?? "Terdata"}
                                         </span>
                                     </div>
                                     <p className="text-xs text-slate-700 font-medium">{s.jenisLayanan}</p>
                                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                         <span className="text-[10px] text-slate-400">{formatDate(s.tanggal)}</span>
-                                        <span className="text-[10px] text-slate-400">· by {s.marketingNama}</span>
+                                        <span className="text-[10px] text-slate-400">· Pelaksana: {s.marketingNama}</span>
                                         {s.garansiTahun && s.garansiTahun > 0 && (
                                             <span className="text-[10px] text-purple-600 font-semibold">
                                                 · Garansi {s.garansiTahun}thn ({s.jenisGaransi ?? "Anti Rayap"})
@@ -1282,23 +1284,43 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
         if (!user) return;
         setLoading(true);
         try {
-            // Load quotations + field projects (agar pelanggan baru yang diinput teknisi di lapangan otomatis muncul untuk dilengkapi Admin)
-            const [quotesData, projRes] = await Promise.all([
+            // Load field projects & work reports + manual customer records
+            const [quotesData, projRes, mergedProjects] = await Promise.all([
                 getQuotations({
                     companyId: user.companyId,
                     byUid: canSeeAll ? undefined : user.uid,
-                }),
+                }).catch(() => [] as Quotation[]),
                 supabase
                     .from("projects")
-                    .select("id, client_name, project_name, address, latitude, longitude, service_type, work_date, created_at")
+                    .select("id, client_name, project_name, address, latitude, longitude, service_type, warranty_months, work_date, created_at")
                     .eq("company_id", user.companyId)
                     .order("created_at", { ascending: false })
                     .limit(300),
+                fetchMyProjects().catch(() => []),
             ]);
             setQuotations(quotesData);
-            setFieldProjects(projRes.data || []);
+
+            const dbRows = projRes.data || [];
+            const fallbackRows = mergedProjects.map(mp => ({
+                id: mp.id,
+                client_name: mp.clientName || mp.projectName,
+                project_name: mp.projectName,
+                address: mp.address,
+                latitude: mp.latitude,
+                longitude: mp.longitude,
+                service_type: mp.serviceType,
+                warranty_months: mp.warrantyMonths,
+                work_date: mp.workDate,
+                created_at: mp.createdAt,
+            }));
+            const seenIds = new Set(dbRows.map((r: any) => String(r.id)));
+            const combinedProjects = [
+                ...dbRows,
+                ...fallbackRows.filter(f => !seenIds.has(String(f.id))),
+            ];
+            setFieldProjects(combinedProjects);
         } catch (err) {
-            console.error("[CustomersPage] load quotations/projects error:", err);
+            console.error("[CustomersPage] load projects error:", err);
         }
 
         // Load checklists separately — don't block quotations if this fails
@@ -1394,44 +1416,106 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
             if (c.wilayah === "Tidak Diketahui" && c.address) c.wilayah = extractWilayah(c.address);
         });
 
+        const localReports = getLocalRealisticReports();
+
         fieldProjects.forEach((p: any) => {
-            const cName = String(p.client_name || "").trim();
+            const cName = String(p.client_name || p.project_name || "").trim();
             if (!cName) return;
             const key = cName.toLowerCase().replace(/\s+/g, "_");
-            const svcLabel = p.service_type === "TERMITE_CONTROL" ? "Anti Rayap" : "Pest Control";
+            const isTermite = p.service_type === "TERMITE_CONTROL";
+            const svcLabel = isTermite ? "Anti Rayap" : "Pest Control";
+            const matchingReports = localReports.filter(
+                r => r.projectId === p.id || (r.clientName || "").trim().toLowerCase() === cName.toLowerCase()
+            );
+            const executorLabel = matchingReports[0]?.executorName || "Tim Teknisi Lapangan";
+            const customerPhone = matchingReports.find(r => r.customerPhone)?.customerPhone || "";
+            const picName = matchingReports.find(r => r.customerName)?.customerName || undefined;
+            const visitDate = p.work_date ? new Date(p.work_date) : p.created_at ? new Date(p.created_at) : new Date();
+            const warrantyMonths = Number(p.warranty_months || (isTermite ? 36 : 0));
+            const warrantyYears = warrantyMonths >= 12 ? Math.round(warrantyMonths / 12) : 0;
+
+            let warrantyObj: WarrantyInfo | null = null;
+            if (warrantyYears > 0) {
+                const expiredAt = new Date(visitDate);
+                expiredAt.setFullYear(expiredAt.getFullYear() + warrantyYears);
+                const daysRemaining = Math.ceil((expiredAt.getTime() - now.getTime()) / 86400000);
+                warrantyObj = {
+                    quotationId: String(p.id),
+                    noSurat: `LKP-${String(p.id).slice(0, 6).toUpperCase()}`,
+                    garansiTahun: warrantyYears,
+                    jenisGaransi: isTermite ? "Garansi Anti Rayap" : "Garansi Layanan",
+                    dealAt: visitDate,
+                    expiredAt,
+                    isActive: daysRemaining > 0,
+                    daysRemaining: Math.max(0, daysRemaining),
+                };
+            }
+
             if (!map.has(key)) {
                 const addr = String(p.address || "").trim();
+                const serviceEntries: ServiceRecord[] = matchingReports.length > 0
+                    ? matchingReports.map((rep, idx) => ({
+                        noSurat: `LKP-${String(rep.id || p.id).slice(0, 6).toUpperCase()}-${idx + 1}`,
+                        kategori: rep.serviceType === "TERMITE_CONTROL" ? "AR" : "PCO",
+                        jenisLayanan: rep.serviceType === "TERMITE_CONTROL" ? "Anti Rayap" : "Pest Control",
+                        tanggal: rep.checkInAt ? new Date(rep.checkInAt) : visitDate,
+                        status: rep.status === "COMPLETED" || rep.status === "REVIEWED" ? "deal" : "pending",
+                        marketingNama: rep.executorName || executorLabel,
+                        garansiTahun: warrantyYears > 0 ? warrantyYears : undefined,
+                        jenisGaransi: isTermite ? "Anti Rayap" : undefined,
+                    }))
+                    : [{
+                        noSurat: `LKP-${String(p.id).slice(0, 6).toUpperCase()}`,
+                        kategori: isTermite ? "AR" : "PCO",
+                        jenisLayanan: svcLabel,
+                        tanggal: visitDate,
+                        status: "deal",
+                        marketingNama: executorLabel,
+                        garansiTahun: warrantyYears > 0 ? warrantyYears : undefined,
+                        jenisGaransi: isTermite ? "Anti Rayap" : undefined,
+                    }];
+
                 map.set(key, {
                     id: key,
                     name: cName,
                     address: addr,
                     addressFull: addr ? [addr] : [],
-                    up: undefined,
-                    wa: "",
+                    up: picName,
+                    wa: customerPhone,
                     wilayah: extractWilayah(addr),
                     latitude: typeof p.latitude === "number" && p.latitude !== 0 ? p.latitude : undefined,
                     longitude: typeof p.longitude === "number" && p.longitude !== 0 ? p.longitude : undefined,
-                    services: [{
-                        noSurat: `FIELD-${String(p.id).slice(0, 6).toUpperCase()}`,
-                        kategori: p.service_type === "TERMITE_CONTROL" ? "AR" : "PCO",
-                        jenisLayanan: svcLabel,
-                        tanggal: p.created_at ? new Date(p.created_at) : new Date(),
-                        status: "deal",
-                        marketingNama: "Input Lapangan Teknisi",
-                    }],
-                    totalQuotations: 0,
-                    totalDeal: 1,
-                    lastServiceDate: p.created_at ? new Date(p.created_at) : new Date(),
+                    services: serviceEntries,
+                    totalQuotations: serviceEntries.length,
+                    totalDeal: serviceEntries.length,
+                    lastServiceDate: serviceEntries[0]?.tanggal ?? visitDate,
                     jasaDigunakan: [svcLabel],
-                    warranties: [],
-                    activeWarranty: null,
+                    warranties: warrantyObj ? [warrantyObj] : [],
+                    activeWarranty: warrantyObj && warrantyObj.isActive ? warrantyObj : null,
                     checklists: [],
-                    needsAdminDetails: true,
+                    needsAdminDetails: !picName && !customerPhone,
                 });
             } else {
                 const existing = map.get(key)!;
-                if (!existing.up && !existing.wa) {
-                    existing.needsAdminDetails = true;
+                if (!existing.latitude && typeof p.latitude === "number" && p.latitude !== 0) existing.latitude = p.latitude;
+                if (!existing.longitude && typeof p.longitude === "number" && p.longitude !== 0) existing.longitude = p.longitude;
+                if (!existing.up && picName) existing.up = picName;
+                if (!existing.wa && customerPhone) existing.wa = customerPhone;
+                if (!existing.jasaDigunakan.includes(svcLabel)) existing.jasaDigunakan.push(svcLabel);
+                existing.services.push({
+                    noSurat: `LKP-${String(p.id).slice(0, 6).toUpperCase()}`,
+                    kategori: isTermite ? "AR" : "PCO",
+                    jenisLayanan: svcLabel,
+                    tanggal: visitDate,
+                    status: "deal",
+                    marketingNama: executorLabel,
+                    garansiTahun: warrantyYears > 0 ? warrantyYears : undefined,
+                });
+                existing.totalDeal = existing.services.length;
+                existing.totalQuotations = existing.services.length;
+                if (warrantyObj && existing.warranties.length === 0) {
+                    existing.warranties.push(warrantyObj);
+                    if (warrantyObj.isActive) existing.activeWarranty = warrantyObj;
                 }
             }
         });
@@ -1518,8 +1602,8 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                                 Alamat: c.address,
                                 PIC: c.up || "-",
                                 WhatsApp: c.wa || "-",
-                                Total_PH: c.totalQuotations,
-                                Total_Deal: c.totalDeal,
+                                Total_Kunjungan: c.services.length,
+                                Layanan: c.jasaDigunakan.join(", ") || "-",
                                 Status_Garansi: c.activeWarranty?.isActive ? `Aktif (${c.activeWarranty.daysRemaining} hari)` : "Tidak Ada",
                                 Koordinat: c.latitude && c.longitude ? `${c.latitude}, ${c.longitude}` : "Belum Ada Pin",
                             }));
@@ -1546,13 +1630,13 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                 </div>
             </div>
 
-            {/* ── Sub-Tab Navigasi Pelanggan (Clean & Bahasa Mudah Dipahami) ── */}
+            {/* ── Sub-Tab Navigasi Pelanggan (Clean & Fokus Pelaporan Kerja) ── */}
             <div className="flex flex-wrap items-center gap-1.5 bg-[var(--bg-card)] p-1.5 rounded-xl border border-[var(--border-subtle)]">
                 {([
                     { id: "master", label: `Daftar Pelanggan (${totalCustomers})` },
-                    { id: "garansi", label: `Jadwal Garansi (${activeWarranties})` },
+                    { id: "garansi", label: `Jadwal Kontrol & Garansi (${activeWarranties})` },
                     { id: "analisis", label: `Lokasi Belum Lengkap (${missingPinCustomers.length})` },
-                    { id: "pengaturan", label: "Pengingat Kontrak" },
+                    { id: "pengaturan", label: "Pengingat Jadwal Kontrol" },
                 ] as const).map(t => (
                     <button
                         key={t.id}
@@ -1625,13 +1709,13 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                         </div>
                     </div>
 
-                    {/* Grid Pelanggan Teratas & Mendekati Kontrak Berakhir */}
+                    {/* Grid Pelanggan Teratas & Mendekati Jadwal Kontrol */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="clean-card p-5 space-y-3">
-                            <h3 className="text-sm font-bold text-[var(--text-primary)]">Pelanggan Teratas (Berdasarkan Total Layanan)</h3>
+                            <h3 className="text-sm font-bold text-[var(--text-primary)]">Pelanggan Teratas (Berdasarkan Frekuensi Kunjungan)</h3>
                             <div className="space-y-2">
                                 {Array.from(customerMap.values())
-                                    .sort((a, b) => b.totalDeal - a.totalDeal)
+                                    .sort((a, b) => b.services.length - a.services.length)
                                     .slice(0, 5)
                                     .map((c, idx) => (
                                         <div key={c.id} className="p-3 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] flex items-center justify-between text-xs">
@@ -1644,14 +1728,14 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                                                     <p className="text-[11px] text-[var(--text-muted)] truncate">{c.wilayah}</p>
                                                 </div>
                                             </div>
-                                            <span className="font-mono font-bold text-emerald-600 shrink-0">{c.totalDeal} Layanan</span>
+                                            <span className="font-mono font-bold text-emerald-600 shrink-0">{c.services.length} Kunjungan</span>
                                         </div>
                                     ))}
                             </div>
                         </div>
 
                         <div className="clean-card p-5 space-y-3">
-                            <h3 className="text-sm font-bold text-[var(--text-primary)]">Pelanggan yang Mendekati Garansi / Kontrak Berakhir</h3>
+                            <h3 className="text-sm font-bold text-[var(--text-primary)]">Pelanggan yang Mendekati Jadwal Kontrol / Garansi Berakhir</h3>
                             <div className="space-y-2">
                                 {Array.from(customerMap.values())
                                     .filter(c => c.activeWarranty?.isActive)
@@ -1661,7 +1745,7 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                                         <div key={c.id} className="p-3 rounded-xl bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] flex items-center justify-between text-xs">
                                             <div className="min-w-0">
                                                 <p className="font-bold text-[var(--text-primary)] truncate">{c.name}</p>
-                                                <p className="text-[11px] text-[var(--text-muted)] truncate">No: {c.activeWarranty?.noSurat}</p>
+                                                <p className="text-[11px] text-[var(--text-muted)] truncate">Kode: {c.activeWarranty?.noSurat}</p>
                                             </div>
                                             <span className="px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-600 font-mono font-bold shrink-0">
                                                 {c.activeWarranty?.daysRemaining} hari lagi
@@ -1679,8 +1763,8 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                     <div className="md:col-span-4 border-b md:border-b-0 md:border-r border-[var(--border-subtle)] pb-4 md:pb-0 md:pr-4 space-y-2">
                         <div className="p-3 rounded-xl bg-[var(--accent-glow)] border border-[var(--accent)] flex items-center justify-between">
                             <div>
-                                <p className="text-xs font-extrabold text-[var(--text-primary)]">Pengingat Kontrak</p>
-                                <p className="text-[11px] text-[var(--text-secondary)]">Pengingat masa berlaku kontrak &amp; garansi</p>
+                                <p className="text-xs font-extrabold text-[var(--text-primary)]">Pengingat Kontrol Berkala</p>
+                                <p className="text-[11px] text-[var(--text-secondary)]">Notifikasi jadwal kunjungan kontrol &amp; garansi</p>
                             </div>
                             <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 text-[10px] font-bold">
                                 {contractReminderEnabled ? "Aktif" : "Nonaktif"}
@@ -1691,9 +1775,9 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                     <div className="md:col-span-8 space-y-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                <h3 className="text-sm font-extrabold text-[var(--text-primary)]">Pengaturan Pengingat Kontrak &amp; Garansi</h3>
+                                <h3 className="text-sm font-extrabold text-[var(--text-primary)]">Pengaturan Pengingat Jadwal Kontrol &amp; Garansi</h3>
                                 <p className="text-xs text-[var(--text-secondary)]">
-                                    Tampilkan pengingat otomatis sebelum masa kontrak Pest Control atau garansi Anti Rayap berakhir
+                                    Tampilkan pengingat otomatis sebelum jadwal kunjungan berkala Pest Control atau masa garansi Anti Rayap berakhir
                                 </p>
                             </div>
                             <button
@@ -1717,7 +1801,7 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                                         onChange={e => setReminderDays2(Number(e.target.value))}
                                         className="w-24 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] text-sm font-mono font-bold"
                                     />
-                                    <span className="text-xs text-[var(--text-secondary)]">hari sebelum berakhir</span>
+                                    <span className="text-xs text-[var(--text-secondary)]">hari sebelum jadwal berakhir</span>
                                 </div>
                             </div>
 
@@ -1730,14 +1814,14 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                                         onChange={e => setReminderDays1(Number(e.target.value))}
                                         className="w-24 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] text-sm font-mono font-bold"
                                     />
-                                    <span className="text-xs text-[var(--text-secondary)]">hari sebelum berakhir</span>
+                                    <span className="text-xs text-[var(--text-secondary)]">hari sebelum jadwal berakhir</span>
                                 </div>
                             </div>
                         </div>
 
                         <div className="flex items-center justify-end gap-3 pt-2">
                             {reminderSaved && (
-                                <span className="text-xs font-bold text-emerald-600">Pengaturan pengingat kontrak tersimpan.</span>
+                                <span className="text-xs font-bold text-emerald-600">Pengaturan pengingat kontrol tersimpan.</span>
                             )}
                             <button
                                 type="button"
@@ -1806,27 +1890,25 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                 )}
             </div>
 
-            {/* ── Filter chips row ── */}
+            {/* ── Filter chips row (Clean tanpa ikon dekoratif) ── */}
             <div className="flex items-center gap-2 flex-wrap">
                 <button
                     onClick={() => { setFilterWarranty(v => !v); setPage(1); }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
                         filterWarranty
-                            ? "bg-purple-600 text-white border-purple-600"
+                            ? "bg-[var(--accent)] text-white border-[var(--accent)]"
                             : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                     }`}>
-                    <Shield size={12} />
                     Bergaransi
                 </button>
 
                 <button
                     onClick={() => { setOnlyMissingPin(v => !v); setPage(1); }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer ${
                         onlyMissingPin
                             ? "bg-amber-600 text-white border-amber-600"
                             : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
                     }`}>
-                    <MapPin size={12} />
                     Tanpa Pin Peta ({missingPinCustomers.length})
                 </button>
 
@@ -1835,7 +1917,7 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                     onChange={e => { setSortBy(e.target.value as typeof sortBy); setPage(1); }}
                     className="px-3 py-1.5 text-xs font-medium border border-slate-200 rounded-lg bg-white text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-100">
                     <option value="date">Terbaru</option>
-                    <option value="deal">Terbanyak Deal</option>
+                    <option value="deal">Terbanyak Kunjungan</option>
                     <option value="name">Nama A-Z</option>
                     <option value="area">Per Wilayah</option>
                 </select>
@@ -1843,20 +1925,19 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                 <button
                     onClick={load}
                     disabled={loading}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-200 bg-white text-slate-500 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors">
-                    <RefreshCw size={12} className={loading ? "animate-spin" : ""} />
-                    Refresh
+                    className="px-3 py-1.5 text-xs font-medium border border-slate-200 bg-white text-slate-600 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors cursor-pointer">
+                    {loading ? "Memuat..." : "Muat Ulang"}
                 </button>
 
-                {(searchQ || filterWarranty) && (
+                {(searchQ || filterWarranty || onlyMissingPin) && (
                     <button
-                        onClick={() => { setSearchQ(""); setFilterWarranty(false); setPage(1); }}
-                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg border border-slate-200 transition-colors">
-                        <X size={11} /> Reset
+                        onClick={() => { setSearchQ(""); setFilterWarranty(false); setOnlyMissingPin(false); setPage(1); }}
+                        className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg border border-slate-200 transition-colors cursor-pointer">
+                        Reset Filter
                     </button>
                 )}
 
-                {/* View Mode Toggle: Card View vs Table View (Screenshot 1: beta.jarivis.com/customer) */}
+                {/* View Mode Toggle: Card View vs Table View */}
                 <div className="ml-auto flex items-center gap-1.5">
                     <button
                         type="button"
@@ -1878,26 +1959,27 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                                 : "bg-white text-slate-600 border-slate-200"
                         }`}
                     >
-                        Tabel Master
+                        Tampilan Tabel
                     </button>
                     <span className="text-xs text-slate-400 font-medium ml-1">
-                        {loading ? "..." : `${customers.length} klien`}
+                        {loading ? "..." : `${customers.length} pelanggan`}
                     </span>
                 </div>
             </div>
 
             {loading ? (
                 <div className="flex items-center justify-center py-16 text-slate-400">
-                    <Loader2 size={24} className="animate-spin mr-2" /> Memuat data...
+                    <Loader2 size={24} className="animate-spin mr-2" /> Memuat data pelanggan...
                 </div>
             ) : customers.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-slate-400 text-center">
-                    <Users size={36} className="mb-3 opacity-20" />
                     <p className="font-medium text-slate-500">
-                        {debouncedSearch || filterWarranty ? "Klien tidak ditemukan" : "Belum ada data klien"}
+                        {debouncedSearch || filterWarranty ? "Pelanggan tidak ditemukan" : "Belum ada data pelanggan"}
                     </p>
                     <p className="text-sm mt-1">
-                        {debouncedSearch || filterWarranty ? "Coba ubah filter." : "Data muncul otomatis dari quotation."}
+                        {debouncedSearch || filterWarranty
+                            ? "Coba ubah kata kunci pencarian atau filter."
+                            : "Tambahkan pelanggan baru atau impor dari Excel untuk lokasi pelaporan kerja."}
                     </p>
                 </div>
             ) : (
@@ -1911,8 +1993,8 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                                         <th className="py-3 px-3.5">Nama Pelanggan</th>
                                         <th className="py-3 px-3.5">Wilayah</th>
                                         <th className="py-3 px-3.5">PIC &amp; WhatsApp</th>
-                                        <th className="py-3 px-3.5 text-center">Deal / PH</th>
-                                        <th className="py-3 px-3.5">Garansi Rayap</th>
+                                        <th className="py-3 px-3.5 text-center">Total Kunjungan</th>
+                                        <th className="py-3 px-3.5">Garansi Layanan</th>
                                         <th className="py-3 px-3.5">Pin Peta</th>
                                         <th className="py-3 px-3.5 text-right">Aksi</th>
                                     </tr>
@@ -1946,7 +2028,7 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
                                                     <p className="font-mono text-[11px] text-[var(--text-muted)]">{c.wa || "-"}</p>
                                                 </td>
                                                 <td className="py-3 px-3.5 text-center font-mono font-bold text-emerald-700">
-                                                    {c.totalDeal}/{c.totalQuotations}
+                                                    {c.services.length} Kunjungan
                                                 </td>
                                                 <td className="py-3 px-3.5">
                                                     {c.activeWarranty?.isActive ? (
