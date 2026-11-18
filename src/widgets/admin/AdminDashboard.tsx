@@ -1095,7 +1095,7 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   )}
 
-                  {/* ── 5 Kartu Status Warna Solid + Rata-Rata Durasi (Screenshot 6: Task Monitoring) ── */}
+                  {/* ── 5 Kartu Ringkasan Minimalis (Laporan Kerja) ── */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                     <button
                       type="button"
@@ -1103,15 +1103,24 @@ export const AdminDashboard: React.FC = () => {
                         setActiveTab('reports');
                         setFilters(prev => ({ ...prev, status: 'ALL' }));
                       }}
-                      className={`p-3.5 rounded-2xl text-left text-white transition-all cursor-pointer shadow-xs ${
+                      className={`clean-card p-4 rounded-xl text-left border transition-all cursor-pointer ${
                         activeTab === 'reports' && filters.status === 'ALL'
-                          ? 'bg-[#1e3a8a] ring-2 ring-[#3b82f6]'
-                          : 'bg-[#1e293b] hover:opacity-95'
+                          ? 'bg-[var(--bg-card)] border-[var(--accent)] ring-1 ring-[var(--accent)]'
+                          : 'bg-[var(--bg-card)] border-[var(--border-subtle)] hover:border-[var(--border-strong)]'
                       }`}
                     >
-                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-blue-200 block">SEMUA LAPORAN</span>
-                      <span className="text-2xl font-black font-mono mt-1 block">{kpi.totalJobs || reports.length}</span>
-                      <span className="text-[11px] text-slate-300 mt-0.5 block">Klik tampilkan semua</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                          Semua Laporan
+                        </span>
+                        <span className="w-2 h-2 rounded-full bg-[var(--accent)] shrink-0" />
+                      </div>
+                      <span className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1.5 block">
+                        {kpi.totalJobs || reports.length}
+                      </span>
+                      <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
+                        Klik tampilkan semua
+                      </span>
                     </button>
 
                     <button
@@ -1120,29 +1129,47 @@ export const AdminDashboard: React.FC = () => {
                         setActiveTab('reports');
                         setFilters(prev => ({ ...prev, status: 'COMPLETED' }));
                       }}
-                      className={`p-3.5 rounded-2xl text-left text-white transition-all cursor-pointer shadow-xs ${
+                      className={`clean-card p-4 rounded-xl text-left border transition-all cursor-pointer ${
                         activeTab === 'reports' && filters.status === 'COMPLETED'
-                          ? 'bg-emerald-700 ring-2 ring-emerald-400'
-                          : 'bg-emerald-600 hover:opacity-95'
+                          ? 'bg-[var(--bg-card)] border-[var(--accent)] ring-1 ring-[var(--accent)]'
+                          : 'bg-[var(--bg-card)] border-[var(--border-subtle)] hover:border-[var(--border-strong)]'
                       }`}
                     >
-                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-100 block">SELESAI</span>
-                      <span className="text-2xl font-black font-mono mt-1 block">{kpi.completedJobs}</span>
-                      <span className="text-[11px] text-emerald-100 mt-0.5 block">Tugas tuntas</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                          Selesai
+                        </span>
+                        <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
+                      </div>
+                      <span className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1.5 block">
+                        {kpi.completedJobs}
+                      </span>
+                      <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
+                        Tugas tuntas
+                      </span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setActiveTab('anomalies')}
-                      className={`p-3.5 rounded-2xl text-left text-white transition-all cursor-pointer shadow-xs ${
+                      className={`clean-card p-4 rounded-xl text-left border transition-all cursor-pointer ${
                         activeTab === 'anomalies'
-                          ? 'bg-rose-700 ring-2 ring-rose-400'
-                          : 'bg-rose-600 hover:opacity-95'
+                          ? 'bg-[var(--bg-card)] border-rose-600 ring-1 ring-rose-600'
+                          : 'bg-[var(--bg-card)] border-[var(--border-subtle)] hover:border-[var(--border-strong)]'
                       }`}
                     >
-                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-rose-100 block">⚠️ PERLU DICEK / ANOMALI</span>
-                      <span className="text-2xl font-black font-mono mt-1 block">{kpi.flaggedJobs}</span>
-                      <span className="text-[11px] text-rose-100 mt-0.5 block">Risiko / Di luar radius</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                          Perlu Dicek
+                        </span>
+                        <span className="w-2 h-2 rounded-full bg-rose-600 shrink-0" />
+                      </div>
+                      <span className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1.5 block">
+                        {kpi.flaggedJobs}
+                      </span>
+                      <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
+                        Risiko / Di luar radius
+                      </span>
                     </button>
 
                     <button
@@ -1151,21 +1178,39 @@ export const AdminDashboard: React.FC = () => {
                         setActiveTab('reports');
                         setFilters(prev => ({ ...prev, status: 'WORKING' }));
                       }}
-                      className={`p-3.5 rounded-2xl text-left text-white transition-all cursor-pointer shadow-xs ${
+                      className={`clean-card p-4 rounded-xl text-left border transition-all cursor-pointer ${
                         activeTab === 'reports' && filters.status === 'WORKING'
-                          ? 'bg-amber-700 ring-2 ring-amber-400'
-                          : 'bg-amber-600 hover:opacity-95'
+                          ? 'bg-[var(--bg-card)] border-[var(--accent)] ring-1 ring-[var(--accent)]'
+                          : 'bg-[var(--bg-card)] border-[var(--border-subtle)] hover:border-[var(--border-strong)]'
                       }`}
                     >
-                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-amber-100 block">SEDANG KERJA / TUNDA</span>
-                      <span className="text-2xl font-black font-mono mt-1 block">{kpi.workingJobs}</span>
-                      <span className="text-[11px] text-amber-100 mt-0.5 block">On-site aktif</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                          Sedang Kerja
+                        </span>
+                        <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                      </div>
+                      <span className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1.5 block">
+                        {kpi.workingJobs}
+                      </span>
+                      <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
+                        On-site aktif
+                      </span>
                     </button>
 
-                    <div className="p-3.5 rounded-2xl bg-purple-700 text-white shadow-xs col-span-2 sm:col-span-1">
-                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-purple-200 block">RATA-RATA PENGERJAAN</span>
-                      <span className="text-2xl font-black font-mono mt-1 block">{kpi.avgDurationMinutes}m</span>
-                      <span className="text-[11px] text-purple-200 mt-0.5 block">Skor Risiko Rata2: {kpi.avgRiskScore}</span>
+                    <div className="clean-card p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] col-span-2 sm:col-span-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
+                          Rata-Rata Durasi
+                        </span>
+                        <Clock size={13} className="text-[var(--text-muted)] shrink-0" />
+                      </div>
+                      <span className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1.5 block">
+                        {kpi.avgDurationMinutes}m
+                      </span>
+                      <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
+                        Skor Risiko Rata-rata: {kpi.avgRiskScore}
+                      </span>
                     </div>
                   </div>
 
@@ -1191,13 +1236,14 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Filter Bar */}
-                  <div className="clean-card p-4 sm:p-5 space-y-3.5">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                      <div className="relative flex-1">
+                  {/* Filter & Action Toolbar (2 Baris Terstruktur) */}
+                  <div className="clean-card p-4 sm:p-5 space-y-3 bg-[var(--bg-card)] rounded-xl border border-[var(--border-subtle)]">
+                    {/* Baris 1: Pencarian Lebar di Kiri + Aksi Rekap & Unduh di Kanan */}
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                      <div className="relative flex-1 min-w-[240px]">
                         <Search
-                          size={16}
-                          className="absolute left-3.5 top-3 text-[var(--text-muted)]"
+                          size={15}
+                          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
                           aria-hidden="true"
                         />
                         <input
@@ -1206,107 +1252,21 @@ export const AdminDashboard: React.FC = () => {
                           placeholder="Cari pelaksana, nama proyek, atau alamat..."
                           value={searchInput}
                           onChange={e => setSearchInput(e.target.value)}
-                          className="w-full pl-9 pr-8 py-2 bg-[var(--bg-tertiary)] rounded-xl border border-[var(--border-subtle)] text-xs sm:text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                          className="w-full h-9 pl-9 pr-8 bg-[var(--bg-tertiary)] rounded-lg border border-[var(--border-subtle)] text-xs sm:text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
                         />
                         {searchInput && (
                           <button
                             type="button"
                             aria-label="Bersihkan pencarian"
                             onClick={() => setSearchInput('')}
-                            className="absolute right-3 top-2.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
                           >
                             <X size={14} aria-hidden="true" />
                           </button>
                         )}
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-xs font-semibold text-[var(--text-muted)] mr-1">
-                          Periode:
-                        </span>
-                        {DATE_PRESETS.map(preset => (
-                          <button
-                            key={preset.id}
-                            type="button"
-                            onClick={() => setDatePreset(preset.id)}
-                            aria-pressed={datePreset === preset.id}
-                            className={`text-xs px-2.5 py-1.5 rounded-lg border font-medium transition-all cursor-pointer ${
-                              datePreset === preset.id
-                                ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-xs'
-                                : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:bg-[var(--bg-tertiary)]'
-                            }`}
-                          >
-                            {preset.label}
-                          </button>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => setShowFilterDrawer(!showFilterDrawer)}
-                          aria-expanded={showFilterDrawer}
-                          className={`inline-flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer ${
-                            showFilterDrawer
-                              ? 'bg-[var(--text-primary)] text-[var(--bg-primary)] border-[var(--text-primary)]'
-                              : 'bg-[var(--bg-tertiary)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:text-[var(--text-primary)]'
-                          }`}
-                        >
-                          <span>Filter Lengkap</span>
-                        </button>
-
-                        {hasActiveReportFilters && (
-                          <button
-                            type="button"
-                            onClick={handleResetAllFilters}
-                            className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] font-semibold transition-colors cursor-pointer"
-                          >
-                            <span>Reset</span>
-                          </button>
-                        )}
-
-                        {previousFiltersSnapshot && !hasActiveReportFilters && (
-                          <button
-                            type="button"
-                            onClick={handleUndoResetAllFilters}
-                            className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border border-[var(--border-focus)] bg-[var(--accent-glow)] text-[var(--accent-text)] font-semibold transition-colors cursor-pointer"
-                          >
-                            <span>Urungkan Reset</span>
-                          </button>
-                        )}
-
-                        <div className="inline-flex items-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] p-0.5 text-xs">
-                          <button
-                            type="button"
-                            onClick={() => setFilters(prev => ({ ...prev, serviceType: 'ALL' }))}
-                            className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer ${
-                              filters.serviceType === 'ALL'
-                                ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-2xs'
-                                : 'text-[var(--text-secondary)]'
-                            }`}
-                          >
-                            Semua Layanan
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setFilters(prev => ({ ...prev, serviceType: 'GENERAL_PEST_CONTROL' }))}
-                            className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer ${
-                              filters.serviceType !== 'ALL' && filters.serviceType !== 'TERMITE_CONTROL'
-                                ? 'bg-emerald-700 text-white shadow-2xs'
-                                : 'text-[var(--text-secondary)]'
-                            }`}
-                          >
-                            Pest Control
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setFilters(prev => ({ ...prev, serviceType: 'TERMITE_CONTROL' }))}
-                            className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer ${
-                              filters.serviceType === 'TERMITE_CONTROL'
-                                ? 'bg-purple-700 text-white shadow-2xs'
-                                : 'text-[var(--text-secondary)]'
-                            }`}
-                          >
-                            Anti Rayap
-                          </button>
-                        </div>
+                      <div className="flex flex-wrap items-center gap-2">
                         {canGenerateMonthlyRecap(user?.role) && (
                           <>
                             <button
@@ -1315,10 +1275,11 @@ export const AdminDashboard: React.FC = () => {
                                 setRecapModalMode('PCO');
                                 setShowMonthlyRecapModal(true);
                               }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
-                              title="Buat Laporan Rekapitulasi Pest Control & Kalkulator Permenkes No. 2 Tahun 2023 (Khusus Admin)"
+                              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-xs font-semibold transition-colors cursor-pointer"
+                              title="Buat Laporan Rekapitulasi Pest Control & Kalkulator Permenkes No. 2 Tahun 2023"
                             >
-                              Rekap Pest Control (Permenkes)
+                              <FileText size={13} className="text-[var(--text-muted)]" />
+                              <span>Rekap Pest Control</span>
                             </button>
                             <button
                               type="button"
@@ -1326,37 +1287,138 @@ export const AdminDashboard: React.FC = () => {
                                 setRecapModalMode('AR');
                                 setShowMonthlyRecapModal(true);
                               }}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
-                              title="Buat Laporan Rekapitulasi Pengendalian & Monitoring Anti Rayap (Khusus Admin)"
+                              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-xs font-semibold transition-colors cursor-pointer"
+                              title="Buat Laporan Rekapitulasi Pengendalian & Monitoring Anti Rayap"
                             >
-                              Rekap Anti Rayap (AR)
+                              <FileText size={13} className="text-[var(--text-muted)]" />
+                              <span>Rekap Anti Rayap</span>
                             </button>
                           </>
                         )}
+
+                        <div className="inline-flex items-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] overflow-hidden divide-x divide-[var(--border-subtle)]">
+                          <button
+                            type="button"
+                            onClick={handleExportPDF}
+                            className="inline-flex items-center gap-1.5 h-9 px-3 hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-xs font-semibold transition-colors cursor-pointer"
+                            title="Unduh Laporan (PDF)"
+                          >
+                            <Download size={13} className="text-[var(--text-muted)]" />
+                            <span>PDF</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleExportExcel}
+                            className="inline-flex items-center gap-1.5 h-9 px-3 hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-xs font-semibold transition-colors cursor-pointer"
+                            title="Unduh Laporan (Excel)"
+                          >
+                            <span>Excel</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleExportCsv}
+                            disabled={isExporting}
+                            className="inline-flex items-center gap-1.5 h-9 px-3 hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-xs font-semibold transition-colors disabled:opacity-60 cursor-pointer"
+                            title="Unduh Laporan (CSV)"
+                          >
+                            <span>{isExporting ? 'Mengunduh...' : 'CSV'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Baris 2: Filter Periode + Filter Layanan + Filter Lengkap */}
+                    <div className="pt-2.5 border-t border-[var(--border-subtle)] flex flex-wrap items-center justify-between gap-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="inline-flex items-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] p-0.5 text-xs">
+                          {DATE_PRESETS.map(preset => (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              onClick={() => setDatePreset(preset.id)}
+                              aria-pressed={datePreset === preset.id}
+                              className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer ${
+                                datePreset === preset.id
+                                  ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-2xs'
+                                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                              }`}
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="inline-flex items-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] p-0.5 text-xs">
+                          <button
+                            type="button"
+                            onClick={() => setFilters(prev => ({ ...prev, serviceType: 'ALL' }))}
+                            className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer ${
+                              filters.serviceType === 'ALL'
+                                ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-2xs'
+                                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                            }`}
+                          >
+                            Semua Layanan
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFilters(prev => ({ ...prev, serviceType: 'GENERAL_PEST_CONTROL' }))}
+                            className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer ${
+                              filters.serviceType !== 'ALL' && filters.serviceType !== 'TERMITE_CONTROL'
+                                ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-2xs'
+                                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                            }`}
+                          >
+                            Pest Control
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFilters(prev => ({ ...prev, serviceType: 'TERMITE_CONTROL' }))}
+                            className={`px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer ${
+                              filters.serviceType === 'TERMITE_CONTROL'
+                                ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-2xs'
+                                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                            }`}
+                          >
+                            Anti Rayap
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {hasActiveReportFilters && (
+                          <button
+                            type="button"
+                            onClick={handleResetAllFilters}
+                            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] text-xs font-semibold transition-colors cursor-pointer"
+                          >
+                            <RotateCcw size={12} />
+                            <span>Reset</span>
+                          </button>
+                        )}
+
+                        {previousFiltersSnapshot && !hasActiveReportFilters && (
+                          <button
+                            type="button"
+                            onClick={handleUndoResetAllFilters}
+                            className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-lg border border-[var(--border-focus)] bg-[var(--accent-glow)] text-[var(--accent-text)] text-xs font-semibold transition-colors cursor-pointer"
+                          >
+                            <span>Urungkan Reset</span>
+                          </button>
+                        )}
+
                         <button
                           type="button"
-                          onClick={handleExportPDF}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-xs font-semibold transition-colors btn-tactile cursor-pointer"
-                          title="Unduh Laporan (PDF)"
+                          onClick={() => setShowFilterDrawer(!showFilterDrawer)}
+                          aria-expanded={showFilterDrawer}
+                          className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border text-xs font-semibold transition-all cursor-pointer ${
+                            showFilterDrawer
+                              ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                              : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]'
+                          }`}
                         >
-                          Unduh PDF
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleExportExcel}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] text-[var(--text-primary)] text-xs font-semibold transition-colors btn-tactile cursor-pointer"
-                          title="Unduh Laporan (Excel)"
-                        >
-                          Unduh Excel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleExportCsv}
-                          disabled={isExporting}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-semibold transition-colors disabled:opacity-60 cursor-pointer"
-                          title="Unduh Laporan (CSV)"
-                        >
-                          {isExporting ? 'Mengunduh...' : 'Unduh CSV'}
+                          <SlidersHorizontal size={12} />
+                          <span>Filter Lengkap</span>
                         </button>
                       </div>
                     </div>
