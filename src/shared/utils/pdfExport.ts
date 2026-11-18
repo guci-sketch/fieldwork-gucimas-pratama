@@ -32,7 +32,16 @@ export async function exportReportToPdf(report: WorkReport, _project?: Project, 
     (a, b) => order[a.photoType] - order[b.photoType] || +new Date(a.capturedAt) - +new Date(b.capturedAt),
   );
   const photos = await Promise.all(
-    sorted.map(async p => ({ dataUrl: p.purgedAt ? undefined : await fetchPhotoDataUrl(p.url) })),
+    sorted.map(async p => {
+      const snapshot = p.pdfSnapshotUrl || p.metadata?.pdfSnapshotUrl;
+      if (snapshot && snapshot.startsWith('data:')) {
+        return { dataUrl: snapshot };
+      }
+      if (p.purgedAt) {
+        return { dataUrl: undefined };
+      }
+      return { dataUrl: await fetchPhotoDataUrl(p.url) };
+    }),
   );
 
   const cfg = await resolveDocumentConfig(opts.companyId);

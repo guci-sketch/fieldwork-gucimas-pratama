@@ -102,7 +102,7 @@ export function mapDbWorkReportFull(row: any): WorkReport {
     : null;
 
   const photos: DocumentationPhoto[] = photosRaw
-    .filter(p => !p.purged_at)
+    .filter(p => !p.purged_at || Boolean(p.metadata?.pdfSnapshotUrl))
     .map(p => ({
       id: p.id,
       photoType: p.photo_type as PhotoType,
@@ -115,6 +115,8 @@ export function mapDbWorkReportFull(row: any): WorkReport {
       capturedAt: p.captured_at || p.created_at,
       metadata: p.metadata || {},
       purgedAt: p.purged_at ?? null,
+      pdfSnapshotUrl: p.metadata?.pdfSnapshotUrl ?? null,
+      rawArchivedAt: p.metadata?.rawArchivedAt ?? p.purged_at ?? null,
       url:
         typeof p.storage_path === 'string' && p.storage_path.startsWith('data:')
           ? p.storage_path
@@ -382,8 +384,17 @@ export async function checkIn(reportId: string, evidence: EvidencePayload): Prom
   return updateLocalReportItem(updatedLocal);
 }
 
+export const MAX_PHOTOS_PER_REPORT = 4;
+export const MAX_PROGRESS_PHOTOS_PER_REPORT = 2;
+
 export async function addProgressPhoto(reportId: string, evidence: EvidencePayload): Promise<WorkReport> {
   const current = await fetchWorkReport(reportId);
+  const progressCount = current.photos.filter(p => p.photoType === 'PROGRESS').length;
+  if (current.photos.length >= MAX_PHOTOS_PER_REPORT || progressCount >= MAX_PROGRESS_PHOTOS_PER_REPORT) {
+    throw new Error(
+      `Batas maksimal foto tercapai (${MAX_PHOTOS_PER_REPORT} foto per laporan: 1 Check-In, maks ${MAX_PROGRESS_PHOTOS_PER_REPORT} Progres, dan 1 Check-Out) untuk menghemat kuota penyimpanan database.`
+    );
+  }
   const hasAnchor = Boolean(
     current.projectLatitude &&
     current.projectLongitude &&

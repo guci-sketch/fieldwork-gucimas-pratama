@@ -5,7 +5,6 @@ import {
   WorkReportListItem,
   Project,
   ExecutorStats,
-  AuditLogEntry,
   RiskConfig,
   DocumentationPhoto,
   ReportFilters,
@@ -20,7 +19,6 @@ import {
   fetchAdminSummary,
   fetchExecutors,
   fetchAdminProjects,
-  fetchAuditLogs,
   fetchRiskConfig,
   updateRiskConfig,
   resetRiskConfig,
@@ -33,9 +31,6 @@ import {
   createUser,
   resetUserPassword,
   AdminUser,
-  fetchPhotoPurgePreview,
-  purgeOldPhotos,
-  PhotoPurgePreview,
 } from '@/shared/api/admin';
 import { getQuotations } from '@/shared/api/quotationService';
 import {
@@ -60,6 +55,11 @@ import { AuthedImage } from '../common/AuthedImage';
 import { RISK_LEVEL_OPTIONS, STATUS_OPTIONS, getWorkReportStatusMeta } from '@/shared/utils/riskMeta';
 import { exportTableToExcel, exportTableToPDF } from '@/shared/utils/exportUtils';
 import { exportReportToPdf } from '@/shared/utils/pdfExport';
+import {
+  buildArchivePhotoEntries,
+  downloadRawPhotosArchiveAndOffload,
+  type ArchivePhotoEntry,
+} from '@/shared/utils/photoArchiveExporter';
 import { SERVICE_TYPE_OPTIONS, getServiceTypeMeta, APPLICATION_METHOD_LABELS } from '@/shared/utils/serviceMeta';
 import {
   LayoutDashboard,
@@ -126,7 +126,6 @@ type Tab =
   | 'anomalies'
   | 'projects'
   | 'executors'
-  | 'audit'
   | 'risk-config'
   | 'tracking'
   | 'approval'
@@ -248,7 +247,6 @@ export const AdminDashboard: React.FC = () => {
 
   const [executors, setExecutors] = useState<ExecutorStats[]>([]);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[] | null>(null);
   const [riskConfig, setRiskConfig] = useState<RiskConfig | null>(null);
   const [userLocations, setUserLocations] = useState<UserLocation[]>([]);
 
@@ -287,6 +285,15 @@ export const AdminDashboard: React.FC = () => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+
+  // State untuk Unduh Arsip Foto Raw (.ZIP kompatibel WinRAR) & Offload Database
+  const [archiveModalOpen, setArchiveModalOpen] = useState(false);
+  const [archiveTargetReports, setArchiveTargetReports] = useState<WorkReport[]>([]);
+  const [archivePreviewEntries, setArchivePreviewEntries] = useState<ArchivePhotoEntry[]>([]);
+  const [archivePreparing, setArchivePreparing] = useState(false);
+  const [archiveDownloading, setArchiveDownloading] = useState(false);
+  const [archiveOffloadDb, setArchiveOffloadDb] = useState(true);
+  const [archiveScopeTitle, setArchiveScopeTitle] = useState('Semua Laporan pada Filter');
 
   // Feedback banner & reversible undo state
   const [actionBanner, setActionBanner] = useState<{
@@ -424,7 +431,6 @@ export const AdminDashboard: React.FC = () => {
     setReports([]);
     setProjects([]);
     setExecutors([]);
-    setAuditLogs(null);
     setRiskConfig(null);
     setAdminUsers([]);
     setSelectedReportId(null);
@@ -480,11 +486,6 @@ export const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     if (!isAdmin || (isSuper && !activeCompanyId)) return;
-    if ((activeTab === 'audit' || activeTab === 'templates' || activeTab === 'risk-config') && auditLogs === null) {
-      fetchAuditLogs()
-        .then(setAuditLogs)
-        .catch(() => setAuditLogs([]));
-    }
     if ((activeTab === 'risk-config' || activeTab === 'templates' || activeTab === 'reports' || activeTab === 'anomalies') && riskConfig === null) {
       fetchRiskConfig()
         .then(setRiskConfig)
@@ -500,7 +501,7 @@ export const AdminDashboard: React.FC = () => {
         .then(setAdminUsers)
         .catch(() => setAdminUsers([]));
     }
-  }, [activeTab, auditLogs, riskConfig, isAdmin, isSuper, activeCompanyId]);
+  }, [activeTab, riskConfig, isAdmin, isSuper, activeCompanyId]);
 
   useEffect(() => {
     if (!selectedReportId) {
@@ -734,6 +735,77 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  /**
+   * Membuka modal Unduh Arsip Foto Raw (.ZIP kompatibel WinRAR) untuk 1 laporan yang sedang dibuka.
+   */
+  const handleOpenArchiveForSingleReport = (report: WorkReport) => {
+    const entries = buildArchivePhotoEntries([report]);
+    setArchiveScopeTitle(`${report.clientName || report.projectName} — ${report.executorName}`);
+    setArchiveTargetReports([report]);
+    setArchivePreviewEntries(entries);
+    setArchiveOffloadDb(true);
+    setArchiveModalOpen(true);
+  };
+
+  /**
+   * Membuka modal Unduh Arsip Foto Raw (.ZIP kompatibel WinRAR) untuk seluruh laporan pada daftar filter aktif.
+   */
+  const handleOpenArchiveForFilteredReports = async () => {
+    if (archivePreparing) return;
+    setArchivePreparing(true);
+    setArchiveModalOpen(true);
+    setArchiveScopeTitle(`Filter Laporan Aktif (${visibleReports.length} Laporan)`);
+    try {
+      const fullReports = await Promise.all(
+        visibleReports.map(r => fetchAdminReportDetail(r.id).catch(() => null))
+      );
+      const validReports = fullReports.filter((r): r is WorkReport => r !== null);
+      const entries = buildArchivePhotoEntries(validReports);
+      setArchiveTargetReports(validReports);
+      setArchivePreviewEntries(entries);
+      setArchiveOffloadDb(true);
+    } finally {
+      setArchivePreparing(false);
+    }
+  };
+
+  /**
+   * Mengeksekusi pengunduhan arsip foto raw (.ZIP / WinRAR) dengan nama file sesuai
+   * Tanggal + Laporan/Pelanggan + Teknisi + Tahap, serta menghapus foto raw dari DB
+   * sementara salinan foto di dalam PDF tetap tersimpan aman.
+   */
+  const handleExecuteArchiveDownload = async () => {
+    if (archiveDownloading || archivePreviewEntries.length === 0) return;
+    setArchiveDownloading(true);
+    try {
+      const result = await downloadRawPhotosArchiveAndOffload(archiveTargetReports, {
+        offloadRawFromDb: archiveOffloadDb,
+      });
+
+      if (selectedReportId && archiveTargetReports.some(r => r.id === selectedReportId)) {
+        const refreshed = await fetchAdminReportDetail(selectedReportId).catch(() => null);
+        if (refreshed) setSelectedReport(refreshed);
+      }
+      await loadReports();
+
+      const freedKb = Math.max(1, Math.round(result.freedBytesEstimate / 1024));
+      setArchiveModalOpen(false);
+      setActionBanner({
+        tone: 'success',
+        message: result.offloadedFromDb
+          ? `Arsip ${result.archiveFilename} (${result.totalPhotosArchived} foto raw) berhasil diunduh. Kuota database dihemat ±${freedKb} KB & foto di dalam PDF Laporan Kunjungan tetap tersimpan utuh.`
+          : `Arsip ${result.archiveFilename} (${result.totalPhotosArchived} foto raw) berhasil diunduh.`,
+      });
+    } catch (err) {
+      setActionBanner({
+        tone: 'error',
+        message: err instanceof Error ? err.message : 'Gagal membuat arsip foto raw.',
+      });
+    } finally {
+      setArchiveDownloading(false);
+    }
+  };
+
   const handleAdminReview = async () => {
     if (!selectedReportId || !adminReviewNotes.trim() || isSubmittingReview) return;
     setIsSubmittingReview(true);
@@ -844,7 +916,7 @@ export const AdminDashboard: React.FC = () => {
       group: '',
       icon: <Settings2 size={16} />,
       roles: ['ADMIN', 'SUPERADMIN'],
-      keywords: ['pengaturan', 'kop', 'radius', 'audit', 'profil'],
+      keywords: ['pengaturan', 'kop', 'radius', 'profil'],
     },
   ];
 
@@ -855,7 +927,7 @@ export const AdminDashboard: React.FC = () => {
     if (activeTab === 'anomalies') return 'reports';
     if (activeTab === 'cashflow' || activeTab === 'performa') return 'order-tracking';
     if (activeTab === 'executors') return 'approval';
-    if ((activeTab === 'risk-config' || activeTab === 'audit' || activeTab === 'profile') && isAdmin) {
+    if ((activeTab === 'risk-config' || activeTab === 'profile') && isAdmin) {
       return 'templates';
     }
     return activeTab;
@@ -879,10 +951,6 @@ export const AdminDashboard: React.FC = () => {
     }
     if (activeTab === 'tracking') {
       void fetchLatestLocations().then(setUserLocations);
-      return;
-    }
-    if (activeTab === 'audit') {
-      void fetchAuditLogs().then(setAuditLogs);
       return;
     }
     if (activeTab === 'approval') {
@@ -1295,6 +1363,17 @@ export const AdminDashboard: React.FC = () => {
                             </button>
                           </>
                         )}
+
+                        <button
+                          type="button"
+                          onClick={() => void handleOpenArchiveForFilteredReports()}
+                          disabled={archivePreparing || visibleReports.length === 0}
+                          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-xs font-bold transition-colors disabled:opacity-50 cursor-pointer"
+                          title="Unduh Arsip Foto Raw (.ZIP kompatibel WinRAR) dengan nama file sesuai Laporan, Teknisi & Tanggal, sekaligus optimasi kuota Database"
+                        >
+                          <Download size={13} />
+                          <span>{archivePreparing ? 'Menyiapkan Foto...' : 'Arsip Foto Raw (RAR/ZIP)'}</span>
+                        </button>
 
                         <div className="inline-flex items-center rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-card)] overflow-hidden divide-x divide-[var(--border-subtle)]">
                           <button
@@ -2700,42 +2779,6 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               )}
 
-              {activeTab === 'audit' && (
-                <div className="clean-card bg-[var(--bg-card)] rounded-xl border border-[var(--border-subtle)] overflow-hidden p-4">
-                  <h3 className="font-bold text-sm text-[var(--text-primary)] mb-3">
-                    Histori &amp; Rekam Jejak Audit Sistem
-                  </h3>
-                  {auditLogs === null ? (
-                    <div className="py-8 text-center text-xs text-[var(--text-muted)]">Memuat...</div>
-                  ) : (
-                    <div className="space-y-3">
-                      {auditLogs.map(log => (
-                        <div
-                          key={log.id}
-                          className="p-3 rounded-lg border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] flex items-start justify-between gap-3 text-xs"
-                        >
-                          <div>
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <span className="font-bold text-[var(--text-primary)]">{log.userName}</span>
-                              <span className="text-[11px] font-bold px-1.5 py-0.2 rounded bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text-secondary)]">
-                                {log.userRole}
-                              </span>
-                              <span className="font-mono text-[11px] text-[var(--status-completed-text)] bg-[var(--status-completed-bg)] px-1.5 py-0.2 rounded font-semibold">
-                                {log.action}
-                              </span>
-                            </div>
-                            <p className="text-[var(--text-secondary)]">{log.details}</p>
-                          </div>
-                          <span className="text-xs text-[var(--text-muted)] font-mono whitespace-nowrap">
-                            {new Date(log.createdAt).toLocaleTimeString('id-ID')} WIB
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
               {activeTab === 'approval' && (
                 <div className="clean-card p-5 sm:p-6 lg:p-7 space-y-6">
                   {/* Header Halaman (Clean tanpa ikon dekoratif) */}
@@ -3254,7 +3297,7 @@ export const AdminDashboard: React.FC = () => {
               {activeTab === 'inventory' && <InventoryPage />}
               {activeTab === 'saas-companies' && isMasterSuper && <CompaniesPage />}
 
-              {(activeTab === 'templates' || activeTab === 'risk-config' || activeTab === 'audit' || (activeTab === 'profile' && isAdmin)) && (
+              {(activeTab === 'templates' || activeTab === 'risk-config' || (activeTab === 'profile' && isAdmin)) && (
                 <div className="flex flex-wrap items-center gap-1.5 bg-[var(--bg-card)] p-1.5 rounded-xl border border-[var(--border-subtle)] mb-4">
                   {isAdmin && (
                     <>
@@ -3279,17 +3322,6 @@ export const AdminDashboard: React.FC = () => {
                         }`}
                       >
                         Aturan Jarak &amp; Foto
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('audit')}
-                        className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                          activeTab === 'audit'
-                            ? 'bg-[var(--accent)] text-white shadow-2xs'
-                            : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
-                        }`}
-                      >
-                        Riwayat Aktivitas
                       </button>
                     </>
                   )}
@@ -3316,7 +3348,6 @@ export const AdminDashboard: React.FC = () => {
                     onSave={handleSaveRiskConfig}
                     onReset={handleResetRiskConfigWithUndo}
                   />
-                  <PhotoRetentionPanel />
                 </div>
               )}
 
@@ -3458,7 +3489,17 @@ export const AdminDashboard: React.FC = () => {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {selectedReport.photos.some(p => !p.purgedAt && Boolean(p.url)) && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenArchiveForSingleReport(selectedReport)}
+                        title="Unduh Foto Raw (.ZIP kompatibel WinRAR) & hapus foto raw dari database (foto di PDF tetap aman)"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15 transition-colors cursor-pointer"
+                      >
+                        <Download size={14} aria-hidden="true" /> Foto Raw (RAR/ZIP)
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={handleDownloadVisitReport}
@@ -3801,9 +3842,25 @@ export const AdminDashboard: React.FC = () => {
                   )}
 
                   <div>
-                    <h4 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider mb-2.5">
-                      Bukti Foto Pekerjaan ({selectedReport.photos.length})
-                    </h4>
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                      <h4 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider">
+                        Bukti Foto Pekerjaan ({selectedReport.photos.length} / Maks 4 Foto)
+                      </h4>
+                      {selectedReport.photos.some(p => !p.purgedAt && Boolean(p.url)) ? (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenArchiveForSingleReport(selectedReport)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 text-[11px] font-bold transition-colors cursor-pointer"
+                        >
+                          <Download size={12} />
+                          <span>Unduh Foto Raw (RAR/ZIP) &amp; Hapus dari DB</span>
+                        </button>
+                      ) : selectedReport.photos.length > 0 ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold">
+                          ✓ Foto Raw Diarsipkan • Foto di PDF Tetap Tersimpan
+                        </span>
+                      ) : null}
+                    </div>
                     {selectedReport.photos.length === 0 ? (
                       <p className="text-xs text-[var(--text-muted)]">Belum ada foto dokumentasi.</p>
                     ) : (
@@ -4123,6 +4180,156 @@ export const AdminDashboard: React.FC = () => {
       )}
       {viewingPhoto && <PhotoViewerModal photo={viewingPhoto} onClose={() => setViewingPhoto(null)} />}
       {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
+
+      {archiveModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4"
+          onClick={() => !archiveDownloading && setArchiveModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-xl rounded-2xl bg-[var(--bg-card)] border border-[var(--border-subtle)] shadow-2xl overflow-hidden flex flex-col max-h-[88vh]"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-5 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-extrabold text-[var(--text-primary)]">
+                  Unduh Arsip Foto Raw (RAR / ZIP) &amp; Optimasi Database
+                </h3>
+                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                  Cakupan: <span className="font-semibold text-[var(--text-primary)]">{archiveScopeTitle}</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={archiveDownloading}
+                onClick={() => setArchiveModalOpen(false)}
+                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto text-xs">
+              <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] p-3.5 space-y-1.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)] block">
+                  Format Penamaan File Otomatis di Dalam Arsip
+                </span>
+                <code className="block text-xs font-mono font-bold text-[var(--text-primary)] bg-[var(--bg-card)] px-2.5 py-1.5 rounded-lg border border-[var(--border-subtle)] break-all">
+                  {'{YYYY-MM-DD}_{Nama-Laporan-Pelanggan}_{Nama-Teknisi}_{Tahap-Foto}_{No}.jpg'}
+                </code>
+                <p className="text-[11px] text-[var(--text-secondary)]">
+                  File diunduh dalam format arsip standar (<strong>.zip</strong>) yang dapat langsung dibuka menggunakan{' '}
+                  <strong>WinRAR</strong>, 7-Zip, maupun File Explorer tanpa aplikasi tambahan.
+                </p>
+              </div>
+
+              {archivePreparing ? (
+                <div className="py-10 text-center space-y-2">
+                  <Loader2 size={22} className="animate-spin mx-auto text-[var(--accent)]" />
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    Memeriksa foto raw aktif pada laporan kerja...
+                  </p>
+                </div>
+              ) : archivePreviewEntries.length === 0 ? (
+                <div className="rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] p-6 text-center space-y-1.5">
+                  <p className="text-sm font-bold text-[var(--text-primary)]">
+                    Tidak Ada Foto Raw Baru untuk Diarsipkan
+                  </p>
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    Seluruh foto raw pada laporan ini sudah pernah diunduh &amp; dibersihkan dari database, atau laporan belum memiliki foto dokumentasi. Salinan foto pada dokumen PDF Laporan Kunjungan tetap tersimpan aman.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-bold text-[var(--text-primary)]">
+                        Daftar File Foto Siap Diunduh ({archivePreviewEntries.length} Foto)
+                      </span>
+                      <span className="text-[11px] text-[var(--text-muted)] font-mono">
+                        Estimasi ukuran: ±{Math.max(40, archivePreviewEntries.length * 50)} KB
+                      </span>
+                    </div>
+                    <div className="max-h-44 overflow-y-auto rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] divide-y divide-[var(--border-subtle)]">
+                      {archivePreviewEntries.map((item, idx) => (
+                        <div key={`${item.photo.id}-${idx}`} className="px-3 py-2 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-mono text-[11px] font-semibold text-[var(--text-primary)] truncate" title={item.filename}>
+                              {item.filename}
+                            </p>
+                            <p className="text-[10px] text-[var(--text-muted)] truncate">
+                              Laporan: {item.clientName} • Teknisi: {item.executorName} • Tanggal: {item.dateStr}
+                            </p>
+                          </div>
+                          <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded bg-[var(--bg-card)] border border-[var(--border-subtle)] text-[var(--text-secondary)]">
+                            {item.photo.photoType.replace('_', ' ')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <label className="flex items-start gap-3 p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={archiveOffloadDb}
+                      onChange={e => setArchiveOffloadDb(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-[var(--border-subtle)] accent-emerald-600 cursor-pointer"
+                    />
+                    <div className="space-y-1">
+                      <span className="font-bold text-[var(--text-primary)] block">
+                        Hapus foto raw dari database setelah diunduh (Hemat Kuota Database)
+                      </span>
+                      <span className="text-[11px] text-[var(--text-secondary)] block leading-relaxed">
+                        Saat dicentang, file foto raw berukuran besar akan dihapus dari database setelah arsip terunduh.{' '}
+                        <strong className="text-emerald-700 dark:text-emerald-300">
+                          Foto di dalam PDF Laporan Kunjungan sudah di-setup otomatis dan TIDAK ikut terhapus
+                        </strong>{' '}
+                        sehingga Anda tetap dapat mencetak atau mengunduh PDF kapan saja lengkap dengan fotonya.
+                      </span>
+                    </div>
+                  </label>
+                </>
+              )}
+            </div>
+
+            <div className="px-5 py-3.5 border-t border-[var(--border-subtle)] bg-[var(--bg-tertiary)] flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={archiveDownloading}
+                onClick={() => setArchiveModalOpen(false)}
+                className="px-4 py-2 rounded-xl border border-[var(--border-subtle)] bg-[var(--bg-card)] hover:bg-[var(--bg-tertiary)] text-xs font-semibold text-[var(--text-secondary)] transition-colors cursor-pointer"
+              >
+                Tutup
+              </button>
+              {archivePreviewEntries.length > 0 && (
+                <button
+                  type="button"
+                  disabled={archiveDownloading || archivePreparing}
+                  onClick={() => void handleExecuteArchiveDownload()}
+                  className="px-4 py-2 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold shadow-2xs transition-colors disabled:opacity-50 inline-flex items-center gap-2 cursor-pointer"
+                >
+                  {archiveDownloading ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>Mengunduh &amp; Mengoptimasi DB...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download size={14} />
+                      <span>
+                        {archiveOffloadDb
+                          ? `Unduh Arsip (${archivePreviewEntries.length} Foto) & Hapus Raw di DB`
+                          : `Unduh Arsip (${archivePreviewEntries.length} Foto)`}
+                      </span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 };
@@ -4238,142 +4445,6 @@ const RiskConfigPanel: React.FC<{
         >
           {saving && <Loader2 size={16} className="animate-spin" aria-hidden="true" />} Simpan Konfigurasi
         </button>
-      </div>
-    </div>
-  );
-};
-
-const PhotoRetentionPanel: React.FC = () => {
-  const [months, setMonths] = useState(2);
-  const [preview, setPreview] = useState<PhotoPurgePreview | null>(null);
-  const [isLoadingPreview, setIsLoadingPreview] = useState(true);
-  const [isPurging, setIsPurging] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [resultMessage, setResultMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const loadPreview = useCallback(async (m: number) => {
-    setIsLoadingPreview(true);
-    setError(null);
-    try {
-      const res = await fetchPhotoPurgePreview(m);
-      setPreview(res);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Gagal memuat perkiraan retensi foto.');
-    } finally {
-      setIsLoadingPreview(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadPreview(months);
-  }, [months, loadPreview]);
-
-  const handlePurge = async () => {
-    if (isPurging) return;
-    setIsPurging(true);
-    setError(null);
-    try {
-      const result = await purgeOldPhotos(months);
-      setResultMessage(
-        `${result.purgedCount} foto berhasil dihapus${
-          result.failedCount > 0 ? `, ${result.failedCount} gagal` : ''
-        }. Data laporan lainnya tidak berubah.`
-      );
-      setConfirmOpen(false);
-      await loadPreview(months);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Gagal menghapus foto lama.');
-    } finally {
-      setIsPurging(false);
-    }
-  };
-
-  return (
-    <div className="clean-card bg-[var(--bg-card)] p-5 rounded-xl border border-[var(--border-subtle)]">
-      <h3 className="font-bold text-sm text-[var(--text-primary)] mb-1">
-        Retensi Penyimpanan Foto
-      </h3>
-      <p className="text-xs text-[var(--text-muted)] mb-4">
-        Menghapus <strong>file foto</strong> yang lebih lama dari batas waktu di bawah untuk menghemat penyimpanan. Data laporan, GPS, timestamp, riwayat treatment, dan audit log <strong>tidak ikut terhapus</strong> — hanya gambarnya.
-      </p>
-
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <span className="text-xs font-semibold text-[var(--text-secondary)]">Hapus foto lebih lama dari:</span>
-        <div className="flex flex-wrap gap-1.5">
-          {[1, 2, 3, 6, 12].map(m => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMonths(m)}
-              className={`text-xs px-2.5 py-1.5 rounded-lg border font-medium transition-all cursor-pointer ${
-                months === m
-                  ? 'bg-rose-600 text-white border-rose-600'
-                  : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border-subtle)] hover:bg-[var(--bg-tertiary)]'
-              }`}
-            >
-              {m} bulan
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {error && (
-        <p className="text-xs text-[var(--status-flagged-text)] bg-[var(--status-flagged-bg)] border border-[var(--status-flagged-border)] rounded-lg px-3 py-2 mb-3">
-          {error}
-        </p>
-      )}
-      {resultMessage && (
-        <p className="text-xs text-[var(--status-completed-text)] bg-[var(--status-completed-bg)] border border-[var(--status-completed-border)] rounded-lg px-3 py-2 mb-3">
-          {resultMessage}
-        </p>
-      )}
-
-      <div className="bg-[var(--bg-tertiary)] rounded-lg p-3.5 border border-[var(--border-subtle)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {isLoadingPreview ? (
-          <span className="text-xs text-[var(--text-muted)]">Menghitung foto yang memenuhi syarat...</span>
-        ) : preview ? (
-          <div className="text-xs text-[var(--text-secondary)]">
-            <span className="font-bold text-[var(--text-primary)] text-base font-mono tabular-nums">
-              {preview.eligibleCount}
-            </span>{' '}
-            foto akan dihapus
-            {preview.oldestPhotoDate && (
-              <span> (paling lama: {new Date(preview.oldestPhotoDate).toLocaleDateString('id-ID')})</span>
-            )}
-          </div>
-        ) : null}
-
-        {!confirmOpen ? (
-          <button
-            type="button"
-            onClick={() => setConfirmOpen(true)}
-            disabled={isLoadingPreview || !preview || preview.eligibleCount === 0}
-            className="text-xs font-bold px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-          >
-            Hapus Sekarang
-          </button>
-        ) : (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-[var(--status-flagged-text)]">Yakin hapus permanen?</span>
-            <button
-              type="button"
-              onClick={() => setConfirmOpen(false)}
-              disabled={isPurging}
-              className="text-xs px-3 py-1.5 rounded-lg border border-[var(--border-subtle)] text-[var(--text-secondary)] cursor-pointer"
-            >
-              Batal
-            </button>
-            <button
-              type="button"
-                              onClick={handlePurge}
-              disabled={isPurging}
-              className="text-xs font-bold px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1.5 disabled:opacity-60 cursor-pointer"
-            >
-              {isPurging && <Loader2 size={13} className="animate-spin" aria-hidden="true" />} Ya, Hapus
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

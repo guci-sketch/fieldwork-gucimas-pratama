@@ -413,8 +413,16 @@ export interface DocumentationPhoto {
   distanceToProject: number;
   isWithinRadius: boolean;
   capturedAt: string;
-  metadata: { projectName?: string; executorName?: string; caption?: string | null };
+  metadata: {
+    projectName?: string;
+    executorName?: string;
+    caption?: string | null;
+    pdfSnapshotUrl?: string | null;
+    rawArchivedAt?: string | null;
+  };
   purgedAt?: string | null;
+  pdfSnapshotUrl?: string | null;
+  rawArchivedAt?: string | null;
   url: string;
 }
 

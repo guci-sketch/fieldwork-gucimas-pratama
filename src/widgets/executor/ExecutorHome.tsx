@@ -1231,6 +1231,8 @@ export const ExecutorHome: React.FC = () => {
           (() => {
             const hasBefore = activeTaskReport.photos.some(p => p.photoTag === 'BEFORE');
             const hasAfter = activeTaskReport.photos.some(p => p.photoTag === 'AFTER');
+            const progressCount = activeTaskReport.photos.filter(p => p.photoType === 'PROGRESS').length;
+            const limitReached = activeTaskReport.photos.length >= 4 || progressCount >= 2;
             return (
               <>
                 <header className="tech-header">
@@ -1250,8 +1252,8 @@ export const ExecutorHome: React.FC = () => {
                   <div className="notice info">
                     <Camera size={17} />
                     <span>
-                      <strong>Dokumentasi ber-watermark GPS</strong>
-                      Ambil foto Kondisi Awal sebelum tindakan dan foto Hasil setelah tindakan selesai.
+                      <strong>Dokumentasi ber-watermark GPS (Kompresi Otomatis 40–60 KB)</strong>
+                      Ambil 1 foto Kondisi Awal dan 1 foto Hasil (maksimal 4 foto per laporan termasuk Check-In &amp; Check-Out untuk efisiensi kuota database).
                     </span>
                   </div>
 
@@ -1262,14 +1264,15 @@ export const ExecutorHome: React.FC = () => {
                       </div>
                       <span>
                         <strong>Kondisi Awal</strong>
-                        <small>{hasBefore ? 'Tersimpan pada laporan' : 'Ambil foto sebelum pekerjaan'}</small>
+                        <small>{hasBefore ? 'Tersimpan pada laporan (1/1)' : 'Ambil foto sebelum pekerjaan'}</small>
                       </span>
                       <button
                         type="button"
                         className="btn secondary"
+                        disabled={hasBefore || limitReached}
                         onClick={() => setActiveCameraAction({ type: 'PROGRESS', report: activeTaskReport, photoTag: 'BEFORE' })}
                       >
-                        {hasBefore ? 'Tambah Lagi' : 'Ambil Foto'}
+                        {hasBefore ? 'Tersimpan' : 'Ambil Foto'}
                       </button>
                     </div>
 
@@ -1279,14 +1282,15 @@ export const ExecutorHome: React.FC = () => {
                       </div>
                       <span>
                         <strong>Hasil</strong>
-                        <small>{hasAfter ? 'Tersimpan pada laporan' : 'Tambahkan foto setelah pekerjaan'}</small>
+                        <small>{hasAfter ? 'Tersimpan pada laporan (1/1)' : 'Tambahkan foto setelah pekerjaan'}</small>
                       </span>
                       <button
                         type="button"
                         className="btn secondary"
+                        disabled={hasAfter || limitReached}
                         onClick={() => setActiveCameraAction({ type: 'PROGRESS', report: activeTaskReport, photoTag: 'AFTER' })}
                       >
-                        {hasAfter ? 'Tambah Lagi' : 'Ambil Foto'}
+                        {hasAfter ? 'Tersimpan' : 'Ambil Foto'}
                       </button>
                     </div>
                   </div>
@@ -1294,7 +1298,7 @@ export const ExecutorHome: React.FC = () => {
                   {activeTaskReport.photos.length > 0 && (
                     <div className="mt-4">
                       <p className="text-xs font-semibold text-[var(--secondary)] mb-2">
-                        Foto Tercatat ({activeTaskReport.photos.length} foto):
+                        Foto Tercatat ({activeTaskReport.photos.length} / Maks 4 Foto):
                       </p>
                       <div className="flex gap-2 overflow-x-auto pb-1">
                         {activeTaskReport.photos.map(photo => (
