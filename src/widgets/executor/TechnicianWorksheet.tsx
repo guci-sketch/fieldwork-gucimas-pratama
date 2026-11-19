@@ -38,6 +38,7 @@ import {
   getTechSigTimeStorageKey,
   isTermiteService,
 } from './techLiteUtils';
+import { ConfirmActionModal, useConfirmAction } from './ConfirmActionModal';
 
 export interface WorksheetClientPrefill {
   customerName: string;
@@ -324,6 +325,7 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
   const [showTechDetails, setShowTechDetails] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [validationMsg, setValidationMsg] = useState<string | null>(null);
+  const { confirmRequest, confirmAction, closeConfirm } = useConfirmAction();
 
   // Live signature canvas (Tahap 1 — Teknisi Utama)
   const techCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -440,6 +442,67 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
     }
   };
 
+  const handleRequestClearTechSign = () => {
+    confirmAction({
+      tone: 'danger',
+      title: 'Hapus Tanda Tangan Teknisi?',
+      description:
+        'Goresan tanda tangan teknisi saat ini akan dihapus dan Anda perlu menandatangani ulang sebelum melanjutkan.',
+      confirmLabel: 'Ya, Hapus TTD',
+      cancelLabel: 'Batal',
+      onConfirm: clearTechSign,
+    });
+  };
+
+  const handleRequestBack = () => {
+    confirmAction({
+      tone: 'warning',
+      title: 'Keluar dari Form Laporan?',
+      description:
+        'Perubahan form Anda sudah tersimpan otomatis sebagai draf di perangkat ini dan dapat dilanjutkan kembali kapan saja.',
+      details: [
+        { label: 'Nomor WO', value: woCode },
+        { label: 'Lokasi', value: report.projectName },
+      ],
+      confirmLabel: 'Ya, Keluar',
+      cancelLabel: 'Tetap di Form',
+      onConfirm: onBack,
+    });
+  };
+
+  const handleRequestSwitchServiceMode = (targetMode: 'AR' | 'PCO') => {
+    if (targetMode === draft.serviceMode) return;
+    confirmAction({
+      tone: 'warning',
+      title: 'Ganti Jenis Layanan Laporan?',
+      description:
+        'Daftar temuan hama, metode treatment, dan saran akan menyesuaikan jenis layanan yang dipilih.',
+      details: [
+        { label: 'Mode Saat Ini', value: draft.serviceMode === 'AR' ? 'Anti Rayap' : 'Pest Control' },
+        { label: 'Mode Baru', value: targetMode === 'AR' ? 'Anti Rayap' : 'Pest Control' },
+      ],
+      confirmLabel: 'Ya, Ganti Mode',
+      cancelLabel: 'Batal',
+      onConfirm: () => updateDraft('serviceMode', targetMode),
+    });
+  };
+
+  const handleRequestRemoveCustomMethod = (methodName: string) => {
+    confirmAction({
+      tone: 'danger',
+      title: 'Hapus Treatment Khusus?',
+      description: 'Tindakan treatment kustom ini akan dihapus dari daftar laporan pekerjaan.',
+      details: [{ label: 'Treatment', value: methodName }],
+      confirmLabel: 'Ya, Hapus',
+      cancelLabel: 'Batal',
+      onConfirm: () =>
+        updateDraft(
+          'customMethods',
+          draft.customMethods.filter(x => x !== methodName)
+        ),
+    });
+  };
+
   // Build TreatmentInput payload compatible with Permenkes Recap & PDF export
   const buildTreatmentPayload = (): TreatmentInput => {
     const allMethods = [...draft.methods, ...draft.customMethods];
@@ -513,26 +576,7 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
     };
   };
 
-  const handleProceed = async () => {
-    setValidationMsg(null);
-    const allMethods = [...draft.methods, ...draft.customMethods];
-    if (allMethods.length === 0) {
-      setValidationMsg('Pilih minimal 1 tindakan treatment pada Bagian 2.');
-      return;
-    }
-    if (draft.selectedAreas.length === 0) {
-      setValidationMsg('Pilih minimal 1 area pengerjaan pada Bagian 3.');
-      return;
-    }
-    if (!draft.technicianSignature) {
-      setValidationMsg('Bubuhkan tanda tangan teknisi terlebih dahulu pada Bagian 5 (Tahap 1).');
-      return;
-    }
-    if (!draft.clientName.trim()) {
-      setValidationMsg('Isi nama perwakilan customer / PIC pada Bagian 5 (Tahap 2).');
-      return;
-    }
-
+  const executeProceed = async () => {
     setIsSaving(true);
     try {
       await onSaveTreatment(buildTreatmentPayload());
@@ -554,6 +598,43 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
       customerRole: draft.clientRole.trim() || 'PIC Utama',
       customerPhone: draft.clientPhone.trim(),
       technicianSignature: draft.technicianSignature,
+    });
+  };
+
+  const handleProceed = () => {
+    setValidationMsg(null);
+    const allMethods = [...draft.methods, ...draft.customMethods];
+    if (allMethods.length === 0) {
+      setValidationMsg('Pilih minimal 1 tindakan treatment pada Bagian 2.');
+      return;
+    }
+    if (draft.selectedAreas.length === 0) {
+      setValidationMsg('Pilih minimal 1 area pengerjaan pada Bagian 3.');
+      return;
+    }
+    if (!draft.technicianSignature) {
+      setValidationMsg('Bubuhkan tanda tangan teknisi terlebih dahulu pada Bagian 5 (Tahap 1).');
+      return;
+    }
+    if (!draft.clientName.trim()) {
+      setValidationMsg('Isi nama perwakilan customer / PIC pada Bagian 5 (Tahap 2).');
+      return;
+    }
+
+    confirmAction({
+      tone: 'primary',
+      title: 'Simpan & Lanjut ke Customer?',
+      description:
+        'Data temuan, metode treatment, dan area tindakan akan disimpan. Setelah ini Anda akan mengambil foto akhir dan menyerahkan layar ke customer untuk tanda tangan.',
+      details: [
+        { label: 'Layanan', value: isTermite ? 'Anti Rayap' : 'Pest Control' },
+        { label: 'Metode Treatment', value: `${allMethods.length} tindakan` },
+        { label: 'Area Tindakan', value: `${draft.selectedAreas.length} area` },
+        { label: 'Penerima / PIC', value: `${draft.clientName.trim()} (${draft.clientRole.trim() || 'PIC Utama'})` },
+      ],
+      confirmLabel: 'Ya, Simpan & Lanjut',
+      cancelLabel: 'Periksa Lagi',
+      onConfirm: executeProceed,
     });
   };
 
@@ -587,7 +668,7 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
         <div className="flex items-center gap-2.5 min-w-0">
           <button
             type="button"
-            onClick={onBack}
+            onClick={handleRequestBack}
             aria-label="Kembali"
             className="w-10 h-10 rounded-full flex items-center justify-center text-[var(--tl-text)] hover:bg-[var(--tl-low)] active:scale-95 transition-transform cursor-pointer shrink-0"
           >
@@ -658,7 +739,7 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
               type="button"
               role="tab"
               aria-selected={isTermite}
-              onClick={() => updateDraft('serviceMode', 'AR')}
+              onClick={() => handleRequestSwitchServiceMode('AR')}
               className={`min-h-[42px] rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 isTermite
                   ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)] shadow-xs'
@@ -671,7 +752,7 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
               type="button"
               role="tab"
               aria-selected={!isTermite}
-              onClick={() => updateDraft('serviceMode', 'PCO')}
+              onClick={() => handleRequestSwitchServiceMode('PCO')}
               className={`min-h-[42px] rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 !isTermite
                   ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)] shadow-xs'
@@ -1199,12 +1280,7 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
                   <button
                     type="button"
                     aria-label={`Hapus ${cm}`}
-                    onClick={() =>
-                      updateDraft(
-                        'customMethods',
-                        draft.customMethods.filter(x => x !== cm)
-                      )
-                    }
+                    onClick={() => handleRequestRemoveCustomMethod(cm)}
                     className="p-0.5 rounded-full hover:bg-black/10 cursor-pointer"
                   >
                     <X size={12} />
@@ -1577,7 +1653,7 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
                 {draft.technicianSignature && (
                   <button
                     type="button"
-                    onClick={clearTechSign}
+                    onClick={handleRequestClearTechSign}
                     className="text-[11px] font-semibold text-[var(--tl-error)] inline-flex items-center gap-1 cursor-pointer"
                   >
                     <Eraser size={12} /> Bersihkan
@@ -1711,6 +1787,8 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
           <span>Penilaian kepuasan klien bersifat rahasia &amp; langsung ke manajemen.</span>
         </div>
       </div>
+
+      <ConfirmActionModal request={confirmRequest} onClose={closeConfirm} />
     </div>
   );
 };

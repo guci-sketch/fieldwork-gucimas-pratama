@@ -39,6 +39,7 @@ import {
   getTechSigTimeStorageKey,
   isTermiteService,
 } from './techLiteUtils';
+import { ConfirmActionModal, useConfirmAction } from './ConfirmActionModal';
 
 interface CompletionPdfWaSheetProps {
   report: WorkReport;
@@ -127,6 +128,7 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
   const [pdfNotice, setPdfNotice] = useState<string | null>(null);
   const [copiedWa, setCopiedWa] = useState(false);
   const [savedToOutboxNotice, setSavedToOutboxNotice] = useState(false);
+  const { confirmRequest, confirmAction, closeConfirm } = useConfirmAction();
 
   const isTermite = isTermiteService(report.serviceType);
   const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
@@ -718,7 +720,20 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
         <button
           type="button"
           disabled={downloadingPdf}
-          onClick={handleDownloadPdf}
+          onClick={() =>
+            confirmAction({
+              tone: 'primary',
+              title: 'Unduh Laporan Kerja (PDF)?',
+              description: 'Dokumen PDF Berita Acara resmi beserta bukti foto akan diunduh ke perangkat Anda.',
+              details: [
+                { label: 'Nomor WO', value: woCode },
+                { label: 'Lokasi', value: report.projectName },
+                { label: 'Dokumentasi', value: `${report.photos.length} Foto Terverifikasi` },
+              ],
+              confirmLabel: 'Ya, Unduh PDF',
+              onConfirm: handleDownloadPdf,
+            })
+          }
           className="w-full min-h-[46px] px-4 rounded-xl bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] text-xs font-bold flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-all cursor-pointer disabled:opacity-60"
         >
           <Download size={16} />
@@ -726,15 +741,27 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
         </button>
 
         <div className="grid grid-cols-2 gap-2">
-          <a
-            href={waHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="min-h-[42px] px-3 rounded-xl bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-xs font-bold flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
+          <button
+            type="button"
+            onClick={() =>
+              confirmAction({
+                tone: 'primary',
+                title: 'Kirim Ringkasan via WhatsApp?',
+                description: 'Anda akan membuka WhatsApp dengan draf resmi Berita Acara untuk dikirim ke PIC lokasi.',
+                details: [
+                  { label: 'Penerima / PIC', value: report.customerName || 'Perwakilan Lokasi' },
+                  { label: 'Nomor WA', value: report.customerPhone || 'Pilih kontak di WhatsApp' },
+                  { label: 'Nomor WO', value: woCode },
+                ],
+                confirmLabel: 'Buka WhatsApp',
+                confirmHref: waHref,
+              })
+            }
+            className="min-h-[42px] px-3 rounded-xl bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-xs font-bold flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform cursor-pointer"
           >
             <MessageCircle size={15} />
             <span className="truncate">Kirim WA PIC</span>
-          </a>
+          </button>
 
           <button
             type="button"
@@ -746,6 +773,8 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
           </button>
         </div>
       </div>
+
+      <ConfirmActionModal request={confirmRequest} onClose={closeConfirm} />
     </div>
   );
 };

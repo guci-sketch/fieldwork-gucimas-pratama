@@ -34,6 +34,7 @@ import { CustomerReviewFormModal } from './CustomerReviewFormModal';
 import { TechnicianWorksheet, WorksheetClientPrefill } from './TechnicianWorksheet';
 import { CompletionPdfWaSheet } from './CompletionPdfWaSheet';
 import { NotificationsSheet, TechNotificationItem } from './NotificationsSheet';
+import { ConfirmActionModal, useConfirmAction } from './ConfirmActionModal';
 import { formatDistance, calculateDistanceMeters } from '@/shared/utils/geo';
 import { postLocation } from '@/shared/api/location';
 import {
@@ -255,6 +256,7 @@ export const ExecutorHome: React.FC = () => {
   const [isViewingHistoryDetail, setIsViewingHistoryDetail] = useState(false);
   const [showGpsPrompt, setShowGpsPrompt] = useState(false);
   const [gpsPermissionStatus, setGpsPermissionStatus] = useState<string>('unknown');
+  const { confirmRequest, confirmAction, closeConfirm } = useConfirmAction();
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -543,7 +545,7 @@ export const ExecutorHome: React.FC = () => {
         timeLabel: 'Antrean',
         unread: true,
         onPress: () => {
-          if (isOnline) attemptSync();
+          if (isOnline) handleRequestSync();
           else setPage('profile');
         },
       });
@@ -585,6 +587,15 @@ export const ExecutorHome: React.FC = () => {
   const unreadNotifCount = notificationItems.filter(n => n.unread).length;
 
   // Handlers
+  const applyTeamMembersUpdate = async (repId: string, next: TeamMemberEntry[]) => {
+    setReports(prev => prev.map(r => (r.id === repId ? { ...r, teamMembers: next } : r)));
+    try {
+      await updateWorkReportTeam(repId, next);
+    } catch {
+      // ignore if offline
+    }
+  };
+
   const handleToggleQuickTeamMember = async (rep: WorkReport, member: TeamMemberEntry) => {
     const current =
       rep.teamMembers && rep.teamMembers.length > 0
@@ -593,15 +604,26 @@ export const ExecutorHome: React.FC = () => {
     const exists = current.some(
       m => (member.id && m.id === member.id) || m.name.toLowerCase() === member.name.toLowerCase()
     );
-    const next = exists
-      ? current.filter(m => !((member.id && m.id === member.id) || m.name.toLowerCase() === member.name.toLowerCase()))
-      : [...current, member];
-    setReports(prev => prev.map(r => (r.id === rep.id ? { ...r, teamMembers: next } : r)));
-    try {
-      await updateWorkReportTeam(rep.id, next);
-    } catch {
-      // ignore if offline
+    if (exists) {
+      const next = current.filter(
+        m => !((member.id && m.id === member.id) || m.name.toLowerCase() === member.name.toLowerCase())
+      );
+      confirmAction({
+        tone: 'warning',
+        title: 'Keluarkan Anggota Tim?',
+        description: 'Anggota ini akan dihapus dari daftar tim pelaksana pada Work Order ini.',
+        details: [
+          { label: 'Anggota', value: member.name },
+          { label: 'Nomor WO', value: formatWoCode(rep.id) },
+        ],
+        confirmLabel: 'Ya, Keluarkan',
+        cancelLabel: 'Batal',
+        onConfirm: () => applyTeamMembersUpdate(rep.id, next),
+      });
+      return;
     }
+    const next = [...current, member];
+    await applyTeamMembersUpdate(rep.id, next);
   };
 
   const handleCreateProjectSubmit = async (data: CreateProjectInput) => {
@@ -737,6 +759,88 @@ export const ExecutorHome: React.FC = () => {
     setTimeout(() => setCacheNotice(null), 3500);
   };
 
+  const handleRequestClearCache = () => {
+    confirmAction({
+      tone: 'danger',
+      title: 'Bersihkan Cache Foto?',
+      description:
+        'Cache sementara foto di perangkat ini akan dihapus untuk menghemat penyimpanan. Antrean offline yang belum terkirim tetap aman.',
+      details: [
+        { label: 'Antrean Offline', value: pendingCount > 0 ? `${pendingCount} data aman` : 'Tidak ada antrean' },
+      ],
+      confirmLabel: 'Ya, Bersihkan',
+      cancelLabel: 'Batal',
+      onConfirm: handleClearCache,
+    });
+  };
+
+  const handleRequestSync = () => {
+    if (isSyncing) return;
+    if (pendingCount > 0) {
+      confirmAction({
+        tone: 'warning',
+        title: 'Kirim Antrean Offline?',
+        description:
+          'Data pekerjaan dan foto yang tertunda di perangkat akan dikirim ke server sekarang.',
+        details: [
+          { label: 'Data Tertunda', value: `${pendingCount} antrean` },
+          { label: 'Koneksi', value: isOnline ? 'Online' : 'Offline' },
+        ],
+        confirmLabel: 'Ya, Sinkronkan',
+        cancelLabel: 'Nanti Saja',
+        onConfirm: attemptSync,
+      });
+      return;
+    }
+    confirmAction({
+      tone: 'primary',
+      title: 'Sinkronkan Data Lapangan?',
+      description: 'Memuat ulang jadwal tugas dan status laporan terbaru dari server.',
+      details: [{ label: 'Status Koneksi', value: isOnline ? 'Online' : 'Offline' }],
+      confirmLabel: 'Ya, Sinkronkan',
+      cancelLabel: 'Batal',
+      onConfirm: attemptSync,
+    });
+  };
+
+  const handleRequestLogout = () => {
+    confirmAction({
+      tone: 'danger',
+      title: 'Keluar dari Akun Teknisi?',
+      description:
+        pendingCount > 0
+          ? `Masih ada ${pendingCount} data antrean offline yang belum terkirim. Anda dapat keluar sekarang, namun disarankan sinkronkan data terlebih dahulu.`
+          : 'Sesi Anda pada perangkat ini akan diakhiri dan diarahkan kembali ke halaman masuk.',
+      details: [
+        { label: 'Akun Teknisi', value: user.name },
+        {
+          label: 'Antrean Offline',
+          value: pendingCount > 0 ? `${pendingCount} belum terkirim` : 'Semua tersinkron',
+        },
+      ],
+      confirmLabel: 'Ya, Keluar',
+      cancelLabel: 'Batal',
+      onConfirm: logout,
+    });
+  };
+
+  const handleRequestCheckInCamera = (report: WorkReport) => {
+    confirmAction({
+      tone: 'primary',
+      title: 'Mulai Check-in & Buka Kamera?',
+      description:
+        'Kamera dan validasi posisi GPS akan dibuka untuk mencatat waktu kehadiran Anda di lokasi kerja.',
+      details: [
+        { label: 'Nomor WO', value: formatWoCode(report.id) },
+        { label: 'Lokasi', value: report.projectName },
+        { label: 'Radius GPS', value: `${report.projectRadius || 100} meter` },
+      ],
+      confirmLabel: 'Ya, Buka Kamera',
+      cancelLabel: 'Batal',
+      onConfirm: () => setActiveCameraAction({ type: 'CHECK_IN', report }),
+    });
+  };
+
   const initials = getInitials(user.name);
   const firstName = user.name.split(' ')[0] || 'Teknisi';
   const currentMonthLabel = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
@@ -770,7 +874,7 @@ export const ExecutorHome: React.FC = () => {
       <div className="flex items-center gap-2 shrink-0">
         <button
           type="button"
-          onClick={() => (pendingCount > 0 ? attemptSync() : setShowNotifications(true))}
+          onClick={() => (pendingCount > 0 ? handleRequestSync() : setShowNotifications(true))}
           aria-label="Status Koneksi dan Sinkronisasi"
           className="inline-flex items-center gap-1.5 min-h-[34px] px-2.5 rounded-full bg-[var(--tl-low)] hover:bg-[var(--tl-container)] text-[11px] font-bold text-[var(--tl-text)] cursor-pointer"
         >
@@ -915,7 +1019,7 @@ export const ExecutorHome: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => (pendingCount > 0 ? attemptSync() : setPage('jobs'))}
+                  onClick={() => (pendingCount > 0 ? handleRequestSync() : setPage('jobs'))}
                   className="px-2 text-center cursor-pointer"
                 >
                   <strong className="block text-[20px] font-extrabold font-mono tabular-nums text-amber-600 dark:text-amber-400 leading-none">
@@ -1229,7 +1333,7 @@ export const ExecutorHome: React.FC = () => {
                 <button
                   type="button"
                   disabled={isSyncing}
-                  onClick={attemptSync}
+                  onClick={handleRequestSync}
                   className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-3.5 flex items-center gap-3 text-left active:scale-[0.98] transition-transform cursor-pointer"
                 >
                   <div className="w-10 h-10 rounded-xl bg-[var(--tl-low)] text-[var(--tl-secondary)] flex items-center justify-center shrink-0">
@@ -1783,7 +1887,7 @@ export const ExecutorHome: React.FC = () => {
             <div className="tech-sticky-tray">
               <button
                 type="button"
-                onClick={() => setActiveCameraAction({ type: 'CHECK_IN', report: activeTaskReport })}
+                onClick={() => handleRequestCheckInCamera(activeTaskReport)}
                 className="w-full min-h-[48px] rounded-xl bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
               >
                 <Camera size={17} />
@@ -1825,7 +1929,7 @@ export const ExecutorHome: React.FC = () => {
             pendingQueueCount={pendingCount}
             isSyncing={isSyncing}
             isHistoryDetail={isViewingHistoryDetail}
-            onSyncNow={attemptSync}
+            onSyncNow={handleRequestSync}
             onViewPhoto={photo => setViewingPhoto(photo)}
             onBack={() => setPage(isViewingHistoryDetail ? 'history' : 'home')}
           />
@@ -2145,7 +2249,7 @@ export const ExecutorHome: React.FC = () => {
                   <button
                     type="button"
                     disabled={isSyncing}
-                    onClick={attemptSync}
+                    onClick={handleRequestSync}
                     className="w-full min-h-[54px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-[var(--tl-low)]/60"
                   >
                     <span className="flex items-center gap-3">
@@ -2165,7 +2269,7 @@ export const ExecutorHome: React.FC = () => {
 
                 <button
                   type="button"
-                  onClick={handleClearCache}
+                  onClick={handleRequestClearCache}
                   className="w-full min-h-[54px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-[var(--tl-low)]/60"
                 >
                   <span className="flex items-center gap-3">
@@ -2201,7 +2305,7 @@ export const ExecutorHome: React.FC = () => {
 
                 <button
                   type="button"
-                  onClick={logout}
+                  onClick={handleRequestLogout}
                   className="w-full min-h-[54px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-rose-50/60 dark:hover:bg-rose-950/20"
                 >
                   <span className="flex items-center gap-3 text-[var(--tl-error)]">
@@ -2349,6 +2453,7 @@ export const ExecutorHome: React.FC = () => {
           </div>
         </div>
       )}
+      <ConfirmActionModal request={confirmRequest} onClose={closeConfirm} />
     </div>
   );
 };

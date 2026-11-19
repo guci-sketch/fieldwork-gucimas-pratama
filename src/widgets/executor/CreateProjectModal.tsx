@@ -8,6 +8,7 @@ import { geocodeAddress, reverseGeocode } from '@/shared/utils/geocoding';
 import { useVisualViewportMetrics, scrollInputIntoView } from '@/shared/hooks/useVirtualKeyboard';
 import { PEST_CATALOG_26, TERMITE_CATALOG_AR } from '@/shared/lib/permenkesRecapEngine';
 import { supabase } from '@/shared/lib/supabase';
+import { ConfirmActionModal, useConfirmAction } from './ConfirmActionModal';
 import { useAuthStore } from '@/app/store/authStore';
 
 interface CreateProjectModalProps {
@@ -179,12 +180,14 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose,
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMapLocked, setIsMapLocked] = useState(false);
   const [isGeocoding, setIsGeocoding] = useState(false);
+  const { confirmRequest, confirmAction, closeConfirm } = useConfirmAction();
 
   const handleSearchAddressCoords = async () => {
     if (!address || address.trim().length < 3) {
-      alert('Ketik alamat terlebih dahulu pada kolom Alamat Lengkap Lokasi.');
+      setSubmitError('Ketik alamat terlebih dahulu pada kolom Alamat Lengkap Lokasi.');
       return;
     }
+    setSubmitError(null);
     setIsGeocoding(true);
     try {
       const coords = await geocodeAddress(address);
@@ -193,7 +196,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose,
         setLocationLng(coords.lng);
         setIsLocationPicked(true);
       } else {
-        alert('Titik koordinat tidak ditemukan untuk teks alamat tersebut. Silakan geser pin peta secara manual.');
+        setSubmitError('Titik koordinat tidak ditemukan untuk alamat tersebut. Silakan geser pin peta secara manual.');
       }
     } finally {
       setIsGeocoding(false);
@@ -202,9 +205,10 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose,
 
   const handleUseCurrentGps = () => {
     if (!navigator.geolocation) {
-      alert('Perangkat ini tidak mendukung sensor GPS.');
+      setSubmitError('Perangkat ini tidak mendukung sensor GPS.');
       return;
     }
+    setSubmitError(null);
     setIsGeocoding(true);
     navigator.geolocation.getCurrentPosition(
       async pos => {
@@ -226,7 +230,11 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose,
       },
       err => {
         setIsGeocoding(false);
-        alert(err.code === err.PERMISSION_DENIED ? 'Izin GPS ditolak oleh peramban HP.' : 'Sinyal GPS lemah atau tidak tersedia. Pastikan fitur Lokasi HP menyala.');
+        setSubmitError(
+          err.code === err.PERMISSION_DENIED
+            ? 'Izin GPS ditolak oleh peramban HP.'
+            : 'Sinyal GPS lemah atau tidak tersedia. Pastikan fitur Lokasi HP menyala.'
+        );
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
@@ -322,24 +330,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose,
     setShowCustomerDropdown(false);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const newErrors: { [key: string]: string } = {};
-
-    if (!projectName.trim()) newErrors.projectName = 'Nama proyek wajib diisi';
-    if (!address.trim()) newErrors.address = 'Alamat proyek wajib diisi';
-    if (!workDate) newErrors.workDate = 'Tanggal pelaksanaan wajib diisi';
-
-    const finalFocus = [...targetFocus];
-    if (otherFocus.trim() && !finalFocus.includes(otherFocus.trim())) {
-      finalFocus.push(otherFocus.trim());
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
+  const executeCreateProject = async (finalFocus: string[]) => {
     setSubmitError(null);
     setIsSubmitting(true);
     try {
@@ -405,6 +396,55 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose,
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const newErrors: { [key: string]: string } = {};
+
+    if (!projectName.trim()) newErrors.projectName = 'Nama proyek wajib diisi';
+    if (!address.trim()) newErrors.address = 'Alamat proyek wajib diisi';
+    if (!workDate) newErrors.workDate = 'Tanggal pelaksanaan wajib diisi';
+
+    const finalFocus = [...targetFocus];
+    if (otherFocus.trim() && !finalFocus.includes(otherFocus.trim())) {
+      finalFocus.push(otherFocus.trim());
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    confirmAction({
+      tone: 'primary',
+      title: 'Simpan & Tugaskan Lokasi Baru?',
+      description: 'Pastikan nama proyek, alamat, dan titik koordinat GPS sudah benar sebelum menyimpan.',
+      details: [
+        { label: 'Proyek', value: projectName.trim() },
+        { label: 'Klien', value: clientName.trim() || 'Klien Layanan Lapangan' },
+        { label: 'Layanan', value: serviceType === 'TERMITE_CONTROL' ? 'Anti Rayap' : 'Pest Control' },
+        { label: 'Jadwal', value: `${workDate} · ${scheduledStartTime} WIB` },
+      ],
+      confirmLabel: 'Ya, Simpan Tugas',
+      onConfirm: () => executeCreateProject(finalFocus),
+    });
+  };
+
+  const handleRequestClose = () => {
+    if (isSubmitting) return;
+    if (clientName.trim() || address.trim()) {
+      confirmAction({
+        tone: 'warning',
+        title: 'Batalkan Pembuatan Tugas?',
+        description: 'Isian lokasi dan jadwal tugas baru yang belum disimpan akan hilang.',
+        confirmLabel: 'Ya, Batalkan',
+        cancelLabel: 'Lanjut Isi',
+        onConfirm: () => onClose(),
+      });
+      return;
+    }
+    onClose();
+  };
+
   const isTermite = serviceType === 'TERMITE_CONTROL';
   const catalogForDropdown = isTermite ? TERMITE_CATALOG_AR : PEST_CATALOG_26;
   const { isKeyboardOpen, viewportHeight } = useVisualViewportMetrics();
@@ -413,7 +453,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose,
     <div
       id="create-project-modal-backdrop"
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 bg-black/55"
-      onClick={onClose}
+      onClick={handleRequestClose}
     >
       <div
         id="create-project-modal-card"
@@ -895,7 +935,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose,
             <button
               id="btn-cancel-create-project"
               type="button"
-              onClick={onClose}
+              onClick={handleRequestClose}
               disabled={isSubmitting}
               className="px-4 py-2.5 rounded-xl border border-[var(--border-subtle)] hover:bg-[var(--bg-tertiary)] text-xs font-semibold transition-colors text-[var(--text-secondary)] disabled:opacity-50"
             >
@@ -913,6 +953,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose,
           </div>
         </form>
       </div>
+      <ConfirmActionModal request={confirmRequest} onClose={closeConfirm} />
     </div>
   );
 };

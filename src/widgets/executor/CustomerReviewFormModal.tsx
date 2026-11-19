@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { X, RefreshCw, Star, Lock, ArrowRight, EyeOff, PenTool, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ConfirmActionModal, useConfirmAction } from './ConfirmActionModal';
 
 interface CustomerReviewFormModalProps {
   initialName?: string;
@@ -55,6 +56,7 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
   const [error, setError] = useState('');
+  const { confirmRequest, confirmAction, closeConfirm } = useConfirmAction();
 
   useEffect(() => {
     if (step !== 'SIGN_STAGE') return;
@@ -150,13 +152,32 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
     setStep('STRICT_BLIND_EVAL_STAGE');
   };
 
-  const handleFinalStrictSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (rating < 1 || rating > 5) {
-      setError('Silakan pilih 1 hingga 5 bintang kepuasan.');
+  const handleRequestClose = () => {
+    if (hasSignature) {
+      confirmAction({
+        tone: 'danger',
+        title: 'Batalkan Tanda Tangan Customer?',
+        description: 'Goresan tanda tangan yang sudah dibuat akan dibuang dan Anda kembali ke Form Laporan.',
+        confirmLabel: 'Ya, Batalkan',
+        cancelLabel: 'Tetap di Sini',
+        onConfirm: () => onClose(),
+      });
       return;
     }
+    onClose();
+  };
 
+  const handleRequestClearSignature = () => {
+    confirmAction({
+      tone: 'danger',
+      title: 'Hapus Tanda Tangan Customer?',
+      description: 'Bidang tanda tangan akan dikosongkan sehingga customer perlu menggoreskan ulang.',
+      confirmLabel: 'Ya, Bersihkan',
+      onConfirm: () => clearSignature(),
+    });
+  };
+
+  const executeFinalStrictSubmit = () => {
     const compiledFeedback = [
       `[STRICT_BLIND_PIC_REVIEW]`,
       `[Rating: ${rating}/5]`,
@@ -180,6 +201,28 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
     setFeedback('');
 
     onSubmit(finalPayload);
+  };
+
+  const handleFinalStrictSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (rating < 1 || rating > 5) {
+      setError('Silakan pilih 1 hingga 5 bintang kepuasan.');
+      return;
+    }
+
+    confirmAction({
+      tone: 'primary',
+      title: 'Selesaikan & Kunci Pekerjaan?',
+      description:
+        'Laporan kerja dan tanda tangan pengesahan akan dikunci permanen. Penilaian kepuasan langsung terkirim rahasia ke manajemen.',
+      details: [
+        { label: 'Penandatangan', value: name.trim() },
+        ...(projectName ? [{ label: 'Lokasi', value: projectName }] : []),
+      ],
+      confirmLabel: 'Ya, Selesaikan WO',
+      cancelLabel: 'Periksa Lagi',
+      onConfirm: executeFinalStrictSubmit,
+    });
   };
 
   return (
@@ -209,7 +252,7 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
           {step === 'SIGN_STAGE' && (
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleRequestClose}
               aria-label="Tutup"
               className="w-9 h-9 rounded-full bg-[var(--tl-container)] flex items-center justify-center text-[var(--tl-text)] hover:bg-[var(--tl-high)] cursor-pointer shrink-0"
             >
@@ -272,7 +315,7 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
                   {hasSignature && (
                     <button
                       type="button"
-                      onClick={clearSignature}
+                      onClick={handleRequestClearSignature}
                       className="text-[11px] font-semibold text-[var(--tl-error)] flex items-center gap-1 cursor-pointer"
                     >
                       <RefreshCw size={13} /> Bersihkan
@@ -301,7 +344,7 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
               <div className="flex gap-2.5 pt-1">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={handleRequestClose}
                   className="flex-1 min-h-[48px] bg-[var(--tl-container)] text-[var(--tl-text)] font-semibold rounded-xl text-xs cursor-pointer"
                 >
                   Batal
@@ -426,6 +469,7 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
           )}
         </AnimatePresence>
       </motion.div>
+      <ConfirmActionModal request={confirmRequest} onClose={closeConfirm} />
     </div>
   );
 };
