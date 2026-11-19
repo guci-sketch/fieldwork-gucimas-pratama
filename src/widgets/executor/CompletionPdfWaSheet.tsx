@@ -230,33 +230,33 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
     <div className="flex flex-col min-h-full bg-[var(--tl-surface)]">
       {/* Frosted Stack Header */}
       <header
-        className="sticky top-0 z-30 px-4 h-16 flex items-center justify-between gap-2 backdrop-blur-md shrink-0"
+        className="sticky top-0 z-30 px-4 h-14 flex items-center justify-between gap-2 backdrop-blur-md shrink-0"
         style={{
-          background: 'color-mix(in srgb, var(--tl-surface) 90%, transparent)',
+          background: 'color-mix(in srgb, var(--tl-surface) 92%, transparent)',
           boxShadow: 'var(--tl-shadow-head)',
         }}
       >
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
           <button
             type="button"
             onClick={onBack}
             aria-label="Kembali"
-            className="w-10 h-10 rounded-full flex items-center justify-center text-[var(--tl-text)] hover:bg-[var(--tl-low)] active:scale-95 transition-transform cursor-pointer shrink-0"
+            className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--tl-text)] hover:bg-[var(--tl-low)] active:scale-95 transition-transform cursor-pointer shrink-0"
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={19} />
           </button>
           <div className="min-w-0">
-            <h1 className="text-[16px] font-bold text-[var(--tl-text)] tracking-tight leading-tight truncate">
+            <h1 className="text-[14.5px] font-bold text-[var(--tl-text)] tracking-tight leading-tight truncate">
               Detail Pekerjaan
             </h1>
-            <p className="text-[11px] text-[var(--tl-text-variant)] font-mono truncate">
+            <p className="text-[10.5px] text-[var(--tl-text-variant)] font-mono truncate">
               {woCode} · {workDateLabel}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[var(--tl-low)] text-[11px] font-semibold text-[var(--tl-text)]">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[var(--tl-text-variant)]">
             <span
               className={`w-2 h-2 rounded-full ${
                 isOffline ? 'bg-rose-500' : pendingQueueCount > 0 ? 'bg-amber-500' : 'bg-emerald-500'
@@ -266,31 +266,31 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
           </span>
           <div
             aria-hidden="true"
-            className="w-9 h-9 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-xs font-bold flex items-center justify-center shrink-0"
+            className="w-8 h-8 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[11px] font-bold flex items-center justify-center shrink-0"
           >
             {techInitials}
           </div>
         </div>
       </header>
 
-      <main className="flex-1 px-4 pt-4 pb-40 space-y-4">
+      <main className="flex-1 px-4 pt-3.5 pb-40 space-y-3.5">
         {/* Post-checkout completion confirmation banner */}
         {!isHistoryDetail && (
-          <div className="rounded-2xl bg-[var(--tl-card)] p-4 flex items-center gap-3.5 shadow-[var(--tl-shadow-card)]">
+          <div className="rounded-2xl bg-[var(--tl-card)] p-3.5 flex items-center gap-3 shadow-[var(--tl-shadow-card)]">
             <div
-              className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+              className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
                 hasOutboxPending
                   ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
                   : 'bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)]'
               }`}
             >
-              {hasOutboxPending ? <CloudOff size={22} /> : <CheckCircle2 size={22} />}
+              {hasOutboxPending ? <CloudOff size={19} /> : <CheckCircle2 size={19} />}
             </div>
             <div className="min-w-0">
-              <h2 className="text-sm font-bold text-[var(--tl-text)]">
+              <h2 className="text-[13px] font-bold text-[var(--tl-text)]">
                 {hasOutboxPending ? 'Tersimpan di Antrean Offline' : 'Laporan Selesai & Disahkan'}
               </h2>
-              <p className="text-xs text-[var(--tl-text-variant)] mt-0.5 leading-snug">
+              <p className="text-[11.5px] text-[var(--tl-text-variant)] mt-0.5 leading-snug">
                 {hasOutboxPending
                   ? 'Data aman tersimpan di HP. Kirim ulang otomatis saat sinyal kembali.'
                   : 'Berita Acara siap diunduh sebagai PDF atau dibagikan ke PIC via WhatsApp.'}
@@ -302,34 +302,23 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
         {/* ================================================================ */}
         {/* CARD 1 — KARTU PENUGASAN UTAMA                                   */}
         {/* ================================================================ */}
-        <section className="rounded-2xl bg-[var(--tl-card)] p-4 space-y-3.5 shadow-[var(--tl-shadow-card)]">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="px-2 py-0.5 rounded-md bg-[var(--tl-container)] text-[var(--tl-text)] text-[10.5px] font-mono font-bold tracking-wide">
-                NO. {woCode}
-              </span>
-              <span
-                className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
-                  isTermite
-                    ? 'bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)]'
-                    : 'bg-[var(--tl-high)] text-[var(--tl-text)]'
-                }`}
-              >
-                {getServiceLabel(report.serviceType)}
-              </span>
-            </div>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-[11px] font-bold">
+        <section className="rounded-2xl bg-[var(--tl-card)] p-3.5 space-y-3 shadow-[var(--tl-shadow-card)]">
+          <div className="flex items-center justify-between gap-2 text-[11px]">
+            <span className="font-mono font-semibold text-[var(--tl-text-variant)]">
+              {woCode} · {getServiceLabel(report.serviceType)}
+            </span>
+            <span className="inline-flex items-center gap-1 font-semibold text-[var(--tl-secondary)] shrink-0">
               <CheckCircle2 size={12} />
-              <span>Selesai &amp; Disahkan</span>
+              <span>Selesai</span>
             </span>
           </div>
 
           <div>
-            <h2 className="text-[17px] font-bold text-[var(--tl-text)] leading-snug">
+            <h2 className="text-[15px] font-bold text-[var(--tl-text)] leading-snug">
               {report.projectName}
             </h2>
             {report.clientName && (
-              <p className="text-xs text-[var(--tl-text-variant)] mt-0.5">{report.clientName}</p>
+              <p className="text-[11.5px] text-[var(--tl-text-variant)] mt-0.5">{report.clientName}</p>
             )}
           </div>
 
@@ -398,41 +387,41 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
         {/* ================================================================ */}
         {/* CARD 2 — DOKUMENTASI & PENGESAHAN PEKERJAAN                      */}
         {/* ================================================================ */}
-        <section className="rounded-2xl bg-[var(--tl-card)] p-4 space-y-4 shadow-[var(--tl-shadow-card)]">
+        <section className="rounded-2xl bg-[var(--tl-card)] p-3.5 space-y-3.5 shadow-[var(--tl-shadow-card)]">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <Camera size={16} className="text-[var(--tl-secondary)]" />
-              <h3 className="text-sm font-bold text-[var(--tl-text)]">Dokumentasi &amp; Pengesahan</h3>
+              <Camera size={15} className="text-[var(--tl-secondary)]" />
+              <h3 className="text-[13px] font-bold text-[var(--tl-text)]">Dokumentasi &amp; Pengesahan</h3>
             </div>
-            <span className="px-2.5 py-0.5 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-[10.5px] font-bold">
-              {report.photos.length} Foto Terverifikasi
+            <span className="text-[11px] font-semibold text-[var(--tl-secondary)]">
+              {report.photos.length} Foto
             </span>
           </div>
 
           {/* Teknisi Pelaksana Block (Teknisi Tunggal vs Tim Pelaksana) */}
-          <div className="rounded-xl bg-[var(--tl-low)] p-3.5 space-y-2.5">
+          <div className="rounded-xl bg-[var(--tl-low)] p-3 space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--tl-text-variant)] flex items-center gap-1.5">
+              <span className="text-[11px] font-semibold text-[var(--tl-text-variant)] flex items-center gap-1.5">
                 <Users size={13} className="text-[var(--tl-secondary)]" />
                 <span>Teknisi Pelaksana</span>
               </span>
-              <span className="px-2 py-0.5 rounded-full bg-[var(--tl-card)] text-[var(--tl-text)] text-[10.5px] font-semibold">
-                {isSoloTech ? 'Teknisi Tunggal' : `Tim Pelaksana (${teamList.length} Orang)`}
+              <span className="text-[10.5px] font-medium text-[var(--tl-text-variant)]">
+                {isSoloTech ? 'Teknisi Tunggal' : `Tim (${teamList.length} Orang)`}
               </span>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {teamList.map((member, idx) => (
                 <div
                   key={`${member.name}-${idx}`}
-                  className="flex items-center justify-between gap-2.5 bg-[var(--tl-card)] rounded-xl p-2.5"
+                  className="flex items-center justify-between gap-2 bg-[var(--tl-card)] rounded-xl p-2.5"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[11px] font-bold flex items-center justify-center shrink-0">
+                    <div className="w-7 h-7 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[10.5px] font-bold flex items-center justify-center shrink-0">
                       {getInitials(member.name)}
                     </div>
                     <div className="min-w-0">
-                      <strong className="block text-xs font-bold text-[var(--tl-text)] truncate">
+                      <strong className="block text-[12px] font-semibold text-[var(--tl-text)] truncate">
                         {member.name}
                       </strong>
                       <span className="block text-[10.5px] text-[var(--tl-text-variant)] truncate">
@@ -441,8 +430,8 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
                       </span>
                     </div>
                   </div>
-                  <span className="px-2 py-0.5 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-[10px] font-bold whitespace-nowrap shrink-0">
-                    Hadir &amp; Bertugas
+                  <span className="text-[10.5px] font-semibold text-[var(--tl-secondary)] whitespace-nowrap shrink-0">
+                    Hadir
                   </span>
                 </div>
               ))}
@@ -563,11 +552,11 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
 
           {/* Catatan Lapangan Teknisi (NEVER displays confidential client rating!) */}
           {parsed.cleanNotes && (
-            <div className="rounded-xl bg-[var(--tl-low)] p-3.5 border-l-3 border-[var(--tl-secondary)]">
-              <span className="block text-[10.5px] font-bold uppercase tracking-wider text-[var(--tl-text-variant)] mb-1">
+            <div className="rounded-xl bg-[var(--tl-low)] p-3 border border-[var(--tl-container)]">
+              <span className="block text-[10.5px] font-semibold text-[var(--tl-text-variant)] mb-1">
                 Catatan Lapangan Teknisi
               </span>
-              <p className="text-xs text-[var(--tl-text)] leading-relaxed italic">
+              <p className="text-[11.5px] text-[var(--tl-text)] leading-relaxed">
                 &ldquo;{parsed.cleanNotes}&rdquo;
               </p>
             </div>
@@ -577,10 +566,10 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
         {/* ================================================================ */}
         {/* CARD 3 — PELAPORAN KERJA & PENANGANAN HAMA                       */}
         {/* ================================================================ */}
-        <section className="rounded-2xl bg-[var(--tl-card)] p-4 space-y-3 shadow-[var(--tl-shadow-card)]">
+        <section className="rounded-2xl bg-[var(--tl-card)] p-3.5 space-y-3 shadow-[var(--tl-shadow-card)]">
           <div className="flex items-center gap-2">
-            <FileText size={16} className="text-[var(--tl-secondary)]" />
-            <h3 className="text-sm font-bold text-[var(--tl-text)]">Pelaporan Kerja &amp; Penanganan Hama</h3>
+            <FileText size={15} className="text-[var(--tl-secondary)]" />
+            <h3 className="text-[13px] font-bold text-[var(--tl-text)]">Pelaporan Kerja &amp; Penanganan Hama</h3>
           </div>
 
           <div className="space-y-2.5 text-xs">

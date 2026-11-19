@@ -167,6 +167,17 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
     onClose();
   };
 
+  useEffect(() => {
+    if (step !== 'SIGN_STAGE') return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !confirmRequest) {
+        handleRequestClose();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [step, hasSignature, confirmRequest]);
+
   const handleRequestClearSignature = () => {
     confirmAction({
       tone: 'danger',
@@ -235,16 +246,16 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
         className="tech-lite-shell bg-[var(--tl-card)] rounded-t-2xl sm:rounded-2xl w-full max-w-[430px] overflow-hidden flex flex-col max-h-[92dvh] shadow-2xl"
       >
         {/* Reference-matched Bottom-Sheet Header */}
-        <div className="px-5 pt-5 pb-3.5 border-b border-[var(--tl-container)] flex items-center justify-between shrink-0">
+        <div className="px-4 pt-4 pb-3 border-b border-[var(--tl-container)] flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-9 h-9 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] flex items-center justify-center shrink-0">
-              {step === 'SIGN_STAGE' ? <PenTool size={18} /> : <Star size={18} />}
+            <div className="w-8 h-8 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] flex items-center justify-center shrink-0">
+              {step === 'SIGN_STAGE' ? <PenTool size={16} /> : <Star size={16} />}
             </div>
             <div className="min-w-0">
-              <h2 className="text-[16px] font-bold text-[var(--tl-text)] leading-tight truncate">
+              <h2 className="text-[14.5px] font-bold text-[var(--tl-text)] leading-tight truncate">
                 {step === 'SIGN_STAGE' ? 'Tanda Tangan Customer' : 'Feedback Kualitas Pelayanan'}
               </h2>
-              <p className="text-xs text-[var(--tl-text-variant)] truncate mt-0.5">
+              <p className="text-[11px] text-[var(--tl-text-variant)] truncate mt-0.5">
                 {name ? `${name}${projectName ? ` · ${projectName}` : ''}` : projectName || 'Pengesahan Berita Acara'}
               </p>
             </div>

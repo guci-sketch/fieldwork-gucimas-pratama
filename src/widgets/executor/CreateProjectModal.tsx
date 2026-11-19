@@ -445,6 +445,16 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose,
     onClose();
   };
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !confirmRequest) {
+        handleRequestClose();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [confirmRequest, isSubmitting, clientName, address]);
+
   const isTermite = serviceType === 'TERMITE_CONTROL';
   const catalogForDropdown = isTermite ? TERMITE_CATALOG_AR : PEST_CATALOG_26;
   const { isKeyboardOpen, viewportHeight } = useVisualViewportMetrics();
@@ -473,8 +483,10 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ onClose,
           </div>
           <button
             id="btn-close-create-project"
-            onClick={onClose}
-            className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors"
+            type="button"
+            onClick={handleRequestClose}
+            aria-label="Tutup form buat tugas"
+            className="p-2 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] transition-colors cursor-pointer"
           >
             <X size={20} />
           </button>

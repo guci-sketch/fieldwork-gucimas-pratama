@@ -659,48 +659,48 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
     <div className="flex flex-col min-h-full bg-[var(--tl-surface)]">
       {/* Frosted Sticky Header */}
       <header
-        className="sticky top-0 z-30 px-4 h-16 flex items-center justify-between gap-2 backdrop-blur-md shrink-0"
+        className="sticky top-0 z-30 px-4 h-14 flex items-center justify-between gap-2 backdrop-blur-md shrink-0"
         style={{
-          background: 'color-mix(in srgb, var(--tl-surface) 90%, transparent)',
+          background: 'color-mix(in srgb, var(--tl-surface) 92%, transparent)',
           boxShadow: 'var(--tl-shadow-head)',
         }}
       >
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
           <button
             type="button"
             onClick={handleRequestBack}
             aria-label="Kembali"
-            className="w-10 h-10 rounded-full flex items-center justify-center text-[var(--tl-text)] hover:bg-[var(--tl-low)] active:scale-95 transition-transform cursor-pointer shrink-0"
+            className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--tl-text)] hover:bg-[var(--tl-low)] active:scale-95 transition-transform cursor-pointer shrink-0"
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={19} />
           </button>
           <div className="min-w-0">
-            <span className="block text-[10.5px] font-bold uppercase tracking-wider text-[var(--tl-secondary)] leading-none">
-              GuciMas Pratama
-            </span>
-            <h1 className="text-[15px] font-bold text-[var(--tl-text)] truncate mt-0.5">
+            <h1 className="text-[14px] font-bold text-[var(--tl-text)] truncate leading-tight">
               Form Laporan Pekerjaan
             </h1>
+            <span className="block text-[10.5px] font-medium text-[var(--tl-text-variant)] truncate">
+              {woCode} · {isTermite ? 'Anti Rayap' : 'Pest Control'}
+            </span>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[var(--tl-low)] text-[11px] font-mono font-bold tabular-nums text-[var(--tl-text)]">
+          <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold tabular-nums text-[var(--tl-text)]">
             <Clock size={12} className="text-[var(--tl-secondary)]" />
             <span>{elapsedTime}</span>
           </span>
           <span
             aria-label={isOnline ? 'Status Online' : 'Status Offline'}
-            className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-rose-500'}`}
+            className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-rose-500'}`}
           />
         </div>
       </header>
 
-      <main className="flex-1 px-4 pt-4 pb-36 space-y-4">
+      <main className="flex-1 px-4 pt-3.5 pb-36 space-y-3.5">
         {validationMsg && (
           <div
             role="alert"
-            className="px-4 py-3 rounded-xl bg-[var(--tl-error-container)] text-[var(--tl-on-error-container)] text-xs font-semibold"
+            className="px-3.5 py-2.5 rounded-xl bg-[var(--tl-error-container)] text-[var(--tl-on-error-container)] text-[11.5px] font-semibold"
           >
             {validationMsg}
           </div>
@@ -709,22 +709,12 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
         {/* ================================================================ */}
         {/* TOP WORK ORDER CONTEXT CARD + 2-TAB SERVICE SWITCHER             */}
         {/* ================================================================ */}
-        <section className="rounded-2xl bg-[var(--tl-card)] p-4 space-y-3.5 shadow-[var(--tl-shadow-card)]">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5 text-[11px] font-mono font-bold text-[var(--tl-text-variant)]">
-              <span className="px-2 py-0.5 rounded-md bg-[var(--tl-container)] text-[var(--tl-text)]">
-                {woCode}
-              </span>
-              <span>·</span>
-              <span>{(report.scheduledStartTime || '09.00').replace(':', '.')} WIB</span>
-            </div>
-            <span
-              className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                isTermite
-                  ? 'bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)]'
-                  : 'bg-[var(--tl-high)] text-[var(--tl-text)]'
-              }`}
-            >
+        <section className="rounded-2xl bg-[var(--tl-card)] p-3.5 space-y-3 shadow-[var(--tl-shadow-card)]">
+          <div className="flex items-center justify-between gap-2 text-[11px] text-[var(--tl-text-variant)]">
+            <span className="font-mono font-semibold text-[var(--tl-text)]">
+              {woCode} · {(report.scheduledStartTime || '09.00').replace(':', '.')} WIB
+            </span>
+            <span className="font-semibold text-[var(--tl-secondary)]">
               {isTermite ? 'Anti Rayap' : 'Pest Control'}
             </span>
           </div>
@@ -740,7 +730,7 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
               role="tab"
               aria-selected={isTermite}
               onClick={() => handleRequestSwitchServiceMode('AR')}
-              className={`min-h-[42px] rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`min-h-[38px] rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
                 isTermite
                   ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)] shadow-xs'
                   : 'text-[var(--tl-text-variant)] hover:text-[var(--tl-text)]'
@@ -753,7 +743,7 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
               role="tab"
               aria-selected={!isTermite}
               onClick={() => handleRequestSwitchServiceMode('PCO')}
-              className={`min-h-[42px] rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`min-h-[38px] rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
                 !isTermite
                   ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)] shadow-xs'
                   : 'text-[var(--tl-text-variant)] hover:text-[var(--tl-text)]'
@@ -781,22 +771,22 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
         {/* ================================================================ */}
         {/* BAGIAN 1 — DETAIL TEMUAN PER HAMA                                */}
         {/* ================================================================ */}
-        <section className="rounded-2xl bg-[var(--tl-card)] p-4 space-y-3.5 shadow-[var(--tl-shadow-card)]">
+        <section className="rounded-2xl bg-[var(--tl-card)] p-3.5 space-y-3 shadow-[var(--tl-shadow-card)]">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[11px] font-bold flex items-center justify-center shrink-0">
+              <span className="w-5 h-5 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[10.5px] font-bold flex items-center justify-center shrink-0">
                 1
               </span>
               <div>
-                <h2 className="text-sm font-bold text-[var(--tl-text)]">Detail Temuan Per Hama</h2>
-                <p className="text-[11px] text-[var(--tl-text-variant)]">
+                <h2 className="text-[13px] font-bold text-[var(--tl-text)]">Detail Temuan Per Hama</h2>
+                <p className="text-[10.5px] text-[var(--tl-text-variant)]">
                   {isTermite
                     ? 'Centang spesies rayap & tandai estimasi keparahan'
                     : 'Pilih hama yang ditemukan & atur jumlah titik/ekor'}
                 </p>
               </div>
             </div>
-            <Bug size={16} className="text-[var(--tl-secondary)] shrink-0" />
+            <Bug size={15} className="text-[var(--tl-secondary)] shrink-0" />
           </div>
 
           {isTermite ? (
@@ -1218,20 +1208,20 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
         {/* ================================================================ */}
         {/* BAGIAN 2 — TINDAKAN TREATMENT / METODE                           */}
         {/* ================================================================ */}
-        <section className="rounded-2xl bg-[var(--tl-card)] p-4 space-y-3.5 shadow-[var(--tl-shadow-card)]">
+        <section className="rounded-2xl bg-[var(--tl-card)] p-3.5 space-y-3 shadow-[var(--tl-shadow-card)]">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[11px] font-bold flex items-center justify-center shrink-0">
+              <span className="w-5 h-5 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[10.5px] font-bold flex items-center justify-center shrink-0">
                 2
               </span>
               <div>
-                <h2 className="text-sm font-bold text-[var(--tl-text)]">Tindakan Treatment &amp; Metode</h2>
-                <p className="text-[11px] text-[var(--tl-text-variant)]">
+                <h2 className="text-[13px] font-bold text-[var(--tl-text)]">Tindakan Treatment &amp; Metode</h2>
+                <p className="text-[10.5px] text-[var(--tl-text-variant)]">
                   Pilih metode penanganan yang diterapkan di lokasi
                 </p>
               </div>
             </div>
-            <Wrench size={16} className="text-[var(--tl-secondary)] shrink-0" />
+            <Wrench size={15} className="text-[var(--tl-secondary)] shrink-0" />
           </div>
 
           <div className="space-y-2">
@@ -1370,20 +1360,20 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
         {/* ================================================================ */}
         {/* BAGIAN 3 — AREA TINDAKAN & PERLINDUNGAN                          */}
         {/* ================================================================ */}
-        <section className="rounded-2xl bg-[var(--tl-card)] p-4 space-y-3.5 shadow-[var(--tl-shadow-card)]">
+        <section className="rounded-2xl bg-[var(--tl-card)] p-3.5 space-y-3 shadow-[var(--tl-shadow-card)]">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[11px] font-bold flex items-center justify-center shrink-0">
+              <span className="w-5 h-5 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[10.5px] font-bold flex items-center justify-center shrink-0">
                 3
               </span>
               <div>
-                <h2 className="text-sm font-bold text-[var(--tl-text)]">Area Tindakan &amp; Perlindungan</h2>
-                <p className="text-[11px] text-[var(--tl-text-variant)]">
+                <h2 className="text-[13px] font-bold text-[var(--tl-text)]">Area Tindakan &amp; Perlindungan</h2>
+                <p className="text-[10.5px] text-[var(--tl-text-variant)]">
                   Tandai area pengerjaan &amp; titik prioritas tinggi
                 </p>
               </div>
             </div>
-            <span className="px-2.5 py-0.5 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-[10.5px] font-bold shrink-0">
+            <span className="text-[11px] font-semibold text-[var(--tl-secondary)] shrink-0">
               {draft.selectedAreas.length} Area
             </span>
           </div>
@@ -1489,20 +1479,20 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
         {/* ================================================================ */}
         {/* BAGIAN 4 — SARAN, REKOMENDASI & DOKUMENTASI FOTO (MAKS 6 FOTO)   */}
         {/* ================================================================ */}
-        <section className="rounded-2xl bg-[var(--tl-card)] p-4 space-y-3.5 shadow-[var(--tl-shadow-card)]">
+        <section className="rounded-2xl bg-[var(--tl-card)] p-3.5 space-y-3 shadow-[var(--tl-shadow-card)]">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[11px] font-bold flex items-center justify-center shrink-0">
+              <span className="w-5 h-5 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[10.5px] font-bold flex items-center justify-center shrink-0">
                 4
               </span>
               <div>
-                <h2 className="text-sm font-bold text-[var(--tl-text)]">Saran &amp; Dokumentasi Foto</h2>
-                <p className="text-[11px] text-[var(--tl-text-variant)]">
+                <h2 className="text-[13px] font-bold text-[var(--tl-text)]">Saran &amp; Dokumentasi Foto</h2>
+                <p className="text-[10.5px] text-[var(--tl-text-variant)]">
                   Rekomendasi sanitasi &amp; bukti lapangan terkompresi
                 </p>
               </div>
             </div>
-            <Sparkles size={16} className="text-[var(--tl-secondary)] shrink-0" />
+            <Sparkles size={15} className="text-[var(--tl-secondary)] shrink-0" />
           </div>
 
           <div className="flex flex-wrap gap-1.5">
@@ -1600,20 +1590,20 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
         {/* ================================================================ */}
         {/* BAGIAN 5 — PENGESAHAN LAPANGAN (2 TAHAP VALIDASI)                */}
         {/* ================================================================ */}
-        <section className="rounded-2xl bg-[var(--tl-card)] p-4 space-y-4 shadow-[var(--tl-shadow-card)]">
+        <section className="rounded-2xl bg-[var(--tl-card)] p-3.5 space-y-3.5 shadow-[var(--tl-shadow-card)]">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <span className="w-6 h-6 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[11px] font-bold flex items-center justify-center shrink-0">
+              <span className="w-5 h-5 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[10.5px] font-bold flex items-center justify-center shrink-0">
                 5
               </span>
               <div>
-                <h2 className="text-sm font-bold text-[var(--tl-text)]">Pengesahan Lapangan</h2>
-                <p className="text-[11px] text-[var(--tl-text-variant)]">
+                <h2 className="text-[13px] font-bold text-[var(--tl-text)]">Pengesahan Lapangan</h2>
+                <p className="text-[10.5px] text-[var(--tl-text-variant)]">
                   2 tahap validasi: Teknisi Utama &amp; Customer (PIC)
                 </p>
               </div>
             </div>
-            <ShieldCheck size={16} className="text-[var(--tl-secondary)] shrink-0" />
+            <ShieldCheck size={15} className="text-[var(--tl-secondary)] shrink-0" />
           </div>
 
           {/* Tahap 1: Teknisi Utama */}

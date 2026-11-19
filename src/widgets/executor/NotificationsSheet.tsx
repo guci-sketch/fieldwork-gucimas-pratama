@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Bell, CheckCircle2, ChevronRight, ClipboardList, CloudOff, X } from 'lucide-react';
 
@@ -20,6 +20,14 @@ interface NotificationsSheetProps {
 export const NotificationsSheet: React.FC<NotificationsSheetProps> = ({ items, onClose }) => {
   const [tab, setTab] = useState<'all' | 'task' | 'system'>('all');
 
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
   const filtered = items.filter(item => {
     if (tab === 'task') return item.category === 'task';
     if (tab === 'system') return item.category === 'system';
@@ -27,24 +35,31 @@ export const NotificationsSheet: React.FC<NotificationsSheetProps> = ({ items, o
   });
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#233144]/60 backdrop-blur-xs">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-[#233144]/60 backdrop-blur-xs"
+    >
       <motion.div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Pusat Notifikasi"
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 24 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
+        onClick={e => e.stopPropagation()}
         className="tech-lite-shell w-full max-w-[430px] max-h-[82dvh] rounded-t-2xl sm:rounded-2xl bg-[var(--tl-card)] flex flex-col overflow-hidden shadow-2xl"
       >
         <div className="w-10 h-1 rounded-full bg-[var(--tl-container)] mx-auto mt-3 mb-1 sm:hidden" />
 
-        <div className="px-4 py-3.5 border-b border-[var(--tl-container)] flex items-center justify-between">
+        <div className="px-4 py-3 border-b border-[var(--tl-container)] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-full bg-[var(--tl-low)] text-[var(--tl-primary)] flex items-center justify-center">
-              <Bell size={16} />
+              <Bell size={15} />
             </div>
             <div>
-              <h2 className="text-[15px] font-bold text-[var(--tl-text)] leading-tight">Notifikasi</h2>
-              <p className="text-[11px] text-[var(--tl-text-variant)]">Pembaruan tugas &amp; sinkronisasi</p>
+              <h2 className="text-[14px] font-bold text-[var(--tl-text)] leading-tight">Notifikasi</h2>
+              <p className="text-[10.5px] text-[var(--tl-text-variant)]">Pembaruan tugas &amp; sinkronisasi</p>
             </div>
           </div>
           <button
@@ -53,7 +68,7 @@ export const NotificationsSheet: React.FC<NotificationsSheetProps> = ({ items, o
             aria-label="Tutup notifikasi"
             className="w-9 h-9 rounded-full bg-[var(--tl-low)] flex items-center justify-center text-[var(--tl-text)] hover:bg-[var(--tl-container)] cursor-pointer"
           >
-            <X size={18} />
+            <X size={17} />
           </button>
         </div>
 
@@ -68,7 +83,7 @@ export const NotificationsSheet: React.FC<NotificationsSheetProps> = ({ items, o
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className={`min-h-[36px] px-3.5 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
+              className={`min-h-[34px] px-3 rounded-full text-[11.5px] font-semibold transition-colors cursor-pointer ${
                 tab === t.id
                   ? 'bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] shadow-2xs'
                   : 'bg-[var(--tl-container)] text-[var(--tl-text-variant)] hover:text-[var(--tl-text)]'

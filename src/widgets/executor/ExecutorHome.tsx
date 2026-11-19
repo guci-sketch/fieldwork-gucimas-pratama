@@ -35,6 +35,7 @@ import { TechnicianWorksheet, WorksheetClientPrefill } from './TechnicianWorkshe
 import { CompletionPdfWaSheet } from './CompletionPdfWaSheet';
 import { NotificationsSheet, TechNotificationItem } from './NotificationsSheet';
 import { ConfirmActionModal, useConfirmAction } from './ConfirmActionModal';
+import { TechnicianSpotlightGuide, TECH_GUIDE_STORAGE_KEY } from './TechnicianSpotlightGuide';
 import { formatDistance, calculateDistanceMeters } from '@/shared/utils/geo';
 import { postLocation } from '@/shared/api/location';
 import {
@@ -53,6 +54,7 @@ import {
   Clock,
   CloudOff,
   ExternalLink,
+  HelpCircle,
   History,
   Home,
   LocateFixed,
@@ -94,14 +96,12 @@ type TechPage =
   | 'history'
   | 'profile';
 
-function ServicePill({ serviceType }: { serviceType?: string | null }) {
+function ServiceLabel({ serviceType }: { serviceType?: string | null }) {
   const isTermite = isTermiteService(serviceType);
   return (
     <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap ${
-        isTermite
-          ? 'bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)]'
-          : 'bg-[var(--tl-high)] text-[var(--tl-text)]'
+      className={`text-[11px] font-semibold whitespace-nowrap ${
+        isTermite ? 'text-[var(--tl-secondary)]' : 'text-[var(--tl-text-variant)]'
       }`}
     >
       {getServiceLabel(serviceType)}
@@ -112,15 +112,14 @@ function ServicePill({ serviceType }: { serviceType?: string | null }) {
 function StatusPill({ status }: { status: string }) {
   if (status === 'WORKING') {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/45 dark:text-amber-300 text-[10.5px] font-bold whitespace-nowrap">
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100/85 text-amber-800 dark:bg-amber-950/45 dark:text-amber-300 text-[10.5px] font-semibold whitespace-nowrap">
         <span>Berlangsung</span>
       </span>
     );
   }
   if (status === 'COMPLETED' || status === 'REVIEWED') {
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-[10.5px] font-bold whitespace-nowrap">
+      <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-[var(--tl-secondary)] whitespace-nowrap">
         <CheckCircle2 size={11} />
         <span>Selesai</span>
       </span>
@@ -128,13 +127,13 @@ function StatusPill({ status }: { status: string }) {
   }
   if (status === 'FLAGGED') {
     return (
-      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-[var(--tl-error-container)] text-[var(--tl-on-error-container)] text-[10.5px] font-bold whitespace-nowrap">
+      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-[var(--tl-error-container)] text-[var(--tl-on-error-container)] text-[10.5px] font-semibold whitespace-nowrap">
         Ditinjau
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-[var(--tl-container)] text-[var(--tl-text-variant)] text-[10.5px] font-bold whitespace-nowrap">
+    <span className="inline-flex items-center text-[10.5px] font-semibold text-[var(--tl-text-variant)] whitespace-nowrap">
       Siap
     </span>
   );
@@ -142,18 +141,18 @@ function StatusPill({ status }: { status: string }) {
 
 function GuciMasBrandLockup() {
   return (
-    <div className="flex items-center gap-2.5 min-w-0">
+    <div className="flex items-center gap-2 min-w-0">
       <div
         aria-hidden="true"
-        className="w-9 h-9 rounded-xl bg-[var(--tl-primary)] text-[var(--tl-on-primary)] flex items-center justify-center shadow-xs shrink-0"
+        className="w-8 h-8 rounded-xl bg-[var(--tl-primary)] text-[var(--tl-on-primary)] flex items-center justify-center shadow-xs shrink-0"
       >
-        <ShieldCheck size={19} />
+        <ShieldCheck size={17} />
       </div>
       <div className="min-w-0 leading-tight">
-        <strong className="block text-[14px] font-extrabold tracking-tight text-[var(--tl-text)] truncate">
+        <strong className="block text-[13.5px] font-bold tracking-tight text-[var(--tl-text)] truncate">
           GuciMas
         </strong>
-        <span className="block text-[10.5px] font-semibold text-[var(--tl-secondary)] tracking-wide truncate">
+        <span className="block text-[10px] font-medium text-[var(--tl-secondary)] truncate">
           Field Lite
         </span>
       </div>
@@ -190,7 +189,15 @@ export const ExecutorHome: React.FC = () => {
   const { user, logout } = useAuth();
   const { resolvedTheme, setTheme } = useTheme();
 
-  const [page, setPage] = useState<TechPage>('home');
+  const [navState, setNavState] = useState<{ current: TechPage; history: TechPage[] }>({
+    current: 'home',
+    history: [],
+  });
+  const page = navState.current;
+  const setPage = useCallback((next: TechPage) => {
+    setNavState(prev => ({ current: next, history: prev.history }));
+  }, []);
+  const [guideMode, setGuideMode] = useState<'idle' | 'prompt' | 'tour'>('idle');
   const [isOnline, setIsOnline] = useState<boolean>(() =>
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
@@ -257,6 +264,85 @@ export const ExecutorHome: React.FC = () => {
   const [showGpsPrompt, setShowGpsPrompt] = useState(false);
   const [gpsPermissionStatus, setGpsPermissionStatus] = useState<string>('unknown');
   const { confirmRequest, confirmAction, closeConfirm } = useConfirmAction();
+
+  // Consistent atomic navigation stack & scroll reset across pages/subpages
+  const navigateTo = useCallback((nextPage: TechPage, options?: { reset?: boolean }) => {
+    setNavState(prev => {
+      if (options?.reset) {
+        return { current: nextPage, history: [] };
+      }
+      if (prev.current === nextPage) return prev;
+      return {
+        current: nextPage,
+        history: [...prev.history.slice(-8), prev.current],
+      };
+    });
+  }, []);
+
+  const goBack = useCallback((fallback: TechPage = 'home') => {
+    setNavState(prev => {
+      if (prev.history.length === 0) {
+        return { current: fallback, history: [] };
+      }
+      const prevPage = prev.history[prev.history.length - 1];
+      return {
+        current: prevPage,
+        history: prev.history.slice(0, -1),
+      };
+    });
+  }, []);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  }, [page]);
+
+  // Escape key closes GPS prompt cleanly
+  useEffect(() => {
+    if (!showGpsPrompt || gpsPermissionStatus === 'granted') return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowGpsPrompt(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showGpsPrompt, gpsPermissionStatus]);
+
+  // Gently offer opt-in interactive spotlight tour on first visit once Beranda is clear
+  useEffect(() => {
+    if (isLoading || page !== 'home' || guideMode !== 'idle') return;
+    if (
+      showGpsPrompt ||
+      showNotifications ||
+      showCreateProject ||
+      activeCameraAction ||
+      checkoutEvidence ||
+      viewingPhoto ||
+      showChangePassword ||
+      confirmRequest
+    ) {
+      return;
+    }
+    try {
+      if (localStorage.getItem(TECH_GUIDE_STORAGE_KEY)) return;
+    } catch {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setGuideMode('prompt');
+    }, 650);
+    return () => window.clearTimeout(timer);
+  }, [
+    isLoading,
+    page,
+    guideMode,
+    showGpsPrompt,
+    showNotifications,
+    showCreateProject,
+    activeCameraAction,
+    checkoutEvidence,
+    viewingPhoto,
+    showChangePassword,
+    confirmRequest,
+  ]);
 
   const showToast = useCallback((msg: string) => {
     setToastMsg(msg);
@@ -546,7 +632,7 @@ export const ExecutorHome: React.FC = () => {
         unread: true,
         onPress: () => {
           if (isOnline) handleRequestSync();
-          else setPage('profile');
+          else navigateTo('profile', { reset: true });
         },
       });
     }
@@ -562,7 +648,7 @@ export const ExecutorHome: React.FC = () => {
           setSelectedReportId(job.id);
           setSelectedProjectDetailId(job.projectId);
           setIsViewingHistoryDetail(false);
-          setPage(job.status === 'WORKING' ? 'worksheet' : 'task-detail');
+          navigateTo(job.status === 'WORKING' ? 'worksheet' : 'task-detail');
         },
       });
     });
@@ -577,12 +663,12 @@ export const ExecutorHome: React.FC = () => {
         onPress: () => {
           setSelectedReportId(rep.id);
           setIsViewingHistoryDetail(true);
-          setPage('completion');
+          navigateTo('completion');
         },
       });
     });
     return list;
-  }, [pendingCount, isOnline, activeQueueJobs, completedJobs, attemptSync]);
+  }, [pendingCount, isOnline, activeQueueJobs, completedJobs, navigateTo]);
 
   const unreadNotifCount = notificationItems.filter(n => n.unread).length;
 
@@ -656,7 +742,7 @@ export const ExecutorHome: React.FC = () => {
         setActiveCameraAction(null);
         await loadData();
         setSelectedReportId(updated.id);
-        setPage('worksheet');
+        navigateTo('worksheet', { reset: true });
         showToast(
           `Check-in tercatat (${updated.checkInDistance != null ? formatDistance(updated.checkInDistance) : 'GPS aktif'}).`
         );
@@ -676,10 +762,10 @@ export const ExecutorHome: React.FC = () => {
         await enqueue(queueAction, report.id, evidence);
         await refreshQueueState();
         setActiveCameraAction(null);
-        if (type === 'CHECK_IN') setPage('worksheet');
+        if (type === 'CHECK_IN') navigateTo('worksheet', { reset: true });
         if (type === 'CHECK_OUT') {
           setIsViewingHistoryDetail(false);
-          setPage('completion');
+          navigateTo('completion', { reset: true });
         }
         showToast('Disimpan di antrean offline. Otomatis terkirim saat online.');
       } else {
@@ -734,14 +820,14 @@ export const ExecutorHome: React.FC = () => {
       await loadData();
       setSelectedReportId(completed.id);
       setIsViewingHistoryDetail(false);
-      setPage('completion');
+      navigateTo('completion', { reset: true });
       showToast('Pekerjaan selesai & Berita Acara siap dikirim.');
     } catch (err) {
       if (err instanceof ApiError && err.status === 0) {
         await enqueue('CHECK_OUT', report.id, fullEvidence);
         await refreshQueueState();
         setIsViewingHistoryDetail(false);
-        setPage('completion');
+        navigateTo('completion', { reset: true });
         showToast('Disimpan di antrean offline.');
       } else {
         setActionError(err instanceof ApiError ? err.message : 'Gagal menyelesaikan pekerjaan.');
@@ -841,6 +927,42 @@ export const ExecutorHome: React.FC = () => {
     });
   };
 
+  const handleOpenGuidePrompt = () => {
+    setGuideMode('prompt');
+  };
+
+  const handleStartSpotlightTour = () => {
+    if (page !== 'home') {
+      navigateTo('home', { reset: true });
+    }
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+    // Small tick lets Beranda mount if triggered from Profil before measuring target rects
+    window.setTimeout(() => {
+      setGuideMode('tour');
+    }, page !== 'home' ? 120 : 20);
+  };
+
+  const markGuideDone = () => {
+    try {
+      localStorage.setItem(TECH_GUIDE_STORAGE_KEY, '1');
+    } catch {
+      // ignore storage errors
+    }
+  };
+
+  const handleDismissGuide = () => {
+    markGuideDone();
+    setGuideMode('idle');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleCompleteGuide = () => {
+    markGuideDone();
+    setGuideMode('idle');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    showToast('Panduan selesai! Buka lagi kapan saja di ikon ? atau Profil.');
+  };
+
   const initials = getInitials(user.name);
   const firstName = user.name.split(' ')[0] || 'Teknisi';
   const currentMonthLabel = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
@@ -863,24 +985,35 @@ export const ExecutorHome: React.FC = () => {
   // Reusable Frosted GuciMas Field Lite Top Header
   const renderLiteHeader = () => (
     <header
-      className="sticky top-0 z-30 px-4 h-16 flex items-center justify-between gap-2 backdrop-blur-md shrink-0"
+      className="sticky top-0 z-30 px-4 h-14 flex items-center justify-between gap-2 backdrop-blur-md shrink-0"
       style={{
-        background: 'color-mix(in srgb, var(--tl-surface) 90%, transparent)',
+        background: 'color-mix(in srgb, var(--tl-surface) 92%, transparent)',
         boxShadow: 'var(--tl-shadow-head)',
       }}
     >
       <GuciMasBrandLockup />
 
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-1.5 shrink-0">
         <button
           type="button"
+          onClick={handleOpenGuidePrompt}
+          aria-label="Buka Panduan Aplikasi"
+          title="Panduan Singkat"
+          className="w-8 h-8 rounded-full bg-[var(--tl-low)] hover:bg-[var(--tl-container)] text-[var(--tl-text-variant)] hover:text-[var(--tl-text)] flex items-center justify-center active:scale-95 transition-transform cursor-pointer"
+        >
+          <HelpCircle size={15} />
+        </button>
+
+        <button
+          type="button"
+          data-tour="header-status"
           onClick={() => (pendingCount > 0 ? handleRequestSync() : setShowNotifications(true))}
           aria-label="Status Koneksi dan Sinkronisasi"
-          className="inline-flex items-center gap-1.5 min-h-[34px] px-2.5 rounded-full bg-[var(--tl-low)] hover:bg-[var(--tl-container)] text-[11px] font-bold text-[var(--tl-text)] cursor-pointer"
+          className="inline-flex items-center gap-1.5 min-h-[32px] px-2.5 rounded-full bg-[var(--tl-low)] hover:bg-[var(--tl-container)] text-[11px] font-semibold text-[var(--tl-text)] cursor-pointer"
         >
           <span
             className={`w-2 h-2 rounded-full ${
-              !isOnline ? 'bg-rose-500' : pendingCount > 0 ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'
+              !isOnline ? 'bg-rose-500' : pendingCount > 0 ? 'bg-amber-500' : 'bg-emerald-500'
             }`}
           />
           <span>{!isOnline ? 'Offline' : pendingCount > 0 ? `${pendingCount} Antrean` : 'Online'}</span>
@@ -888,9 +1021,9 @@ export const ExecutorHome: React.FC = () => {
 
         <button
           type="button"
-          onClick={() => setPage('profile')}
+          onClick={() => navigateTo('profile', { reset: true })}
           aria-label="Buka Profil Teknisi"
-          className="w-9 h-9 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-xs font-bold flex items-center justify-center shadow-xs active:scale-95 transition-transform cursor-pointer"
+          className="w-8 h-8 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[11px] font-bold flex items-center justify-center shadow-xs active:scale-95 transition-transform cursor-pointer"
         >
           {initials}
         </button>
@@ -912,7 +1045,7 @@ export const ExecutorHome: React.FC = () => {
             <div className="px-4 py-3 rounded-2xl bg-[var(--tl-primary)] text-[var(--tl-on-primary)] shadow-xl flex items-center justify-between gap-2 text-xs font-semibold">
               <span className="flex items-center gap-2 min-w-0">
                 <Check size={15} className="text-[var(--tl-secondary-container)] shrink-0" />
-                <span className="truncate">{toastMsg}</span>
+                <span className="leading-snug">{toastMsg}</span>
               </span>
               <button
                 type="button"
@@ -958,14 +1091,14 @@ export const ExecutorHome: React.FC = () => {
           <>
             {renderLiteHeader()}
 
-            <main className="flex-1 px-4 pt-4 pb-24 space-y-4">
+            <main className="flex-1 px-4 pt-3.5 pb-24 space-y-3.5">
               {/* Greeting + Date + Circular Notification Bell */}
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h1 className="text-[20px] font-extrabold tracking-tight text-[var(--tl-text)] leading-tight truncate">
+                  <h1 className="text-[17px] font-bold tracking-tight text-[var(--tl-text)] leading-snug truncate">
                     {getTimeGreeting()}, {firstName}
                   </h1>
-                  <p className="text-xs font-medium text-[var(--tl-text-variant)] mt-0.5">
+                  <p className="text-[11.5px] font-medium text-[var(--tl-text-variant)] mt-0.5">
                     {formatFullDateId()}
                   </p>
                 </div>
@@ -974,11 +1107,11 @@ export const ExecutorHome: React.FC = () => {
                   type="button"
                   onClick={() => setShowNotifications(true)}
                   aria-label="Pusat Notifikasi"
-                  className="relative w-10 h-10 rounded-full bg-[var(--tl-card)] text-[var(--tl-text)] shadow-[var(--tl-shadow-card)] flex items-center justify-center active:scale-95 transition-transform cursor-pointer shrink-0"
+                  className="relative w-9 h-9 rounded-full bg-[var(--tl-card)] text-[var(--tl-text)] shadow-[var(--tl-shadow-card)] flex items-center justify-center active:scale-95 transition-transform cursor-pointer shrink-0"
                 >
-                  <Bell size={18} />
+                  <Bell size={17} />
                   {unreadNotifCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[9.5px] font-bold flex items-center justify-center ring-2 ring-[var(--tl-surface)]">
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-amber-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-[var(--tl-surface)]">
                       {unreadNotifCount}
                     </span>
                   )}
@@ -987,45 +1120,48 @@ export const ExecutorHome: React.FC = () => {
 
               {/* 3-Column Divided Compact KPI Strip */}
               <section
+                data-tour="kpi-strip"
                 aria-label="Ringkasan Tugas Hari Ini"
-                className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] grid grid-cols-3 divide-x divide-[var(--tl-container)] py-3"
+                className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] grid grid-cols-3 divide-x divide-[var(--tl-container)] py-2.5"
               >
                 <button
                   type="button"
                   onClick={() => {
                     setTaskDayTab('today');
-                    setPage('jobs');
+                    navigateTo('jobs', { reset: true });
                   }}
                   className="px-2 text-center cursor-pointer"
                 >
-                  <strong className="block text-[20px] font-extrabold font-mono tabular-nums text-[var(--tl-text)] leading-none">
+                  <strong className="block text-[17.5px] font-bold font-mono tabular-nums text-[var(--tl-text)] leading-none">
                     {activeQueueJobs.length}
                   </strong>
-                  <span className="block text-[11px] font-semibold text-[var(--tl-text-variant)] mt-1">
+                  <span className="block text-[10.5px] font-medium text-[var(--tl-text-variant)] mt-1">
                     Hari Ini
                   </span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPage('history')}
+                  onClick={() => navigateTo('history', { reset: true })}
                   className="px-2 text-center cursor-pointer"
                 >
-                  <strong className="block text-[20px] font-extrabold font-mono tabular-nums text-[var(--tl-secondary)] leading-none">
+                  <strong className="block text-[17.5px] font-bold font-mono tabular-nums text-[var(--tl-secondary)] leading-none">
                     {completedJobs.length}
                   </strong>
-                  <span className="block text-[11px] font-semibold text-[var(--tl-text-variant)] mt-1">
+                  <span className="block text-[10.5px] font-medium text-[var(--tl-text-variant)] mt-1">
                     Selesai
                   </span>
                 </button>
                 <button
                   type="button"
-                  onClick={() => (pendingCount > 0 ? handleRequestSync() : setPage('jobs'))}
+                  onClick={() =>
+                    pendingCount > 0 ? handleRequestSync() : navigateTo('jobs', { reset: true })
+                  }
                   className="px-2 text-center cursor-pointer"
                 >
-                  <strong className="block text-[20px] font-extrabold font-mono tabular-nums text-amber-600 dark:text-amber-400 leading-none">
+                  <strong className="block text-[17.5px] font-bold font-mono tabular-nums text-amber-600 dark:text-amber-400 leading-none">
                     {pendingCount > 0 ? pendingCount : activeQueueJobs.filter(j => j.status !== 'WORKING').length}
                   </strong>
-                  <span className="block text-[11px] font-semibold text-[var(--tl-text-variant)] mt-1">
+                  <span className="block text-[10.5px] font-medium text-[var(--tl-text-variant)] mt-1">
                     Pending
                   </span>
                 </button>
@@ -1043,7 +1179,7 @@ export const ExecutorHome: React.FC = () => {
                   <button
                     type="button"
                     onClick={loadData}
-                    className="min-h-[42px] px-4 rounded-xl bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-xs font-bold cursor-pointer"
+                    className="min-h-[40px] px-4 rounded-xl bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-xs font-semibold cursor-pointer"
                   >
                     Muat Ulang
                   </button>
@@ -1052,26 +1188,30 @@ export const ExecutorHome: React.FC = () => {
 
               {/* Primary Active Task Card (Tugas Utama) with Progressive Disclosure */}
               {!isLoading && !loadError && homePrimaryTask && (
-                <article className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] overflow-hidden">
+                <article
+                  data-tour="primary-task"
+                  className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] overflow-hidden"
+                >
                   {/* Top Soft Header Strip */}
-                  <div className="px-4 py-2.5 bg-[var(--tl-low)] flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-[10.5px] font-extrabold uppercase tracking-wider text-[var(--tl-primary)]">
+                  <div className="px-4 py-2 bg-[var(--tl-low)] flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0 text-[10.5px]">
+                      <span className="font-bold uppercase tracking-wider text-[var(--tl-primary)]">
                         Tugas Utama
                       </span>
-                      <span className="text-[10.5px] font-mono font-bold text-[var(--tl-text-variant)]">
+                      <span className="text-[var(--tl-outline)]">·</span>
+                      <span className="font-mono font-semibold text-[var(--tl-text-variant)]">
                         {formatWoCode(homePrimaryTask.id)}
                       </span>
                     </div>
-                    <ServicePill serviceType={homePrimaryTask.serviceType} />
+                    <ServiceLabel serviceType={homePrimaryTask.serviceType} />
                   </div>
 
-                  <div className="p-4 space-y-3.5">
+                  <div className="p-3.5 space-y-3">
                     {/* Status + Time + Radius */}
                     <div className="flex items-center justify-between gap-2 text-[11px]">
                       <div className="flex items-center gap-2">
                         <StatusPill status={homePrimaryTask.status} />
-                        <span className="font-mono font-semibold tabular-nums text-[var(--tl-text-variant)]">
+                        <span className="font-mono font-medium tabular-nums text-[var(--tl-text-variant)]">
                           {homePrimaryTask.status === 'WORKING'
                             ? elapsedTime
                             : formatTimeWib(homePrimaryTask.scheduledStartTime)}
@@ -1085,20 +1225,20 @@ export const ExecutorHome: React.FC = () => {
 
                     {/* Title */}
                     <div>
-                      <h2 className="text-[18px] font-extrabold text-[var(--tl-text)] leading-snug">
+                      <h2 className="text-[15.5px] font-bold text-[var(--tl-text)] leading-snug">
                         {homePrimaryTask.projectName}
                       </h2>
                     </div>
 
                     {/* Inset Location & Time Card */}
-                    <div className="rounded-xl bg-[var(--tl-low)] p-3 space-y-2 text-xs">
+                    <div className="rounded-xl bg-[var(--tl-low)] p-3 text-xs">
                       <div className="flex items-start gap-2">
-                        <MapPin size={15} className="text-[var(--tl-secondary)] shrink-0 mt-0.5" />
+                        <MapPin size={14} className="text-[var(--tl-secondary)] shrink-0 mt-0.5" />
                         <div className="min-w-0">
-                          <strong className="block text-[var(--tl-text)] font-bold truncate">
+                          <strong className="block text-[12px] text-[var(--tl-text)] font-semibold truncate">
                             {homePrimaryTask.clientName || 'Lokasi Klien'}
                           </strong>
-                          <span className="block text-[11px] text-[var(--tl-text-variant)] line-clamp-2 mt-0.5">
+                          <span className="block text-[11px] text-[var(--tl-text-variant)] line-clamp-2 mt-0.5 leading-relaxed">
                             {homePrimaryTask.projectAddress}
                           </span>
                         </div>
@@ -1270,16 +1410,16 @@ export const ExecutorHome: React.FC = () => {
                         setSelectedReportId(homePrimaryTask.id);
                         setSelectedProjectDetailId(homePrimaryTask.projectId);
                         setIsViewingHistoryDetail(false);
-                        setPage(homePrimaryTask.status === 'WORKING' ? 'worksheet' : 'gps');
+                        navigateTo(homePrimaryTask.status === 'WORKING' ? 'worksheet' : 'gps');
                       }}
-                      className="w-full min-h-[48px] px-4 rounded-xl bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] text-xs font-bold flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-all cursor-pointer"
+                      className="w-full min-h-[46px] px-4 rounded-xl bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] text-[12.5px] font-semibold flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-all cursor-pointer"
                     >
                       <span>
                         {homePrimaryTask.status === 'WORKING'
                           ? 'Lanjutkan Lembar Kerja'
                           : 'Mulai Perjalanan & Check-in'}
                       </span>
-                      <ArrowRight size={16} />
+                      <ArrowRight size={15} />
                     </button>
                   </div>
                 </article>
@@ -1287,13 +1427,16 @@ export const ExecutorHome: React.FC = () => {
 
               {/* Empty Active State */}
               {!isLoading && !loadError && !homePrimaryTask && (
-                <article className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-5 text-center space-y-3">
-                  <div className="w-12 h-12 rounded-2xl bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] flex items-center justify-center mx-auto">
-                    <CheckCircle2 size={24} />
+                <article
+                  data-tour="primary-task"
+                  className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-5 text-center space-y-3"
+                >
+                  <div className="w-11 h-11 rounded-2xl bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] flex items-center justify-center mx-auto">
+                    <CheckCircle2 size={22} />
                   </div>
                   <div>
-                    <h2 className="text-sm font-bold text-[var(--tl-text)]">Semua Tugas Hari Ini Selesai</h2>
-                    <p className="text-xs text-[var(--tl-text-variant)] mt-1">
+                    <h2 className="text-[14px] font-bold text-[var(--tl-text)]">Semua Tugas Hari Ini Selesai</h2>
+                    <p className="text-[11.5px] text-[var(--tl-text-variant)] mt-1 leading-relaxed">
                       Buka menu Tugas untuk memeriksa jadwal lain atau tambahkan lokasi lapangan baru.
                     </p>
                   </div>
@@ -1301,9 +1444,9 @@ export const ExecutorHome: React.FC = () => {
                     type="button"
                     onClick={() => {
                       setTaskDayTab('all');
-                      setPage('jobs');
+                      navigateTo('jobs', { reset: true });
                     }}
-                    className="w-full min-h-[46px] rounded-xl bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-xs font-bold cursor-pointer"
+                    className="w-full min-h-[44px] rounded-xl bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[12.5px] font-semibold cursor-pointer"
                   >
                     Lihat Semua Tugas
                   </button>
@@ -1311,17 +1454,17 @@ export const ExecutorHome: React.FC = () => {
               )}
 
               {/* 2-Column Functional Operational Shortcuts (Zero Dead Clicks) */}
-              <div className="grid grid-cols-2 gap-2.5">
+              <div data-tour="quick-actions" className="grid grid-cols-2 gap-2.5">
                 <button
                   type="button"
                   onClick={() => setShowCreateProject(true)}
-                  className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-3.5 flex items-center gap-3 text-left active:scale-[0.98] transition-transform cursor-pointer"
+                  className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-3 flex items-center gap-2.5 text-left active:scale-[0.98] transition-transform cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-[var(--tl-low)] text-[var(--tl-primary)] flex items-center justify-center shrink-0">
-                    <PlusCircle size={19} />
+                  <div className="w-9 h-9 rounded-xl bg-[var(--tl-low)] text-[var(--tl-primary)] flex items-center justify-center shrink-0">
+                    <PlusCircle size={18} />
                   </div>
                   <div className="min-w-0">
-                    <strong className="block text-xs font-bold text-[var(--tl-text)] truncate">
+                    <strong className="block text-[12px] font-semibold text-[var(--tl-text)] truncate">
                       Tugas Baru
                     </strong>
                     <span className="block text-[10.5px] text-[var(--tl-text-variant)] truncate">
@@ -1334,13 +1477,13 @@ export const ExecutorHome: React.FC = () => {
                   type="button"
                   disabled={isSyncing}
                   onClick={handleRequestSync}
-                  className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-3.5 flex items-center gap-3 text-left active:scale-[0.98] transition-transform cursor-pointer"
+                  className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-3 flex items-center gap-2.5 text-left active:scale-[0.98] transition-transform cursor-pointer"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-[var(--tl-low)] text-[var(--tl-secondary)] flex items-center justify-center shrink-0">
-                    <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
+                  <div className="w-9 h-9 rounded-xl bg-[var(--tl-low)] text-[var(--tl-secondary)] flex items-center justify-center shrink-0">
+                    <RefreshCw size={17} className={isSyncing ? 'animate-spin' : ''} />
                   </div>
                   <div className="min-w-0">
-                    <strong className="block text-xs font-bold text-[var(--tl-text)] truncate">
+                    <strong className="block text-[12px] font-semibold text-[var(--tl-text)] truncate">
                       Sinkron Data
                     </strong>
                     <span className="block text-[10.5px] text-[var(--tl-text-variant)] truncate">
@@ -1355,15 +1498,15 @@ export const ExecutorHome: React.FC = () => {
               </div>
 
               {/* Jadwal Berikutnya */}
-              <section className="space-y-2.5">
+              <section data-tour="upcoming-jobs" className="space-y-2">
                 <div className="flex items-center justify-between px-0.5">
-                  <h2 className="text-sm font-extrabold text-[var(--tl-text)]">
+                  <h2 className="text-[13.5px] font-bold text-[var(--tl-text)]">
                     Jadwal Berikutnya ({upcomingHomeJobs.length})
                   </h2>
                   <button
                     type="button"
-                    onClick={() => setPage('jobs')}
-                    className="text-xs font-bold text-[var(--tl-secondary)] hover:underline cursor-pointer"
+                    onClick={() => navigateTo('jobs', { reset: true })}
+                    className="text-[11.5px] font-semibold text-[var(--tl-secondary)] hover:underline cursor-pointer"
                   >
                     Lihat Semua
                   </button>
@@ -1379,18 +1522,19 @@ export const ExecutorHome: React.FC = () => {
                           setSelectedReportId(job.id);
                           setSelectedProjectDetailId(job.projectId);
                           setIsViewingHistoryDetail(false);
-                          setPage(job.status === 'WORKING' ? 'worksheet' : 'task-detail');
+                          navigateTo(job.status === 'WORKING' ? 'worksheet' : 'task-detail');
                         }}
                         className="w-full p-3.5 flex items-center justify-between gap-3 text-left hover:bg-[var(--tl-low)]/50 active:scale-[0.99] transition-all cursor-pointer"
                       >
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[11px] font-mono font-bold text-[var(--tl-text-variant)] tabular-nums">
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[10.5px] font-mono font-semibold text-[var(--tl-text-variant)] tabular-nums">
                               {formatTimeWib(job.scheduledStartTime)}
                             </span>
-                            <ServicePill serviceType={job.serviceType} />
+                            <span className="text-[10.5px] text-[var(--tl-outline)]">·</span>
+                            <ServiceLabel serviceType={job.serviceType} />
                           </div>
-                          <strong className="block text-[13.5px] font-bold text-[var(--tl-text)] truncate">
+                          <strong className="block text-[13px] font-semibold text-[var(--tl-text)] truncate">
                             {job.projectName}
                           </strong>
                           <p className="text-[11px] text-[var(--tl-text-variant)] truncate">
@@ -1399,7 +1543,7 @@ export const ExecutorHome: React.FC = () => {
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
                           <StatusPill status={job.status} />
-                          <ChevronRight size={16} className="text-[var(--tl-outline)]" />
+                          <ChevronRight size={15} className="text-[var(--tl-outline)]" />
                         </div>
                       </button>
                     ))}
@@ -1421,18 +1565,18 @@ export const ExecutorHome: React.FC = () => {
           <>
             {renderLiteHeader()}
 
-            <main className="flex-1 px-4 pt-4 pb-24 space-y-4">
-              {/* Page Title & Month Badge */}
+            <main className="flex-1 px-4 pt-3.5 pb-24 space-y-3.5">
+              {/* Page Title & Month Label */}
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <h1 className="text-[20px] font-extrabold tracking-tight text-[var(--tl-text)]">
+                  <h1 className="text-[17px] font-bold tracking-tight text-[var(--tl-text)]">
                     Daftar Tugas
                   </h1>
-                  <p className="text-xs text-[var(--tl-text-variant)] mt-0.5">
+                  <p className="text-[11.5px] text-[var(--tl-text-variant)] mt-0.5">
                     {filteredDayTasks.length} jadwal ditampilkan · {activeQueueJobs.length} aktif
                   </p>
                 </div>
-                <span className="px-2.5 py-1 rounded-full bg-[var(--tl-low)] text-[11px] font-bold text-[var(--tl-primary)] shrink-0">
+                <span className="text-[11px] font-medium text-[var(--tl-text-variant)] pt-1 shrink-0">
                   {currentMonthLabel}
                 </span>
               </div>
@@ -1517,29 +1661,31 @@ export const ExecutorHome: React.FC = () => {
                   return (
                     <article
                       key={project.id}
-                      className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-4 space-y-3"
+                      className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-3.5 space-y-2.5"
                     >
                       {/* Top Meta Row */}
                       <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="px-2 py-0.5 rounded-md bg-[var(--tl-container)] text-[var(--tl-text)] text-[10.5px] font-mono font-bold">
+                        <div className="flex items-center gap-1.5 flex-wrap text-[10.5px]">
+                          <span className="font-mono font-semibold text-[var(--tl-text)]">
                             {woCode}
                           </span>
-                          <span className="text-[11px] font-mono font-semibold text-[var(--tl-text-variant)]">
+                          <span className="text-[var(--tl-outline)]">·</span>
+                          <span className="font-mono font-medium text-[var(--tl-text-variant)]">
                             {formatTimeWib(report?.scheduledStartTime || project.scheduledStartTime)}
                           </span>
-                          <ServicePill serviceType={project.serviceType} />
+                          <span className="text-[var(--tl-outline)]">·</span>
+                          <ServiceLabel serviceType={project.serviceType} />
                         </div>
                         <StatusPill status={status} />
                       </div>
 
                       {/* Title & Location */}
                       <div>
-                        <h2 className="text-[15px] font-bold text-[var(--tl-text)] leading-snug">
+                        <h2 className="text-[14px] font-semibold text-[var(--tl-text)] leading-snug">
                           {project.projectName}
                         </h2>
-                        <p className="text-xs text-[var(--tl-text-variant)] mt-0.5 flex items-start gap-1">
-                          <MapPin size={13} className="text-[var(--tl-secondary)] shrink-0 mt-0.5" />
+                        <p className="text-[11.5px] text-[var(--tl-text-variant)] mt-0.5 flex items-start gap-1">
+                          <MapPin size={12} className="text-[var(--tl-secondary)] shrink-0 mt-0.5" />
                           <span className="line-clamp-2">{project.clientName ? `${project.clientName} · ` : ''}{project.address}</span>
                         </p>
                       </div>
@@ -1584,16 +1730,16 @@ export const ExecutorHome: React.FC = () => {
                           if (report) setSelectedReportId(report.id);
                           if (isDone && report) {
                             setIsViewingHistoryDetail(true);
-                            setPage('completion');
+                            navigateTo('completion');
                           } else if (isWorking && report) {
                             setIsViewingHistoryDetail(false);
-                            setPage('worksheet');
+                            navigateTo('worksheet');
                           } else {
                             setIsViewingHistoryDetail(false);
-                            setPage('task-detail');
+                            navigateTo('task-detail');
                           }
                         }}
-                        className={`w-full min-h-[44px] px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer ${
+                        className={`w-full min-h-[42px] px-4 rounded-xl text-[12px] font-semibold flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer ${
                           isDone
                             ? 'bg-[var(--tl-low)] hover:bg-[var(--tl-container)] text-[var(--tl-text)]'
                             : 'bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)]'
@@ -1606,7 +1752,7 @@ export const ExecutorHome: React.FC = () => {
                             ? 'Lanjutkan Kerja'
                             : 'Mulai Kerjakan'}
                         </span>
-                        <ArrowRight size={15} />
+                        <ArrowRight size={14} />
                       </button>
                     </article>
                   );
@@ -1658,7 +1804,7 @@ export const ExecutorHome: React.FC = () => {
             return (
               <div className="flex flex-col min-h-full bg-[var(--tl-surface)]">
                 <header
-                  className="sticky top-0 z-30 px-4 h-16 flex items-center justify-between gap-2 backdrop-blur-md shrink-0"
+                  className="sticky top-0 z-30 px-4 h-14 flex items-center justify-between gap-2 backdrop-blur-md shrink-0"
                   style={{
                     background: 'color-mix(in srgb, var(--tl-surface) 90%, transparent)',
                     boxShadow: 'var(--tl-shadow-head)',
@@ -1666,27 +1812,27 @@ export const ExecutorHome: React.FC = () => {
                 >
                   <button
                     type="button"
-                    onClick={() => setPage(selectedProjectDetailId ? 'jobs' : 'home')}
+                    onClick={() => goBack('jobs')}
                     aria-label="Kembali"
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-[var(--tl-text)] hover:bg-[var(--tl-low)] cursor-pointer"
+                    className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--tl-text)] hover:bg-[var(--tl-low)] cursor-pointer"
                   >
-                    <ArrowLeft size={20} />
+                    <ArrowLeft size={19} />
                   </button>
-                  <strong className="text-[15px] font-bold text-[var(--tl-text)]">Detail Tugas</strong>
-                  <span className="w-10" />
+                  <strong className="text-[14.5px] font-bold text-[var(--tl-text)]">Detail Tugas</strong>
+                  <span className="w-9" />
                 </header>
 
-                <main className="flex-1 px-4 pt-4 pb-28 space-y-4">
+                <main className="flex-1 px-4 pt-3.5 pb-28 space-y-3.5">
                   <div className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-4 space-y-3">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="px-2 py-0.5 rounded-md bg-[var(--tl-container)] text-[var(--tl-text)] text-[10.5px] font-mono font-bold">
+                      <span className="text-[11px] font-mono font-semibold text-[var(--tl-text-variant)]">
                         {formatWoCode(repObj?.id || projObj?.id)}
                       </span>
-                      <ServicePill serviceType={serviceType} />
+                      <ServiceLabel serviceType={serviceType} />
                     </div>
                     <div>
-                      <h1 className="text-lg font-extrabold text-[var(--tl-text)] leading-snug">{titleText}</h1>
-                      <p className="text-xs text-[var(--tl-text-variant)] mt-0.5">{clientText}</p>
+                      <h1 className="text-[16px] font-bold text-[var(--tl-text)] leading-snug">{titleText}</h1>
+                      <p className="text-[11.5px] text-[var(--tl-text-variant)] mt-0.5">{clientText}</p>
                     </div>
 
                     <div className="rounded-xl bg-[var(--tl-low)] p-3.5 space-y-2.5 text-xs">
@@ -1804,11 +1950,11 @@ export const ExecutorHome: React.FC = () => {
                       type="button"
                       onClick={() => {
                         setSelectedReportId(repObj.id);
-                        setPage('gps');
+                        navigateTo('gps');
                       }}
-                      className="w-full min-h-[48px] rounded-xl bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
+                      className="w-full min-h-[46px] rounded-xl bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] text-[12.5px] font-semibold flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
                     >
-                      <LocateFixed size={17} />
+                      <LocateFixed size={16} />
                       <span>Mulai Pekerjaan &amp; Check-in GPS</span>
                     </button>
                   ) : repObj && repObj.status === 'WORKING' ? (
@@ -1816,12 +1962,12 @@ export const ExecutorHome: React.FC = () => {
                       type="button"
                       onClick={() => {
                         setSelectedReportId(repObj.id);
-                        setPage('worksheet');
+                        navigateTo('worksheet');
                       }}
-                      className="w-full min-h-[48px] rounded-xl bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
+                      className="w-full min-h-[46px] rounded-xl bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] text-[12.5px] font-semibold flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
                     >
                       <span>Buka Form Laporan Pekerjaan</span>
-                      <ArrowRight size={17} />
+                      <ArrowRight size={16} />
                     </button>
                   ) : repObj ? (
                     <button
@@ -1829,12 +1975,12 @@ export const ExecutorHome: React.FC = () => {
                       onClick={() => {
                         setSelectedReportId(repObj.id);
                         setIsViewingHistoryDetail(true);
-                        setPage('completion');
+                        navigateTo('completion');
                       }}
-                      className="w-full min-h-[48px] rounded-xl bg-[var(--tl-low)] hover:bg-[var(--tl-container)] text-[var(--tl-text)] text-xs font-bold flex items-center justify-center gap-2 cursor-pointer"
+                      className="w-full min-h-[46px] rounded-xl bg-[var(--tl-low)] hover:bg-[var(--tl-container)] text-[var(--tl-text)] text-[12.5px] font-semibold flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <span>Lihat Detail Pekerjaan &amp; PDF</span>
-                      <ArrowRight size={16} />
+                      <ArrowRight size={15} />
                     </button>
                   ) : null}
                 </div>
@@ -1848,7 +1994,7 @@ export const ExecutorHome: React.FC = () => {
         {page === 'gps' && activeTaskReport && (
           <div className="flex flex-col min-h-full bg-[var(--tl-surface)]">
             <header
-              className="sticky top-0 z-30 px-4 h-16 flex items-center justify-between gap-2 backdrop-blur-md shrink-0"
+              className="sticky top-0 z-30 px-4 h-14 flex items-center justify-between gap-2 backdrop-blur-md shrink-0"
               style={{
                 background: 'color-mix(in srgb, var(--tl-surface) 90%, transparent)',
                 boxShadow: 'var(--tl-shadow-head)',
@@ -1856,28 +2002,28 @@ export const ExecutorHome: React.FC = () => {
             >
               <button
                 type="button"
-                onClick={() => setPage('task-detail')}
+                onClick={() => goBack('home')}
                 aria-label="Kembali"
-                className="w-10 h-10 rounded-full flex items-center justify-center text-[var(--tl-text)] hover:bg-[var(--tl-low)] cursor-pointer"
+                className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--tl-text)] hover:bg-[var(--tl-low)] cursor-pointer"
               >
-                <ArrowLeft size={20} />
+                <ArrowLeft size={19} />
               </button>
-              <strong className="text-[15px] font-bold text-[var(--tl-text)]">Check-in Lokasi</strong>
-              <span className="w-10" />
+              <strong className="text-[14.5px] font-bold text-[var(--tl-text)]">Check-in Lokasi</strong>
+              <span className="w-9" />
             </header>
 
             <main className="flex-1 px-4 py-6 flex flex-col justify-center">
-              <div className="rounded-3xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-6 text-center space-y-3.5">
-                <div className="w-14 h-14 rounded-2xl bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] flex items-center justify-center mx-auto">
-                  <Navigation size={26} />
+              <div className="rounded-3xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-5 text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] flex items-center justify-center mx-auto">
+                  <Navigation size={23} />
                 </div>
-                <span className="inline-block px-2.5 py-0.5 rounded-full bg-[var(--tl-low)] text-[11px] font-mono font-bold text-[var(--tl-text-variant)]">
+                <span className="block text-[11px] font-mono font-semibold text-[var(--tl-text-variant)]">
                   {formatWoCode(activeTaskReport.id)}
                 </span>
-                <h1 className="text-base font-extrabold text-[var(--tl-text)] leading-snug">
+                <h1 className="text-[15.5px] font-bold text-[var(--tl-text)] leading-snug">
                   {activeTaskReport.projectName}
                 </h1>
-                <p className="text-xs text-[var(--tl-text-variant)] leading-relaxed">
+                <p className="text-[12px] text-[var(--tl-text-variant)] leading-relaxed">
                   Ambil 1 foto kehadiran untuk memvalidasi posisi GPS di area kerja (radius{' '}
                   <strong className="text-[var(--tl-text)]">{activeTaskReport.projectRadius}m</strong>).
                 </p>
@@ -1888,9 +2034,9 @@ export const ExecutorHome: React.FC = () => {
               <button
                 type="button"
                 onClick={() => handleRequestCheckInCamera(activeTaskReport)}
-                className="w-full min-h-[48px] rounded-xl bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
+                className="w-full min-h-[46px] rounded-xl bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] text-[12.5px] font-semibold flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
               >
-                <Camera size={17} />
+                <Camera size={16} />
                 <span>Ambil Foto &amp; Check-in</span>
               </button>
             </div>
@@ -1907,7 +2053,7 @@ export const ExecutorHome: React.FC = () => {
             technicianName={user.name}
             technicianNip={user.nip}
             isOnline={isOnline}
-            onBack={() => setPage('home')}
+            onBack={() => goBack('home')}
             onCapturePhoto={tag =>
               setActiveCameraAction({ type: 'PROGRESS', report: activeTaskReport, photoTag: tag })
             }
@@ -1931,7 +2077,7 @@ export const ExecutorHome: React.FC = () => {
             isHistoryDetail={isViewingHistoryDetail}
             onSyncNow={handleRequestSync}
             onViewPhoto={photo => setViewingPhoto(photo)}
-            onBack={() => setPage(isViewingHistoryDetail ? 'history' : 'home')}
+            onBack={() => goBack(isViewingHistoryDetail ? 'history' : 'home')}
           />
         )}
 
@@ -1942,18 +2088,18 @@ export const ExecutorHome: React.FC = () => {
           <>
             {renderLiteHeader()}
 
-            <main className="flex-1 px-4 pt-4 pb-24 space-y-4">
-              {/* Header + Arsip Resmi Badge */}
+            <main className="flex-1 px-4 pt-3.5 pb-24 space-y-3.5">
+              {/* Header + Quiet Archive Label */}
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <h1 className="text-[20px] font-extrabold tracking-tight text-[var(--tl-text)]">
+                  <h1 className="text-[17px] font-bold tracking-tight text-[var(--tl-text)]">
                     Riwayat Pekerjaan
                   </h1>
-                  <p className="text-xs text-[var(--tl-text-variant)] mt-0.5">
+                  <p className="text-[11.5px] text-[var(--tl-text-variant)] mt-0.5">
                     {filteredHistoryJobs.length} laporan selesai tersimpan
                   </p>
                 </div>
-                <span className="px-2.5 py-1 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-[11px] font-bold shrink-0">
+                <span className="text-[11px] font-semibold text-[var(--tl-secondary)] pt-1 shrink-0">
                   Arsip Resmi
                 </span>
               </div>
@@ -2096,41 +2242,42 @@ export const ExecutorHome: React.FC = () => {
                   return (
                     <article
                       key={rep.id}
-                      className="p-4 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] space-y-3"
+                      className="p-3.5 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] space-y-2.5"
                     >
                       <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-1.5">
-                          <span className="px-2 py-0.5 rounded-md bg-[var(--tl-container)] text-[var(--tl-text)] text-[10.5px] font-mono font-bold">
+                        <div className="flex items-center gap-1.5 text-[10.5px]">
+                          <span className="font-mono font-semibold text-[var(--tl-text)]">
                             {formatWoCode(rep.id)}
                           </span>
-                          <ServicePill serviceType={rep.serviceType} />
+                          <span className="text-[var(--tl-outline)]">·</span>
+                          <ServiceLabel serviceType={rep.serviceType} />
                         </div>
-                        <span className="text-[11px] font-mono font-semibold text-[var(--tl-text-variant)] tabular-nums">
+                        <span className="text-[10.5px] font-mono font-medium text-[var(--tl-text-variant)] tabular-nums">
                           {formatShortDateId(rep.checkOutAt || rep.createdAt)}
                         </span>
                       </div>
 
                       <div>
-                        <strong className="block text-[15px] font-bold text-[var(--tl-text)] leading-snug truncate">
+                        <strong className="block text-[14px] font-semibold text-[var(--tl-text)] leading-snug truncate">
                           {rep.projectName}
                         </strong>
-                        <p className="text-xs text-[var(--tl-text-variant)] mt-0.5 truncate">
+                        <p className="text-[11.5px] text-[var(--tl-text-variant)] mt-0.5 truncate">
                           {rep.clientName || rep.projectAddress}
                         </p>
                       </div>
 
                       <div className="flex items-center gap-3 text-[11px] text-[var(--tl-text-variant)] bg-[var(--tl-low)] rounded-xl px-3 py-2">
-                        <span className="inline-flex items-center gap-1 font-semibold">
-                          <Camera size={13} className="text-[var(--tl-secondary)]" />
+                        <span className="inline-flex items-center gap-1 font-medium">
+                          <Camera size={12} className="text-[var(--tl-secondary)]" />
                           <span>{rep.photos.length} Foto</span>
                         </span>
                         {durationText !== '-' && (
-                          <span className="inline-flex items-center gap-1 font-semibold">
-                            <Clock size={13} className="text-[var(--tl-secondary)]" />
+                          <span className="inline-flex items-center gap-1 font-medium">
+                            <Clock size={12} className="text-[var(--tl-secondary)]" />
                             <span>{durationText}</span>
                           </span>
                         )}
-                        <span className="ml-auto font-bold text-[var(--tl-secondary)]">Selesai</span>
+                        <span className="ml-auto font-semibold text-[var(--tl-secondary)]">Selesai</span>
                       </div>
 
                       <button
@@ -2138,12 +2285,12 @@ export const ExecutorHome: React.FC = () => {
                         onClick={() => {
                           setSelectedReportId(rep.id);
                           setIsViewingHistoryDetail(true);
-                          setPage('completion');
+                          navigateTo('completion');
                         }}
-                        className="w-full min-h-[42px] rounded-xl bg-[var(--tl-low)] hover:bg-[var(--tl-container)] text-[var(--tl-primary)] text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                        className="w-full min-h-[40px] rounded-xl bg-[var(--tl-low)] hover:bg-[var(--tl-container)] text-[var(--tl-primary)] text-[12px] font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <span>Lihat Detail</span>
-                        <ChevronRight size={15} />
+                        <ChevronRight size={14} />
                       </button>
                     </article>
                   );
@@ -2166,40 +2313,38 @@ export const ExecutorHome: React.FC = () => {
           <>
             {renderLiteHeader()}
 
-            <main className="flex-1 px-4 pt-4 pb-24 space-y-4">
+            <main className="flex-1 px-4 pt-3.5 pb-24 space-y-3.5">
               {/* Profile Identity Card */}
-              <div className="p-5 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] text-center space-y-1.5">
-                <div className="w-16 h-16 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] font-extrabold text-lg flex items-center justify-center mx-auto shadow-sm">
+              <div className="p-4 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] text-center space-y-1">
+                <div className="w-14 h-14 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] font-bold text-base flex items-center justify-center mx-auto shadow-sm">
                   {initials}
                 </div>
-                <h1 className="text-base font-extrabold text-[var(--tl-text)] pt-1">{user.name}</h1>
-                <span className="inline-block px-2.5 py-0.5 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-[11px] font-bold">
-                  Teknisi Lapangan
-                </span>
+                <h1 className="text-[15.5px] font-bold text-[var(--tl-text)] pt-1">{user.name}</h1>
+                <p className="text-[11px] font-semibold text-[var(--tl-secondary)]">Teknisi Lapangan</p>
                 <p className="text-[11px] font-mono text-[var(--tl-text-variant)] pt-0.5">
                   NIP: {user.nip || '-'} · {user.email}
                 </p>
               </div>
 
               {/* 3 Core Monthly Metrics */}
-              <div className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] grid grid-cols-3 divide-x divide-[var(--tl-container)] py-3.5">
+              <div className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] grid grid-cols-3 divide-x divide-[var(--tl-container)] py-3">
                 <div className="px-2 text-center">
-                  <strong className="block text-lg font-mono font-extrabold tabular-nums text-[var(--tl-text)]">
+                  <strong className="block text-[17px] font-mono font-bold tabular-nums text-[var(--tl-text)]">
                     {monthlyStats.monthlyTasks}
                   </strong>
-                  <span className="text-[10.5px] font-semibold text-[var(--tl-text-variant)]">Bulan Ini</span>
+                  <span className="text-[10.5px] font-medium text-[var(--tl-text-variant)]">Bulan Ini</span>
                 </div>
                 <div className="px-2 text-center">
-                  <strong className="block text-lg font-mono font-extrabold tabular-nums text-[var(--tl-secondary)]">
+                  <strong className="block text-[17px] font-mono font-bold tabular-nums text-[var(--tl-secondary)]">
                     {monthlyStats.syncRate}%
                   </strong>
-                  <span className="text-[10.5px] font-semibold text-[var(--tl-text-variant)]">Terkirim</span>
+                  <span className="text-[10.5px] font-medium text-[var(--tl-text-variant)]">Terkirim</span>
                 </div>
                 <div className="px-2 text-center">
-                  <strong className="block text-lg font-mono font-extrabold tabular-nums text-[var(--tl-text)]">
+                  <strong className="block text-[17px] font-mono font-bold tabular-nums text-[var(--tl-text)]">
                     {pendingCount}
                   </strong>
-                  <span className="text-[10.5px] font-semibold text-[var(--tl-text-variant)]">Antrean</span>
+                  <span className="text-[10.5px] font-medium text-[var(--tl-text-variant)]">Antrean</span>
                 </div>
               </div>
 
@@ -2288,30 +2433,49 @@ export const ExecutorHome: React.FC = () => {
 
                 <button
                   type="button"
-                  onClick={() => setShowChangePassword(true)}
-                  className="w-full min-h-[54px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-[var(--tl-low)]/60"
+                  onClick={handleOpenGuidePrompt}
+                  className="w-full min-h-[52px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-[var(--tl-low)]/60"
                 >
                   <span className="flex items-center gap-3">
-                    <Lock size={18} className="text-[var(--tl-text-variant)]" />
+                    <HelpCircle size={17} className="text-[var(--tl-secondary)]" />
                     <span>
-                      <strong className="block text-xs font-bold text-[var(--tl-text)]">
+                      <strong className="block text-[12.5px] font-semibold text-[var(--tl-text)]">
+                        Panduan Aplikasi
+                      </strong>
+                      <small className="text-[11px] text-[var(--tl-text-variant)]">
+                        Putar ulang tur fitur singkat
+                      </small>
+                    </span>
+                  </span>
+                  <ChevronRight size={15} className="text-[var(--tl-outline)]" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowChangePassword(true)}
+                  className="w-full min-h-[52px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-[var(--tl-low)]/60"
+                >
+                  <span className="flex items-center gap-3">
+                    <Lock size={17} className="text-[var(--tl-text-variant)]" />
+                    <span>
+                      <strong className="block text-[12.5px] font-semibold text-[var(--tl-text)]">
                         Ubah Kata Sandi
                       </strong>
                       <small className="text-[11px] text-[var(--tl-text-variant)]">Keamanan akun teknisi</small>
                     </span>
                   </span>
-                  <ChevronRight size={16} className="text-[var(--tl-outline)]" />
+                  <ChevronRight size={15} className="text-[var(--tl-outline)]" />
                 </button>
 
                 <button
                   type="button"
                   onClick={handleRequestLogout}
-                  className="w-full min-h-[54px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-rose-50/60 dark:hover:bg-rose-950/20"
+                  className="w-full min-h-[52px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-rose-50/60 dark:hover:bg-rose-950/20"
                 >
                   <span className="flex items-center gap-3 text-[var(--tl-error)]">
-                    <LogOut size={18} />
+                    <LogOut size={17} />
                     <span>
-                      <strong className="block text-xs font-bold">Keluar Akun</strong>
+                      <strong className="block text-[12.5px] font-semibold">Keluar Akun</strong>
                       <small className="text-[11px] text-[var(--tl-text-variant)]">Kembali ke halaman masuk</small>
                     </span>
                   </span>
@@ -2327,44 +2491,110 @@ export const ExecutorHome: React.FC = () => {
             aria-label="Navigasi Teknisi"
             className="tech-bottom-nav px-2 py-1.5 grid grid-cols-4 gap-1"
           >
-            {(
-              [
-                { id: 'home', label: 'Beranda', icon: Home },
-                { id: 'jobs', label: 'Tugas', icon: ClipboardList, badge: activeQueueJobs.length },
-                { id: 'history', label: 'Riwayat', icon: History },
-                { id: 'profile', label: 'Profil', icon: UserIcon },
-              ] as const
-            ).map(item => {
-              const active = activeBottomTabId === item.id;
-              const IconComp = item.icon;
+            {/* Tab 1: Beranda */}
+            {(() => {
+              const active = activeBottomTabId === 'home';
               return (
                 <button
-                  key={item.id}
                   type="button"
                   aria-current={active ? 'page' : undefined}
                   onClick={() => {
                     setSelectedProjectDetailId(null);
                     setIsViewingHistoryDetail(false);
-                    setPage(item.id);
+                    navigateTo('home', { reset: true });
                   }}
-                  className={`relative min-h-[50px] rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer ${
+                  className={`relative min-h-[48px] rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer ${
                     active
-                      ? 'bg-[var(--tl-low)] text-[var(--tl-primary)] font-bold'
+                      ? 'bg-[var(--tl-low)] text-[var(--tl-primary)] font-semibold'
                       : 'text-[var(--tl-text-variant)] hover:text-[var(--tl-text)] font-medium'
                   }`}
                 >
-                  <span className="relative">
-                    <IconComp size={19} strokeWidth={active ? 2.4 : 2} />
-                    {'badge' in item && item.badge > 0 && (
-                      <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-[var(--tl-secondary)] text-white text-[9.5px] font-bold flex items-center justify-center">
-                        {item.badge}
-                      </span>
-                    )}
-                  </span>
-                  <span className="text-[10.5px] leading-none mt-0.5">{item.label}</span>
+                  <Home size={18} strokeWidth={active ? 2.3 : 1.9} />
+                  <span className="text-[10px] leading-none mt-0.5">Beranda</span>
                 </button>
               );
-            })}
+            })()}
+
+            {/* Tabs 2 & 3 grouped for Spotlight Tour target */}
+            <div data-tour="nav-jobs-history" className="col-span-2 grid grid-cols-2 gap-1">
+              {(() => {
+                const active = activeBottomTabId === 'jobs';
+                return (
+                  <button
+                    type="button"
+                    aria-current={active ? 'page' : undefined}
+                    onClick={() => {
+                      setSelectedProjectDetailId(null);
+                      setIsViewingHistoryDetail(false);
+                      navigateTo('jobs', { reset: true });
+                    }}
+                    className={`relative min-h-[48px] rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer ${
+                      active
+                        ? 'bg-[var(--tl-low)] text-[var(--tl-primary)] font-semibold'
+                        : 'text-[var(--tl-text-variant)] hover:text-[var(--tl-text)] font-medium'
+                    }`}
+                  >
+                    <span className="relative">
+                      <ClipboardList size={18} strokeWidth={active ? 2.3 : 1.9} />
+                      {activeQueueJobs.length > 0 && (
+                        <span className="absolute -top-1.5 -right-2.5 min-w-[15px] h-[15px] px-1 rounded-full bg-[var(--tl-secondary)] text-white text-[9px] font-bold flex items-center justify-center">
+                          {activeQueueJobs.length}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-[10px] leading-none mt-0.5">Tugas</span>
+                  </button>
+                );
+              })()}
+
+              {(() => {
+                const active = activeBottomTabId === 'history';
+                return (
+                  <button
+                    type="button"
+                    aria-current={active ? 'page' : undefined}
+                    onClick={() => {
+                      setSelectedProjectDetailId(null);
+                      setIsViewingHistoryDetail(false);
+                      navigateTo('history', { reset: true });
+                    }}
+                    className={`relative min-h-[48px] rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer ${
+                      active
+                        ? 'bg-[var(--tl-low)] text-[var(--tl-primary)] font-semibold'
+                        : 'text-[var(--tl-text-variant)] hover:text-[var(--tl-text)] font-medium'
+                    }`}
+                  >
+                    <History size={18} strokeWidth={active ? 2.3 : 1.9} />
+                    <span className="text-[10px] leading-none mt-0.5">Riwayat</span>
+                  </button>
+                );
+              })()}
+            </div>
+
+            {/* Tab 4: Profil */}
+            {(() => {
+              const active = activeBottomTabId === 'profile';
+              return (
+                <button
+                  type="button"
+                  data-tour="nav-profile"
+                  aria-current={active ? 'page' : undefined}
+                  onClick={() => {
+                    setSelectedProjectDetailId(null);
+                    setIsViewingHistoryDetail(false);
+                    navigateTo('profile', { reset: true });
+                  }}
+                  className={`relative min-h-[48px] rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer ${
+                    active
+                      ? 'bg-[var(--tl-low)] text-[var(--tl-primary)] font-semibold'
+                      : 'text-[var(--tl-text-variant)] hover:text-[var(--tl-text)] font-medium'
+                  }`}
+                >
+                  <UserIcon size={18} strokeWidth={active ? 2.3 : 1.9} />
+                  <span className="text-[10px] leading-none mt-0.5">Profil</span>
+                </button>
+              );
+            })()}
           </nav>
         )}
 
@@ -2416,16 +2646,24 @@ export const ExecutorHome: React.FC = () => {
       {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
 
       {showGpsPrompt && gpsPermissionStatus !== 'granted' && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#233144]/60 backdrop-blur-xs p-4">
-          <div className="bg-[var(--tl-card)] rounded-3xl p-6 max-w-sm w-full shadow-2xl">
-            <div className="w-12 h-12 bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] rounded-2xl flex items-center justify-center mb-4 mx-auto">
-              <MapPin size={24} />
+        <div
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setShowGpsPrompt(false)}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#233144]/60 backdrop-blur-xs p-4"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="bg-[var(--tl-card)] rounded-3xl p-5 max-w-sm w-full shadow-2xl"
+          >
+            <div className="w-11 h-11 bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] rounded-2xl flex items-center justify-center mb-3.5 mx-auto">
+              <MapPin size={22} />
             </div>
-            <h3 className="text-base font-bold text-center text-[var(--tl-text)] mb-1.5">Izinkan Akses GPS</h3>
-            <p className="text-xs text-[var(--tl-text-variant)] text-center mb-5 leading-relaxed">
+            <h3 className="text-[15px] font-bold text-center text-[var(--tl-text)] mb-1.5">Izinkan Akses GPS</h3>
+            <p className="text-[12px] text-[var(--tl-text-variant)] text-center mb-5 leading-relaxed">
               Digunakan untuk memvalidasi lokasi saat Check-in pekerjaan di lapangan.
             </p>
-            <div className="space-y-2.5">
+            <div className="space-y-2">
               <button
                 type="button"
                 onClick={() => {
@@ -2438,14 +2676,14 @@ export const ExecutorHome: React.FC = () => {
                     { enableHighAccuracy: true, timeout: 10000 }
                   );
                 }}
-                className="w-full min-h-[46px] bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] font-bold rounded-xl text-xs cursor-pointer"
+                className="w-full min-h-[44px] bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] font-semibold rounded-xl text-[12.5px] cursor-pointer"
               >
                 Izinkan GPS
               </button>
               <button
                 type="button"
                 onClick={() => setShowGpsPrompt(false)}
-                className="w-full min-h-[44px] bg-[var(--tl-low)] text-[var(--tl-text)] font-semibold rounded-xl text-xs cursor-pointer"
+                className="w-full min-h-[42px] bg-[var(--tl-low)] text-[var(--tl-text)] font-semibold rounded-xl text-[12px] cursor-pointer"
               >
                 Nanti Saja
               </button>
@@ -2454,6 +2692,12 @@ export const ExecutorHome: React.FC = () => {
         </div>
       )}
       <ConfirmActionModal request={confirmRequest} onClose={closeConfirm} />
+      <TechnicianSpotlightGuide
+        mode={guideMode}
+        onAcceptTour={handleStartSpotlightTour}
+        onDismiss={handleDismissGuide}
+        onComplete={handleCompleteGuide}
+      />
     </div>
   );
 };
