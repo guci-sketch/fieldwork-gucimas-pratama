@@ -124,6 +124,8 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
       label: 'Siap Dikerjakan',
       count: readyCount,
       sub: 'Menunggu check-in teknisi',
+      actionCue: 'Filter ›',
+      accentText: 'text-[#356c91] dark:text-sky-300',
       onClick: () => {
         onSelectStatusFilter('READY');
         onOpenReportsTab?.();
@@ -134,6 +136,8 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
       label: 'Sedang Berlangsung',
       count: workingCount,
       sub: 'Aktif dikerjakan di lokasi',
+      actionCue: 'Pantau ›',
+      accentText: 'text-[#b47818] dark:text-amber-300',
       onClick: () => {
         onSelectStatusFilter('WORKING');
         onOpenReportsTab?.();
@@ -144,6 +148,8 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
       label: 'Selesai',
       count: completedCount,
       sub: 'Laporan selesai tercatat',
+      actionCue: 'Rekap ›',
+      accentText: 'text-[#1f7a4c] dark:text-emerald-300',
       onClick: () => {
         onSelectStatusFilter('COMPLETED');
         onOpenReportsTab?.();
@@ -154,6 +160,8 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
       label: 'Perlu Ditinjau',
       count: flaggedCount,
       sub: 'Butuh verifikasi Admin',
+      actionCue: 'Tinjau ›',
+      accentText: 'text-[#b54141] dark:text-rose-300',
       onClick: () => onOpenAnomaliesTab(),
     },
   ];
@@ -201,20 +209,29 @@ export const OperationsAnalyticsBento: React.FC<OperationsAnalyticsBentoProps> =
         </div>
       </div>
 
-      {/* 4 Focused KPI Summary Cards */}
+      {/* 4 Focused KPI Summary Cards with Fieldwork Glassmorphism & Hover Micro-Interactions */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         {kpiItems.map(item => (
           <button
             key={item.code}
             type="button"
             onClick={item.onClick}
-            className={`kpi-card ${item.code.toLowerCase()} text-left cursor-pointer`}
+            className={`kpi-card ${item.code.toLowerCase()} group text-left cursor-pointer`}
           >
             <div>
               <span>{item.label}</span>
+              <span
+                className={`text-[11px] font-semibold opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-150 whitespace-nowrap shrink-0 ${item.accentText}`}
+              >
+                {item.actionCue}
+              </span>
             </div>
-            <strong className="tabular-nums">{formatNumberId(item.count)}</strong>
-            <small>{item.sub}</small>
+            <strong className="font-mono tabular-nums tracking-tight">
+              {formatNumberId(item.count)}
+            </strong>
+            <small className="group-hover:text-[var(--text-secondary)] transition-colors duration-150">
+              {item.sub}
+            </small>
           </button>
         ))}
       </div>

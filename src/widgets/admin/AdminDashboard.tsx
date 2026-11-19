@@ -1163,7 +1163,7 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   )}
 
-                  {/* ── 5 Kartu Ringkasan Minimalis (Laporan Kerja) ── */}
+                  {/* ── 5 Kartu Ringkasan KPI (Laporan Kerja — Fieldwork Glassmorphism & Micro-Interactions) ── */}
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                     <button
                       type="button"
@@ -1171,24 +1171,24 @@ export const AdminDashboard: React.FC = () => {
                         setActiveTab('reports');
                         setFilters(prev => ({ ...prev, status: 'ALL' }));
                       }}
-                      className={`clean-card p-4 rounded-xl text-left border transition-all cursor-pointer ${
+                      className={`kpi-card neutral group text-left cursor-pointer ${
                         activeTab === 'reports' && filters.status === 'ALL'
-                          ? 'bg-[var(--bg-card)] border-[var(--accent)] ring-1 ring-[var(--accent)]'
-                          : 'bg-[var(--bg-card)] border-[var(--border-subtle)] hover:border-[var(--border-strong)]'
+                          ? 'ring-2 ring-[var(--accent)]/40 border-[var(--accent)]'
+                          : ''
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                          Semua Laporan
+                      <div>
+                        <span>Semua Laporan</span>
+                        <span className="text-[11px] font-semibold text-[#1f7a4c] dark:text-emerald-300 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-150 whitespace-nowrap shrink-0">
+                          Semua ›
                         </span>
-                        <span className="w-2 h-2 rounded-full bg-[var(--accent)] shrink-0" />
                       </div>
-                      <span className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1.5 block">
+                      <strong className="font-mono tabular-nums tracking-tight">
                         {kpi.totalJobs || reports.length}
-                      </span>
-                      <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
+                      </strong>
+                      <small className="group-hover:text-[var(--text-secondary)] transition-colors duration-150">
                         Klik tampilkan semua
-                      </span>
+                      </small>
                     </button>
 
                     <button
@@ -1197,47 +1197,47 @@ export const AdminDashboard: React.FC = () => {
                         setActiveTab('reports');
                         setFilters(prev => ({ ...prev, status: 'COMPLETED' }));
                       }}
-                      className={`clean-card p-4 rounded-xl text-left border transition-all cursor-pointer ${
+                      className={`kpi-card completed group text-left cursor-pointer ${
                         activeTab === 'reports' && filters.status === 'COMPLETED'
-                          ? 'bg-[var(--bg-card)] border-[var(--accent)] ring-1 ring-[var(--accent)]'
-                          : 'bg-[var(--bg-card)] border-[var(--border-subtle)] hover:border-[var(--border-strong)]'
+                          ? 'ring-2 ring-emerald-600/35 border-emerald-600'
+                          : ''
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                          Selesai
+                      <div>
+                        <span>Selesai</span>
+                        <span className="text-[11px] font-semibold text-[#1f7a4c] dark:text-emerald-300 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-150 whitespace-nowrap shrink-0">
+                          Filter ›
                         </span>
-                        <span className="w-2 h-2 rounded-full bg-emerald-600 shrink-0" />
                       </div>
-                      <span className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1.5 block">
+                      <strong className="font-mono tabular-nums tracking-tight">
                         {kpi.completedJobs}
-                      </span>
-                      <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
+                      </strong>
+                      <small className="group-hover:text-[var(--text-secondary)] transition-colors duration-150">
                         Tugas tuntas
-                      </span>
+                      </small>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setActiveTab('anomalies')}
-                      className={`clean-card p-4 rounded-xl text-left border transition-all cursor-pointer ${
+                      className={`kpi-card flagged group text-left cursor-pointer ${
                         activeTab === 'anomalies'
-                          ? 'bg-[var(--bg-card)] border-rose-600 ring-1 ring-rose-600'
-                          : 'bg-[var(--bg-card)] border-[var(--border-subtle)] hover:border-[var(--border-strong)]'
+                          ? 'ring-2 ring-rose-600/35 border-rose-600'
+                          : ''
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                          Perlu Dicek
+                      <div>
+                        <span>Perlu Dicek</span>
+                        <span className="text-[11px] font-semibold text-[#b54141] dark:text-rose-300 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-150 whitespace-nowrap shrink-0">
+                          Tinjau ›
                         </span>
-                        <span className="w-2 h-2 rounded-full bg-rose-600 shrink-0" />
                       </div>
-                      <span className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1.5 block">
+                      <strong className="font-mono tabular-nums tracking-tight">
                         {kpi.flaggedJobs}
-                      </span>
-                      <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
+                      </strong>
+                      <small className="group-hover:text-[var(--text-secondary)] transition-colors duration-150">
                         Risiko / Di luar radius
-                      </span>
+                      </small>
                     </button>
 
                     <button
@@ -1246,39 +1246,37 @@ export const AdminDashboard: React.FC = () => {
                         setActiveTab('reports');
                         setFilters(prev => ({ ...prev, status: 'WORKING' }));
                       }}
-                      className={`clean-card p-4 rounded-xl text-left border transition-all cursor-pointer ${
+                      className={`kpi-card working group text-left cursor-pointer ${
                         activeTab === 'reports' && filters.status === 'WORKING'
-                          ? 'bg-[var(--bg-card)] border-[var(--accent)] ring-1 ring-[var(--accent)]'
-                          : 'bg-[var(--bg-card)] border-[var(--border-subtle)] hover:border-[var(--border-strong)]'
+                          ? 'ring-2 ring-amber-600/35 border-amber-600'
+                          : ''
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                          Sedang Kerja
+                      <div>
+                        <span>Sedang Kerja</span>
+                        <span className="text-[11px] font-semibold text-[#b47818] dark:text-amber-300 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all duration-150 whitespace-nowrap shrink-0">
+                          Pantau ›
                         </span>
-                        <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
                       </div>
-                      <span className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1.5 block">
+                      <strong className="font-mono tabular-nums tracking-tight">
                         {kpi.workingJobs}
-                      </span>
-                      <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
+                      </strong>
+                      <small className="group-hover:text-[var(--text-secondary)] transition-colors duration-150">
                         On-site aktif
-                      </span>
+                      </small>
                     </button>
 
-                    <div className="clean-card p-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border-subtle)] col-span-2 sm:col-span-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                          Rata-Rata Durasi
-                        </span>
-                        <Clock size={13} className="text-[var(--text-muted)] shrink-0" />
+                    <div className="kpi-card ready col-span-2 sm:col-span-1 cursor-default">
+                      <div>
+                        <span>Rata-Rata Durasi</span>
+                        <Clock size={13} className="text-[#356c91] dark:text-sky-300 shrink-0" />
                       </div>
-                      <span className="text-2xl font-bold font-mono text-[var(--text-primary)] mt-1.5 block">
+                      <strong className="font-mono tabular-nums tracking-tight">
                         {kpi.avgDurationMinutes}m
-                      </span>
-                      <span className="text-[11px] text-[var(--text-muted)] mt-0.5 block">
+                      </strong>
+                      <small>
                         Skor Risiko Rata-rata: {kpi.avgRiskScore}
-                      </span>
+                      </small>
                     </div>
                   </div>
 
