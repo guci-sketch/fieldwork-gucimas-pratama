@@ -384,15 +384,15 @@ export async function checkIn(reportId: string, evidence: EvidencePayload): Prom
   return updateLocalReportItem(updatedLocal);
 }
 
-export const MAX_PHOTOS_PER_REPORT = 4;
-export const MAX_PROGRESS_PHOTOS_PER_REPORT = 2;
+export const MAX_PHOTOS_PER_REPORT = 6;
+export const MAX_PROGRESS_PHOTOS_PER_REPORT = 4;
 
 export async function addProgressPhoto(reportId: string, evidence: EvidencePayload): Promise<WorkReport> {
   const current = await fetchWorkReport(reportId);
   const progressCount = current.photos.filter(p => p.photoType === 'PROGRESS').length;
   if (current.photos.length >= MAX_PHOTOS_PER_REPORT || progressCount >= MAX_PROGRESS_PHOTOS_PER_REPORT) {
     throw new Error(
-      `Batas maksimal foto tercapai (${MAX_PHOTOS_PER_REPORT} foto per laporan: 1 Check-In, maks ${MAX_PROGRESS_PHOTOS_PER_REPORT} Progres, dan 1 Check-Out) untuk menghemat kuota penyimpanan database.`
+      `Batas maksimal foto tercapai (${MAX_PHOTOS_PER_REPORT} foto per laporan: 1 Check-In, maks ${MAX_PROGRESS_PHOTOS_PER_REPORT} Progres, dan 1 Check-Out) dengan kompresi otomatis 40–60 KB.`
     );
   }
   const hasAnchor = Boolean(

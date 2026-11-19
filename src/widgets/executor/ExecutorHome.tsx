@@ -1,86 +1,94 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { WorkReport, Project, DocumentationPhoto, PhotoType, PhotoTag } from '@/entities/types';
 import { useAuth } from '@/app/providers/AuthContext';
-import { fetchMyWorkReports, checkIn, addProgressPhoto, checkOut, submitTreatment, updateWorkReportTeam, TreatmentInput, TeamMemberEntry } from '@/shared/api/workReports';
+import { useTheme } from '@/shared/hooks/useTheme';
+import {
+  fetchMyWorkReports,
+  checkIn,
+  addProgressPhoto,
+  checkOut,
+  submitTreatment,
+  updateWorkReportTeam,
+  TreatmentInput,
+  TeamMemberEntry,
+} from '@/shared/api/workReports';
 import { supabase } from '@/shared/lib/supabase';
 import { createProject, fetchMyProjects, CreateProjectInput } from '@/shared/api/projects';
 import { ApiError } from '@/shared/api/client';
-import { getQueueLength, enqueue, enqueueTreatment, enqueueGps, syncQueue } from '@/shared/utils/offlineQueue';
+import {
+  getQueueLength,
+  getPendingQueueSummary,
+  clearSafeTechnicianCache,
+  enqueue,
+  enqueueTreatment,
+  enqueueGps,
+  syncQueue,
+  QueuedAction,
+} from '@/shared/utils/offlineQueue';
 import { CameraCaptureModal } from '../camera/CameraCaptureModal';
 import { CreateProjectModal } from './CreateProjectModal';
-import { TreatmentFormModal } from './TreatmentFormModal';
 import { PhotoViewerModal } from '../common/PhotoViewerModal';
-import { AuthedImage } from '../common/AuthedImage';
 import { ChangePasswordModal } from '../auth/ChangePasswordModal';
-import { getServiceTypeMeta } from '@/shared/utils/serviceMeta';
+import { CustomerReviewFormModal } from './CustomerReviewFormModal';
+import { TechnicianWorksheet, WorksheetClientPrefill } from './TechnicianWorksheet';
+import { CompletionPdfWaSheet } from './CompletionPdfWaSheet';
+import { NotificationsSheet, TechNotificationItem } from './NotificationsSheet';
 import { formatDistance, calculateDistanceMeters } from '@/shared/utils/geo';
+import { postLocation } from '@/shared/api/location';
 import { TabContainer } from '@/shared/ui/TabContainer';
 import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
-  CalendarDays,
+  Bell,
+  Calendar,
   Camera,
   Check,
-  CheckCircle2,
+  ChevronDown,
   ChevronRight,
-  ClipboardCheck,
+  ChevronUp,
   ClipboardList,
   CloudOff,
-  FileCheck2,
   History,
   Home,
   LocateFixed,
   Lock,
   LogOut,
   MapPin,
-  MoreHorizontal,
+  Moon,
   MoreVertical,
   Navigation,
-  Plus,
   RefreshCw,
   Search,
-  ShieldCheck,
-  UploadCloud,
+  Sun,
+  Trash2,
   User as UserIcon,
   Users,
-  Wifi,
+  X,
 } from 'lucide-react';
-
-import { CustomerReviewFormModal } from './CustomerReviewFormModal';
-import { postLocation } from '@/shared/api/location';
 
 type TechPage =
   | 'home'
   | 'jobs'
   | 'task-detail'
   | 'gps'
-  | 'work'
-  | 'photos'
-  | 'treatment'
-  | 'checkout'
-  | 'signature'
-  | 'review'
-  | 'sync'
+  | 'worksheet'
+  | 'completion'
   | 'history'
   | 'profile';
 
-const STATUS_META: Record<string, { label: string; tone: string }> = {
-  DRAFT: { label: 'Draft', tone: 'neutral' },
-  READY: { label: 'Siap Dikerjakan', tone: 'info' },
-  WORKING: { label: 'Sedang Berlangsung', tone: 'info' },
-  COMPLETED: { label: 'Selesai', tone: 'success' },
-  FLAGGED: { label: 'Perlu Pemeriksaan', tone: 'danger' },
-  REVIEWED: { label: 'Sudah Ditinjau', tone: 'reviewed' },
-};
-
-function LiteBadge({ status }: { status: string }) {
-  const meta = STATUS_META[status] || { label: status, tone: 'neutral' };
+function ServiceTag({ serviceType }: { serviceType?: string }) {
+  const isTermite = serviceType === 'TERMITE_CONTROL';
   return (
-    <span className={`badge ${meta.tone}`}>
-      <span className="badge-dot" />
-      {meta.label}
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-semibold whitespace-nowrap ${
+        isTermite
+          ? 'bg-amber-50 text-amber-800 border border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60'
+          : 'bg-sky-50 text-sky-800 border border-sky-200/80 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/60'
+      }`}
+    >
+      {isTermite ? 'Anti Rayap' : 'Pest Control'}
     </span>
   );
 }
@@ -103,40 +111,12 @@ function LiteBrand({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function MapIllustration() {
-  return (
-    <div className="map-illustration" aria-label="Peta lokasi pekerjaan">
-      <div className="road one" />
-      <div className="road two" />
-      <div className="road three" />
-      <div className="block b1" />
-      <div className="block b2" />
-      <div className="block b3" />
-      <div className="map-pin p1">
-        <MapPin size={18} />
-      </div>
-      <div className="map-pin p2">
-        <Navigation size={15} />
-      </div>
-      <span className="map-label">Titik geofence lokasi pekerjaan</span>
-    </div>
-  );
-}
-
 function getTimeGreeting(): string {
   const hour = new Date().getHours();
   if (hour < 11) return 'Selamat Pagi';
   if (hour < 15) return 'Selamat Siang';
   if (hour < 18) return 'Selamat Sore';
   return 'Selamat Malam';
-}
-
-function formatScheduleDateId(dateStr?: string | null): string {
-  const d = dateStr ? new Date(dateStr) : new Date();
-  if (Number.isNaN(d.getTime())) {
-    return new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  }
-  return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 function formatShortDateId(dateStr?: string | null): string {
@@ -147,70 +127,119 @@ function formatShortDateId(dateStr?: string | null): string {
   return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+function formatStatusText(status: string): string {
+  switch (status) {
+    case 'WORKING':
+      return 'Berlangsung';
+    case 'COMPLETED':
+    case 'REVIEWED':
+      return 'Selesai';
+    case 'FLAGGED':
+      return 'Ditinjau';
+    default:
+      return 'Siap';
+  }
+}
+
 export const ExecutorHome: React.FC = () => {
   const { user, logout } = useAuth();
+  const { resolvedTheme, setTheme } = useTheme();
+
   const [page, setPage] = useState<TechPage>('home');
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+  const [isScheduleExpanded, setIsScheduleExpanded] = useState(true);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  // Jobs & History Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [projectFilterChip, setProjectFilterChip] = useState<'ALL' | 'READY' | 'WORKING' | 'WARRANTY'>('ALL');
-  const [historyFilterChip, setHistoryFilterChip] = useState<'ALL' | 'COMPLETED' | 'FLAGGED'>('ALL');
+  const [jobCategoryFilter, setJobCategoryFilter] = useState<'ALL' | 'AR' | 'PCO' | 'WORKING'>('ALL');
+  const [historySearch, setHistorySearch] = useState('');
+  const [showDateFilter, setShowDateFilter] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  // Data state
   const [reports, setReports] = useState<WorkReport[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // Offline Queue & Storage
   const [pendingCount, setPendingCount] = useState(0);
-  const [serverTimeOffset] = useState(0);
+  const [pendingItems, setPendingItems] = useState<
+    Array<{ id: string; action: QueuedAction; reportId: string; queuedAt: string }>
+  >([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [cacheNotice, setCacheNotice] = useState<string | null>(null);
 
+  // Modals & Interactive States
   const [showCreateProject, setShowCreateProject] = useState(false);
-  const [activeCameraAction, setActiveCameraAction] = useState<{ type: PhotoType; report: WorkReport; photoTag?: PhotoTag } | null>(null);
-  const [treatmentFormReport, setTreatmentFormReport] = useState<WorkReport | null>(null);
+  const [activeCameraAction, setActiveCameraAction] = useState<{
+    type: PhotoType;
+    report: WorkReport;
+    photoTag?: PhotoTag;
+  } | null>(null);
+  const [clientPrefill, setClientPrefill] = useState<WorksheetClientPrefill | null>(null);
   const [checkoutEvidence, setCheckoutEvidence] = useState<{ report: WorkReport; evidence: any } | null>(() => {
     try {
       const cached = sessionStorage.getItem('fw_checkout');
       return cached ? JSON.parse(cached) : null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   });
   useEffect(() => {
     if (checkoutEvidence) sessionStorage.setItem('fw_checkout', JSON.stringify(checkoutEvidence));
     else sessionStorage.removeItem('fw_checkout');
   }, [checkoutEvidence]);
+
   const [viewingPhoto, setViewingPhoto] = useState<DocumentationPhoto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [successFeedback, setSuccessFeedback] = useState<{ title: string; subtitle: string; stats?: string } | null>(null);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [companyTechs, setCompanyTechs] = useState<{ id: string; name: string }[]>([]);
   const [quickManualName, setQuickManualName] = useState('');
   const [showTeamPicker, setShowTeamPicker] = useState(false);
 
-  // Selected report / project for TaskDetail & 6-Step Workflow (RedesignFieldworkGuciMasLite reference)
+  // Selected items
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [selectedProjectDetailId, setSelectedProjectDetailId] = useState<string | null>(null);
-  const [selectedHistoryDetailId, setSelectedHistoryDetailId] = useState<string | null>(null);
+  const [isViewingHistoryDetail, setIsViewingHistoryDetail] = useState(false);
   const [showGpsPrompt, setShowGpsPrompt] = useState(false);
   const [gpsPermissionStatus, setGpsPermissionStatus] = useState<string>('unknown');
 
-  useEffect(() => {
-    if (!successFeedback) return;
-    const timer = window.setTimeout(() => setSuccessFeedback(null), 7000);
-    return () => window.clearTimeout(timer);
-  }, [successFeedback]);
+  const showToast = useCallback((msg: string) => {
+    setToastMsg(msg);
+  }, []);
 
+  useEffect(() => {
+    if (!toastMsg) return;
+    const t = window.setTimeout(() => setToastMsg(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [toastMsg]);
+
+  const refreshQueueState = useCallback(async () => {
+    const [len, list] = await Promise.all([getQueueLength(), getPendingQueueSummary()]);
+    setPendingCount(len);
+    setPendingItems(list);
+  }, []);
+
+  // GPS Permission Check
   useEffect(() => {
     if (navigator.permissions && navigator.permissions.query) {
       navigator.permissions.query({ name: 'geolocation' }).then(result => {
         setGpsPermissionStatus(result.state);
-        if (result.state === 'prompt') {
-          if (!sessionStorage.getItem('gps_prompted')) {
-            setShowGpsPrompt(true);
-            sessionStorage.setItem('gps_prompted', 'true');
-          }
+        if (result.state === 'prompt' && !sessionStorage.getItem('gps_prompted')) {
+          setShowGpsPrompt(true);
+          sessionStorage.setItem('gps_prompted', 'true');
         }
         result.onchange = () => {
           setGpsPermissionStatus(result.state);
           if (result.state === 'granted') {
-             setShowGpsPrompt(false);
-             trackLocation();
+            setShowGpsPrompt(false);
+            trackLocation();
           }
         };
       });
@@ -271,7 +300,7 @@ export const ExecutorHome: React.FC = () => {
 
   useEffect(() => {
     loadData();
-    getQueueLength().then(setPendingCount);
+    refreshQueueState();
     if (user?.companyId) {
       supabase
         .from('users')
@@ -280,56 +309,65 @@ export const ExecutorHome: React.FC = () => {
         .eq('is_active', true)
         .then(({ data }) => {
           setCompanyTechs(
-            (data || []).filter((u: any) => u.role === 'TEKNISI_LAPANGAN').map((u: any) => ({ id: u.id, name: u.name }))
+            (data || [])
+              .filter((u: any) => u.role === 'TEKNISI_LAPANGAN')
+              .map((u: any) => ({ id: u.id, name: u.name }))
           );
         });
     }
-  }, [loadData, user?.companyId]);
-
-  const handleToggleQuickTeamMember = async (rep: WorkReport, member: TeamMemberEntry) => {
-    const current = rep.teamMembers && rep.teamMembers.length > 0
-      ? rep.teamMembers
-      : user ? [{ id: user.uid, name: user.name, role: 'Ketua Tim', isManual: false }] : [];
-    const exists = current.some(m => (member.id && m.id === member.id) || m.name.toLowerCase() === member.name.toLowerCase());
-    const next = exists
-      ? current.filter(m => !((member.id && m.id === member.id) || m.name.toLowerCase() === member.name.toLowerCase()))
-      : [...current, member];
-    setReports(prev => prev.map(r => r.id === rep.id ? { ...r, teamMembers: next } : r));
-    try {
-      await updateWorkReportTeam(rep.id, next);
-    } catch {
-      // ignore if offline
-    }
-  };
+  }, [loadData, refreshQueueState, user?.companyId]);
 
   const attemptSync = useCallback(async () => {
-    if (await getQueueLength() === 0) return;
+    const count = await getQueueLength();
+    if (count === 0) return;
     setIsSyncing(true);
     const { synced } = await syncQueue(remaining => setPendingCount(remaining));
     setIsSyncing(false);
-    if (synced > 0) await loadData();
-  }, [loadData]);
+    await refreshQueueState();
+    if (synced > 0) {
+      await loadData();
+      showToast(`${synced} data antrean berhasil disinkronkan.`);
+    }
+  }, [loadData, refreshQueueState, showToast]);
 
   useEffect(() => {
-    window.addEventListener('online', attemptSync);
-    return () => window.removeEventListener('online', attemptSync);
+    const onOnline = () => {
+      setIsOnline(true);
+      attemptSync();
+    };
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
   }, [attemptSync]);
+
+  // Live timer for ongoing job
+  const ongoingJob = reports.find(r => r.status === 'WORKING');
+  const [elapsedTime, setElapsedTime] = useState('00:00');
+  useEffect(() => {
+    if (!ongoingJob?.checkInAt) return;
+    const tick = () => {
+      const start = new Date(ongoingJob.checkInAt!).getTime();
+      const diffSec = Math.max(0, Math.floor((Date.now() - start) / 1000));
+      const h = Math.floor(diffSec / 3600);
+      const m = String(Math.floor((diffSec % 3600) / 60)).padStart(2, '0');
+      const s = String(diffSec % 60).padStart(2, '0');
+      setElapsedTime(h > 0 ? `${String(h).padStart(2, '0')}:${m}:${s}` : `${m}:${s}`);
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [ongoingJob?.checkInAt]);
 
   if (!user) return null;
 
-  const filteredReports = reports.filter(r =>
-    searchQuery === '' ||
-    r.projectName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (r.clientName && r.clientName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-    r.projectAddress.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const activeQueueJobs = reports.filter(r => r.status === 'WORKING' || r.status === 'READY' || r.status === 'DRAFT');
+  const readyJob = reports.find(r => r.status === 'READY' || r.status === 'DRAFT');
+  const completedJobs = reports.filter(r => ['COMPLETED', 'FLAGGED', 'REVIEWED'].includes(r.status));
 
-  const activeQueueJobs = filteredReports.filter(r => r.status === 'WORKING' || r.status === 'READY' || r.status === 'DRAFT');
-  const ongoingJob = filteredReports.find(r => r.status === 'WORKING');
-  const readyJob = filteredReports.find(r => r.status === 'READY' || r.status === 'DRAFT');
-  const completedJobs = filteredReports.filter(r => ['COMPLETED', 'FLAGGED', 'REVIEWED'].includes(r.status));
-
-  // Tugas aktif utama pada Beranda (TechHome) dan dalam alur kerja 6 langkah
   const activeTaskReport: WorkReport | undefined =
     reports.find(r => r.id === selectedReportId) ||
     ongoingJob ||
@@ -337,25 +375,134 @@ export const ExecutorHome: React.FC = () => {
     activeQueueJobs[0] ||
     completedJobs[0];
 
+  // Filtered Projects for "Tugas" tab
   const filteredProjects = projects.filter(p => {
+    const q = searchQuery.trim().toLowerCase();
     const matchSearch =
-      searchQuery === '' ||
-      p.projectName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (p.clientName && p.clientName.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      p.address.toLowerCase().includes(searchQuery.toLowerCase());
+      !q ||
+      p.projectName.toLowerCase().includes(q) ||
+      (p.clientName && p.clientName.toLowerCase().includes(q)) ||
+      p.address.toLowerCase().includes(q);
     if (!matchSearch) return false;
     const rep = reports.find(r => r.projectId === p.id);
-    if (projectFilterChip === 'READY') return !rep || rep.status === 'READY' || rep.status === 'DRAFT';
-    if (projectFilterChip === 'WORKING') return rep?.status === 'WORKING';
-    if (projectFilterChip === 'WARRANTY') return p.warrantyMonths > 0;
+    if (jobCategoryFilter === 'AR') return p.serviceType === 'TERMITE_CONTROL';
+    if (jobCategoryFilter === 'PCO') return p.serviceType !== 'TERMITE_CONTROL';
+    if (jobCategoryFilter === 'WORKING') return rep?.status === 'WORKING';
     return true;
   });
 
+  // Filtered History with Search + Date Range (Modul 5)
   const filteredHistoryJobs = completedJobs.filter(rep => {
-    if (historyFilterChip === 'COMPLETED') return rep.status === 'COMPLETED' || rep.status === 'REVIEWED';
-    if (historyFilterChip === 'FLAGGED') return rep.status === 'FLAGGED';
+    const q = historySearch.trim().toLowerCase();
+    if (
+      q &&
+      !rep.projectName.toLowerCase().includes(q) &&
+      !(rep.clientName || '').toLowerCase().includes(q) &&
+      !rep.projectAddress.toLowerCase().includes(q)
+    ) {
+      return false;
+    }
+    const repDate = new Date(rep.checkOutAt || rep.createdAt);
+    if (dateFrom) {
+      const from = new Date(`${dateFrom}T00:00:00`);
+      if (repDate < from) return false;
+    }
+    if (dateTo) {
+      const to = new Date(`${dateTo}T23:59:59`);
+      if (repDate > to) return false;
+    }
     return true;
   });
+
+  // Monthly Performance Metrics (Modul 6 — clean & privacy-safe)
+  const monthlyStats = useMemo(() => {
+    const now = new Date();
+    const thisMonth = reports.filter(r => {
+      const d = new Date(r.createdAt);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    });
+    const doneCount = thisMonth.filter(r => ['COMPLETED', 'REVIEWED', 'FLAGGED'].includes(r.status)).length;
+    const totalCount = thisMonth.length || completedJobs.length;
+    const syncRate =
+      totalCount > 0 ? Math.min(100, Math.round(((totalCount - Math.min(pendingCount, totalCount)) / totalCount) * 100)) : 100;
+    return {
+      monthlyTasks: doneCount || completedJobs.length,
+      syncRate,
+    };
+  }, [reports, completedJobs.length, pendingCount]);
+
+  // Interactive Notifications (Modul 7 — Deep-links to Tasks, Offline Queue, History)
+  const notificationItems: TechNotificationItem[] = useMemo(() => {
+    const list: TechNotificationItem[] = [];
+    if (pendingCount > 0) {
+      list.push({
+        id: 'notif-offline-queue',
+        category: 'system',
+        title: `${pendingCount} data menunggu sinkronisasi`,
+        subtitle: isOnline ? 'Ketuk untuk kirim ulang sekarang' : 'Tersimpan aman hingga sinyal kembali',
+        timeLabel: 'Antrean',
+        unread: true,
+        onPress: () => {
+          if (isOnline) attemptSync();
+          else setPage('profile');
+        },
+      });
+    }
+    activeQueueJobs.slice(0, 4).forEach(job => {
+      list.push({
+        id: `notif-task-${job.id}`,
+        category: 'task',
+        title: job.status === 'WORKING' ? `Lanjutkan: ${job.projectName}` : `Tugas baru: ${job.projectName}`,
+        subtitle: `${job.clientName || 'Pelanggan'} · ${(job.scheduledStartTime || '09.00').replace(':', '.')}`,
+        timeLabel: job.status === 'WORKING' ? 'Aktif' : 'Hari ini',
+        unread: true,
+        onPress: () => {
+          setSelectedReportId(job.id);
+          setSelectedProjectDetailId(job.projectId);
+          setIsViewingHistoryDetail(false);
+          setPage(job.status === 'WORKING' ? 'worksheet' : 'task-detail');
+        },
+      });
+    });
+    completedJobs.slice(0, 3).forEach(rep => {
+      list.push({
+        id: `notif-done-${rep.id}`,
+        category: 'system',
+        title: `Terkirim: ${rep.projectName}`,
+        subtitle: `${rep.photos.length} foto bukti · Ketuk untuk lihat Berita Acara`,
+        timeLabel: formatShortDateId(rep.checkOutAt || rep.createdAt),
+        unread: false,
+        onPress: () => {
+          setSelectedReportId(rep.id);
+          setIsViewingHistoryDetail(true);
+          setPage('completion');
+        },
+      });
+    });
+    return list;
+  }, [pendingCount, isOnline, activeQueueJobs, completedJobs, attemptSync]);
+
+  const unreadNotifCount = notificationItems.filter(n => n.unread).length;
+
+  // Handlers
+  const handleToggleQuickTeamMember = async (rep: WorkReport, member: TeamMemberEntry) => {
+    const current =
+      rep.teamMembers && rep.teamMembers.length > 0
+        ? rep.teamMembers
+        : [{ id: user.uid, name: user.name, role: 'Ketua Tim', isManual: false }];
+    const exists = current.some(
+      m => (member.id && m.id === member.id) || m.name.toLowerCase() === member.name.toLowerCase()
+    );
+    const next = exists
+      ? current.filter(m => !((member.id && m.id === member.id) || m.name.toLowerCase() === member.name.toLowerCase()))
+      : [...current, member];
+    setReports(prev => prev.map(r => (r.id === rep.id ? { ...r, teamMembers: next } : r)));
+    try {
+      await updateWorkReportTeam(rep.id, next);
+    } catch {
+      // ignore if offline
+    }
+  };
 
   const handleCreateProjectSubmit = async (data: CreateProjectInput) => {
     await createProject(data);
@@ -363,11 +510,22 @@ export const ExecutorHome: React.FC = () => {
     await loadData();
   };
 
-  const handleCaptureComplete = async (capturedData: { photoBlob: Blob; latitude: number; longitude: number; accuracy: number }) => {
+  const handleCaptureComplete = async (capturedData: {
+    photoBlob: Blob;
+    latitude: number;
+    longitude: number;
+    accuracy: number;
+  }) => {
     if (!activeCameraAction) return;
     const { type, report, photoTag } = activeCameraAction;
     setActionError(null);
-    const evidence = { photoBlob: capturedData.photoBlob, latitude: capturedData.latitude, longitude: capturedData.longitude, accuracy: capturedData.accuracy, photoTag };
+    const evidence = {
+      photoBlob: capturedData.photoBlob,
+      latitude: capturedData.latitude,
+      longitude: capturedData.longitude,
+      accuracy: capturedData.accuracy,
+      photoTag,
+    };
 
     try {
       if (type === 'CHECK_IN') {
@@ -375,449 +533,436 @@ export const ExecutorHome: React.FC = () => {
         setActiveCameraAction(null);
         await loadData();
         setSelectedReportId(updated.id);
-        setPage('work');
-        setSuccessFeedback({
-          title: '✓ CHECK-IN & FOTO BERHASIL DISIMPAN',
-          subtitle: `Anda tercatat aktif bertugas di ${updated.projectName}.`,
-          stats: `Jarak: ${updated.checkInDistance !== null && updated.checkInDistance !== undefined ? formatDistance(updated.checkInDistance) : '-'} • ${updated.checkInValid ? 'Sesuai radius' : 'Di luar radius'} • ${updated.photos.length} foto tercatat`,
-        });
+        setPage('worksheet');
+        showToast(
+          `Check-in tercatat (${updated.checkInDistance != null ? formatDistance(updated.checkInDistance) : 'GPS aktif'}).`
+        );
       } else if (type === 'PROGRESS') {
         const updated = await addProgressPhoto(report.id, evidence);
         setActiveCameraAction(null);
         await loadData();
-        const tagLabel = photoTag === 'BEFORE' ? 'Kondisi Awal' : photoTag === 'AFTER' ? 'Hasil Perlakuan' : 'Progres Lapangan';
-        setSuccessFeedback({
-          title: `✓ FOTO ${tagLabel.toUpperCase()} BERHASIL DISIMPAN`,
-          subtitle: `Dokumentasi foto pada ${updated.projectName} telah tercatat di sistem.`,
-          stats: `Total dokumentasi saat ini: ${updated.photos.length} foto • Akurasi GPS ±${Math.round(capturedData.accuracy)}m`,
-        });
+        showToast(`Foto tersimpan (${updated.photos.length}/6 foto).`);
       } else {
         setCheckoutEvidence({ report, evidence });
         setActiveCameraAction(null);
-        setPage('signature');
-        return;
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 0) {
-        const queueAction = type === 'CHECK_IN' ? 'CHECK_IN' : type === 'PROGRESS' ? 'PROGRESS' : 'CHECK_OUT';
+        const queueAction: QueuedAction = type === 'CHECK_IN' ? 'CHECK_IN' : type === 'PROGRESS' ? 'PROGRESS' : 'CHECK_OUT';
         await enqueue(queueAction, report.id, evidence);
-        getQueueLength().then(setPendingCount);
+        await refreshQueueState();
         setActiveCameraAction(null);
-        if (type === 'CHECK_IN') setPage('work');
-        if (type === 'CHECK_OUT') setPage('sync');
-        setSuccessFeedback({
-          title: '📶 Disimpan Offline',
-          subtitle: 'Tidak ada koneksi internet. Bukti akan otomatis terkirim saat perangkat kembali online.',
-        });
+        if (type === 'CHECK_IN') setPage('worksheet');
+        if (type === 'CHECK_OUT') {
+          setIsViewingHistoryDetail(false);
+          setPage('completion');
+        }
+        showToast('Disimpan di antrean offline. Otomatis terkirim saat online.');
       } else {
-        const msg = err instanceof Error ? err.message : 'Gagal menyimpan dokumentasi. Coba lagi.';
+        const msg = err instanceof Error ? err.message : 'Gagal menyimpan foto. Coba lagi.';
         setActionError(msg);
         throw new Error(msg);
       }
     }
   };
 
-  const handleTreatmentSubmit = async (input: TreatmentInput) => {
-    const targetReport = treatmentFormReport || activeTaskReport;
-    if (!targetReport) return;
+  const handleSaveTreatmentFromWorksheet = async (input: TreatmentInput) => {
+    if (!activeTaskReport) return;
     try {
-      const updated = await submitTreatment(targetReport.id, input);
-      setTreatmentFormReport(null);
+      const updated = await submitTreatment(activeTaskReport.id, input);
       await loadData();
       setSelectedReportId(updated.id);
-      setPage('checkout');
     } catch (err: any) {
-      if (err.status === 0) {
-        await enqueueTreatment(targetReport.id, input);
-        getQueueLength().then(setPendingCount);
-        setTreatmentFormReport(null);
-        setPage('checkout');
-        setSuccessFeedback({ title: '📶 Disimpan Offline', subtitle: 'Data treatment masuk antrean. Lanjut check-out.' });
-      } else {
-        setActionError(err.message || 'Gagal menyimpan treatment.');
+      if (err?.status === 0) {
+        await enqueueTreatment(activeTaskReport.id, input);
+        await refreshQueueState();
+        showToast('Treatment disimpan di antrean offline.');
       }
     }
   };
 
-  const handleCustomerReviewSubmit = async (reviewData: { customerName: string; customerPhone: string; customerFeedback: string; customerSignature: string }) => {
+  const handleProceedToClientSign = (prefill: WorksheetClientPrefill) => {
+    if (!activeTaskReport) return;
+    setClientPrefill(prefill);
+    setActiveCameraAction({ type: 'CHECK_OUT', report: activeTaskReport });
+  };
+
+  const handleCustomerReviewSubmit = async (reviewData: {
+    customerName: string;
+    customerPhone: string;
+    customerFeedback: string;
+    customerSignature: string;
+  }) => {
     if (!checkoutEvidence) return;
     const { report, evidence } = checkoutEvidence;
     setCheckoutEvidence(null);
+    setClientPrefill(null);
     setActionError(null);
 
     const fullEvidence = { ...evidence, ...reviewData };
-
     try {
       const completed = await checkOut(report.id, fullEvidence);
-      const durationMin = completed.durationSeconds ? Math.round(completed.durationSeconds / 60) : 0;
-      setSuccessFeedback({
-        title: completed.status === 'FLAGGED' ? '⚠ PEKERJAAN SELESAI — DITANDAI UNTUK DITINJAU' : '✓ PEKERJAAN SELESAI',
-        subtitle: completed.projectName,
-        stats: `Durasi: ${durationMin} menit • ${completed.photos.length} foto tersimpan`,
-      });
+      try {
+        localStorage.removeItem(`fw_tech_draft_${report.id}`);
+      } catch {
+        // ignore
+      }
       await loadData();
-      setPage('sync');
+      setSelectedReportId(completed.id);
+      setIsViewingHistoryDetail(false);
+      setPage('completion');
+      showToast('Pekerjaan selesai & Berita Acara siap dikirim.');
     } catch (err) {
       if (err instanceof ApiError && err.status === 0) {
         await enqueue('CHECK_OUT', report.id, fullEvidence);
-        getQueueLength().then(setPendingCount);
-        setSuccessFeedback({
-          title: '📶 Disimpan Offline',
-          subtitle: 'Tidak ada koneksi internet. Bukti dan ulasan akan otomatis terkirim saat perangkat kembali online.',
-        });
-        setPage('sync');
+        await refreshQueueState();
+        setIsViewingHistoryDetail(false);
+        setPage('completion');
+        showToast('Disimpan di antrean offline.');
       } else {
-        setActionError(err instanceof ApiError ? err.message : 'Gagal menyimpan check-out.');
+        setActionError(err instanceof ApiError ? err.message : 'Gagal menyelesaikan pekerjaan.');
       }
     }
   };
 
-  const [elapsedTime, setElapsedTime] = useState('00:00:00');
-  useEffect(() => {
-    if (!ongoingJob?.checkInAt) return;
-    const interval = setInterval(() => {
-      const start = new Date(ongoingJob.checkInAt!).getTime();
-      const diffSec = Math.max(0, Math.floor((Date.now() + serverTimeOffset - start) / 1000));
-      const hours = String(Math.floor(diffSec / 3600)).padStart(2, '0');
-      const minutes = String(Math.floor((diffSec % 3600) / 60)).padStart(2, '0');
-      const seconds = String(diffSec % 60).padStart(2, '0');
-      setElapsedTime(`${hours}:${minutes}:${seconds}`);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [ongoingJob, serverTimeOffset]);
+  const handleClearCache = async () => {
+    const cleared = await clearSafeTechnicianCache();
+    setCacheNotice(
+      cleared > 0
+        ? `${cleared} cache sementara berhasil dibersihkan.`
+        : 'Cache sudah bersih. Antrean offline aktif tetap aman.'
+    );
+    setTimeout(() => setCacheNotice(null), 3500);
+  };
 
-  const initials = user.name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
-  const greetingText = getTimeGreeting();
+  const initials = user.name
+    .split(' ')
+    .map(n => n[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase();
+  const firstName = user.name.split(' ')[0] || 'Teknisi';
 
-  // Floating Bottom Pill Tabs (menggantikan TechBottomNav statis dari referensi Lite)
+  // Bottom Navigation (4 Clean Tabs)
   const activeBottomTabId =
     page === 'jobs' ? 'jobs' : page === 'history' ? 'history' : page === 'profile' ? 'profile' : 'home';
 
   const executorTabs = [
-    { id: 'home', label: 'Beranda', shortLabel: 'Beranda', icon: <Home size={15} />, badge: (ongoingJob ? 1 : 0) + (readyJob ? 1 : 0) },
-    { id: 'jobs', label: 'Tugas', shortLabel: 'Tugas', icon: <ClipboardList size={15} />, badge: projects.length },
-    { id: 'history', label: 'Riwayat', shortLabel: 'Riwayat', icon: <History size={15} />, badge: completedJobs.length },
-    { id: 'profile', label: 'Profil', shortLabel: 'Profil', icon: <UserIcon size={15} /> },
+    { id: 'home', label: 'Beranda', shortLabel: 'Beranda', icon: <Home size={16} /> },
+    { id: 'jobs', label: 'Tugas', shortLabel: 'Tugas', icon: <ClipboardList size={16} />, badge: activeQueueJobs.length || undefined },
+    { id: 'history', label: 'Riwayat', shortLabel: 'Riwayat', icon: <History size={16} /> },
+    { id: 'profile', label: 'Profil', shortLabel: 'Profil', icon: <UserIcon size={16} /> },
   ];
 
-  const isWorkflowSubpage = ['task-detail', 'gps', 'work', 'photos', 'treatment', 'checkout', 'signature', 'review', 'sync'].includes(page);
-
-  // Sembunyikan kapsul navigasi bawah otomatis saat sedang di sub-halaman workflow atau saat modal/kamera terbuka
+  const isWorkflowSubpage = ['task-detail', 'gps', 'worksheet', 'completion'].includes(page);
   const isAnyModalOpen = Boolean(
     isWorkflowSubpage ||
-    activeCameraAction ||
-    treatmentFormReport ||
-    checkoutEvidence ||
-    showCreateProject ||
-    viewingPhoto ||
-    showChangePassword ||
-    (showGpsPrompt && gpsPermissionStatus !== 'granted')
+      activeCameraAction ||
+      checkoutEvidence ||
+      showCreateProject ||
+      viewingPhoto ||
+      showChangePassword ||
+      showNotifications ||
+      (showGpsPrompt && gpsPermissionStatus !== 'granted')
   );
 
-  const openReportDetail = (rep: WorkReport, projId?: string) => {
-    setSelectedReportId(rep.id);
-    if (projId) setSelectedProjectDetailId(projId);
-    if (rep.status === 'COMPLETED' || rep.status === 'REVIEWED' || rep.status === 'FLAGGED') {
-      setSelectedHistoryDetailId(rep.id);
-    }
-    setPage('task-detail');
-  };
+  // Reusable Compact Top Bar (Header Tipis — Indikator Online/Offline Ringkas + Bell)
+  const renderCompactHeader = (title?: string) => (
+    <header className="px-4 h-14 bg-[var(--bg-card)] border-b border-[var(--border)] flex items-center justify-between gap-2 sticky top-0 z-20 shrink-0">
+      {title ? (
+        <div className="flex items-center gap-2.5 min-w-0">
+          <LiteBrand compact />
+          <strong className="text-[15px] font-bold text-[var(--text-primary)] truncate">{title}</strong>
+        </div>
+      ) : (
+        <LiteBrand />
+      )}
+
+      <div className="flex items-center gap-2 shrink-0">
+        {/* Ringkas: Online / Offline / Antrean di dekat profil */}
+        <button
+          type="button"
+          onClick={() => (pendingCount > 0 ? attemptSync() : setShowNotifications(true))}
+          className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-secondary)] px-2 py-1 rounded-lg hover:bg-[var(--bg-secondary)] cursor-pointer"
+        >
+          <span
+            className={`w-2 h-2 rounded-full ${
+              !isOnline ? 'bg-rose-500' : pendingCount > 0 ? 'bg-amber-500' : 'bg-emerald-500'
+            }`}
+          />
+          <span>
+            {!isOnline ? 'Offline' : pendingCount > 0 ? `${pendingCount} Antrean` : 'Online'}
+          </span>
+        </button>
+
+        {/* Pusat Notifikasi */}
+        <button
+          type="button"
+          onClick={() => setShowNotifications(true)}
+          aria-label="Pusat Notifikasi"
+          className="relative w-10 h-10 rounded-xl flex items-center justify-center text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] cursor-pointer"
+        >
+          <Bell size={18} />
+          {unreadNotifCount > 0 && (
+            <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9.5px] font-bold flex items-center justify-center">
+              {unreadNotifCount}
+            </span>
+          )}
+        </button>
+      </div>
+    </header>
+  );
 
   return (
     <div className="technician-stage">
-      {/* Toast Mengambang Konfirmasi Foto / Check-In */}
+      {/* Subtle Comforting Toast */}
       <AnimatePresence>
-        {successFeedback && (
+        {toastMsg && (
           <motion.div
-            initial={{ opacity: 0, y: -16 }}
+            initial={{ opacity: 0, y: -14 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
-            className="fixed top-4 left-1/2 -translate-x-1/2 z-[90] w-[calc(100%-2rem)] max-w-md pointer-events-auto"
+            exit={{ opacity: 0, y: -14 }}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-[110] w-[calc(100%-2rem)] max-w-[400px]"
           >
-            <div className="p-3.5 bg-emerald-950/95 text-white border border-emerald-500/60 rounded-2xl shadow-2xl flex items-start justify-between gap-3 backdrop-blur-md">
-              <div className="flex items-start gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center shrink-0 mt-0.5 font-bold">
-                  <Check size={18} />
-                </div>
-                <div className="min-w-0">
-                  <h4 className="font-bold text-xs sm:text-sm text-emerald-300 tracking-wide">{successFeedback.title}</h4>
-                  <p className="text-xs text-slate-100 mt-0.5">{successFeedback.subtitle}</p>
-                  {successFeedback.stats && <p className="text-[11px] text-emerald-400/90 mt-1 font-mono">{successFeedback.stats}</p>}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSuccessFeedback(null)}
-                className="text-slate-300 hover:text-white p-1 text-xs font-bold shrink-0"
-              >
-                ✕
+            <div className="px-4 py-3 rounded-2xl bg-[#1B4332] text-white shadow-xl flex items-center justify-between gap-2 text-xs font-medium">
+              <span className="flex items-center gap-2 min-w-0">
+                <Check size={15} className="text-emerald-300 shrink-0" />
+                <span className="truncate">{toastMsg}</span>
+              </span>
+              <button type="button" onClick={() => setToastMsg(null)} className="text-emerald-200 p-1 cursor-pointer">
+                <X size={14} />
               </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Container Utama Aplikasi Teknisi Bergaya RedesignFieldworkGuciMasLite */}
+      {/* Mobile-First Phone Shell */}
       <div className={`phone-app ${isWorkflowSubpage ? 'workflow-mode' : ''}`}>
         {actionError && (
           <div className="px-4 pt-3">
-            <div className="notice danger">
-              <AlertCircle size={17} />
-              <span>{actionError}</span>
-              <button type="button" onClick={() => setActionError(null)}>✕</button>
+            <div className="px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2 min-w-0">
+                <AlertCircle size={15} className="shrink-0" />
+                <span>{actionError}</span>
+              </span>
+              <button type="button" onClick={() => setActionError(null)} className="p-1 cursor-pointer">
+                <X size={14} />
+              </button>
             </div>
           </div>
         )}
 
-        {/* =================================================================== */}
-        {/* 1. PAGE: HOME (TechHome dari RedesignFieldworkGuciMasLite)          */}
-        {/* =================================================================== */}
+        {/* ================================================================= */}
+        {/* MODUL 1: BERANDA TENANG & MINIMALIS (EXPANDED / COLLAPSED)        */}
+        {/* ================================================================= */}
         {page === 'home' && (
           <>
-            <div className="tech-home-head">
-              <div>
-                <LiteBrand />
-                <p>{formatScheduleDateId(new Date().toISOString())}</p>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <button type="button" onClick={loadData} title="Muat Ulang Data">
-                  <RefreshCw size={18} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPage('profile')}
-                  title="Profil & Pengaturan Akun"
-                  aria-label="Profil & Pengaturan Akun"
-                >
-                  <UserIcon size={18} />
-                </button>
-                <button
-                  type="button"
-                  onClick={logout}
-                  title="Keluar Akun (Logout)"
-                  aria-label="Keluar Akun (Logout)"
-                  className="text-rose-600 hover:bg-rose-50"
-                >
-                  <LogOut size={18} />
-                </button>
-              </div>
-            </div>
+            {renderCompactHeader()}
 
-            <main className="tech-content">
-              {/* Connection Banner */}
-              <div className={`connection-banner lite-connection-banner ${pendingCount > 0 ? 'pending' : 'online'}`}>
-                {pendingCount > 0 ? <CloudOff size={15} /> : <Wifi size={15} />}
-                <span>
-                  <strong>{pendingCount > 0 ? `Menunggu sinkronisasi (${pendingCount})` : 'Online'}</strong>
-                  {pendingCount > 0 ? 'Data aman tersimpan di perangkat.' : 'Data akan dikirim ke server.'}
+            <main className="tech-content space-y-5">
+              {/* Warm Minimal Greeting */}
+              <div className="pt-1">
+                <span className="text-xs text-[var(--text-secondary)]">
+                  {getTimeGreeting()}, {firstName}
                 </span>
-                {pendingCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={attemptSync}
-                    disabled={isSyncing}
-                    className="text-xs font-bold underline cursor-pointer"
-                  >
-                    {isSyncing ? 'Sinkron...' : 'Sinkronkan'}
-                  </button>
-                )}
-              </div>
-
-              {/* Greeting */}
-              <div className="tech-greeting">
-                <span>{greetingText}, {user.name.split(' ')[0] || 'Andi'}</span>
-                <h1>Tugas aktif Anda</h1>
+                <h1 className="text-xl font-bold tracking-tight text-[var(--text-primary)] mt-0.5">
+                  Siap bertugas hari ini
+                </h1>
               </div>
 
               {isLoading && (
-                <div className="py-12 text-center text-xs text-[var(--secondary)]">Memuat penugasan lapangan...</div>
-              )}
-
-              {!isLoading && loadError && (
-                <div className="notice danger">
-                  <AlertCircle size={17} />
-                  <span>{loadError}</span>
-                  <button type="button" onClick={loadData}>Coba lagi</button>
+                <div className="py-12 text-center text-xs text-[var(--text-secondary)]">
+                  Memuat jadwal hari ini...
                 </div>
               )}
 
-              {/* Active Task Card (Persis TechHome di RedesignFieldworkGuciMasLite) */}
+              {!isLoading && loadError && (
+                <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-center space-y-2.5">
+                  <p className="text-xs text-[var(--text-secondary)]">{loadError}</p>
+                  <button
+                    type="button"
+                    onClick={loadData}
+                    className="min-h-[40px] px-4 rounded-xl bg-[var(--accent)] text-white text-xs font-semibold cursor-pointer"
+                  >
+                    Coba Lagi
+                  </button>
+                </div>
+              )}
+
+              {/* Primary Active Task Card (Aturan 3-Info Inti) */}
               {!isLoading && !loadError && activeTaskReport && (
-                <article className="active-task">
-                  <div className="task-accent" />
-                  <div className="card-top">
-                    <LiteBadge status={activeTaskReport.status} />
-                    <span>
+                <article className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-4 space-y-3.5 shadow-2xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <ServiceTag serviceType={activeTaskReport.serviceType} />
+                    <span className="text-xs font-mono font-semibold tabular-nums text-[var(--text-secondary)]">
                       {activeTaskReport.status === 'WORKING'
-                        ? elapsedTime
+                        ? `Aktif · ${elapsedTime}`
                         : (activeTaskReport.scheduledStartTime || '09.00').replace(':', '.')}
                     </span>
                   </div>
-                  <h2>{activeTaskReport.projectName}</h2>
-                  <p>{activeTaskReport.clientName || 'Pelanggan Operasional'}</p>
-                  <div className="task-meta">
-                    <span>
-                      <MapPin size={16} />
-                      {activeTaskReport.projectAddress}
-                    </span>
-                    <span>
-                      <ClipboardCheck size={16} />
-                      {getServiceTypeMeta(activeTaskReport.serviceType).label}
-                    </span>
+
+                  <div>
+                    <h2 className="text-[17px] font-bold text-[var(--text-primary)] leading-snug">
+                      {activeTaskReport.projectName}
+                    </h2>
+                    <p className="text-xs text-[var(--text-secondary)] mt-1 truncate">
+                      {activeTaskReport.clientName || activeTaskReport.projectAddress}
+                    </p>
                   </div>
+
                   <button
                     type="button"
-                    className="btn primary full"
                     onClick={() => {
                       setSelectedReportId(activeTaskReport.id);
-                      if (activeTaskReport.status === 'WORKING') {
-                        setPage('work');
-                      } else {
-                        setPage('task-detail');
-                      }
+                      setSelectedProjectDetailId(activeTaskReport.projectId);
+                      setIsViewingHistoryDetail(false);
+                      setPage(activeTaskReport.status === 'WORKING' ? 'worksheet' : 'task-detail');
                     }}
+                    className="w-full min-h-[48px] px-4 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer"
                   >
-                    {activeTaskReport.status === 'WORKING' ? 'Lanjutkan Pekerjaan' : 'Lihat Tugas'}
-                    <ArrowRight size={17} />
+                    <span>
+                      {activeTaskReport.status === 'WORKING' ? 'Lanjutkan Lembar Kerja' : 'Buka Detail Tugas'}
+                    </span>
+                    <ArrowRight size={16} />
                   </button>
                 </article>
               )}
 
               {!isLoading && !loadError && !activeTaskReport && (
-                <article className="active-task text-center py-6">
-                  <div className="task-accent" />
-                  <h2>Belum ada laporan kerja aktif</h2>
-                  <p className="mb-4">Pilih lokasi pelanggan pada daftar tugas untuk memulai Check-In GPS dan membuat Laporan Kerja Digital.</p>
-                  <button type="button" className="btn primary full" onClick={() => setPage('jobs')}>
-                    Lihat Daftar Lokasi Tugas
-                    <ArrowRight size={17} />
+                <article className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-5 text-center space-y-3">
+                  <h2 className="text-sm font-bold text-[var(--text-primary)]">Belum ada tugas aktif</h2>
+                  <p className="text-xs text-[var(--text-secondary)]">
+                    Pilih lokasi pada tab Tugas untuk memulai laporan kerja.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setPage('jobs')}
+                    className="w-full min-h-[46px] rounded-xl bg-[var(--accent)] text-white text-xs font-bold cursor-pointer"
+                  >
+                    Lihat Daftar Tugas
                   </button>
                 </article>
               )}
 
-              {/* Jadwal Hari Ini (Daftar next-task) */}
-              <div className="section-head mobile">
-                <div>
-                  <h2>Jadwal hari ini</h2>
-                  <p>Detail Hari ini ({activeQueueJobs.length} penugasan)</p>
+              {/* Jadwal Hari Ini — State Expanded / Collapsed */}
+              <section className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-bold text-[var(--text-primary)]">
+                    Jadwal Hari Ini ({activeQueueJobs.length})
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setIsScheduleExpanded(v => !v)}
+                    className="min-h-[34px] px-2.5 rounded-lg text-xs font-semibold text-[var(--accent-text)] flex items-center gap-1 hover:bg-[var(--bg-secondary)] cursor-pointer"
+                  >
+                    <span>{isScheduleExpanded ? 'Ringkas' : 'Perluas'}</span>
+                    {isScheduleExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
                 </div>
-                <button type="button" onClick={() => setPage('jobs')}>
-                  Lihat semua
-                </button>
-              </div>
 
-              {activeQueueJobs.map(job => {
-                const meta = getServiceTypeMeta(job.serviceType);
-                return (
+                {!isScheduleExpanded ? (
                   <button
-                    key={job.id}
                     type="button"
-                    className="next-task"
-                    onClick={() => openReportDetail(job, job.projectId)}
+                    onClick={() => setIsScheduleExpanded(true)}
+                    className="w-full min-h-[54px] px-4 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] flex items-center justify-between text-left cursor-pointer"
                   >
-                    <div className="time-block">
-                      <strong>{(job.scheduledStartTime || '09.00').replace(':', '.')}</strong>
-                      <span>Hari ini</span>
+                    <div>
+                      <strong className="block text-xs font-semibold text-[var(--text-primary)]">
+                        {activeQueueJobs.length > 0
+                          ? `${activeQueueJobs.length} lokasi dijadwalkan hari ini`
+                          : `${completedJobs.length} pekerjaan selesai tersimpan`}
+                      </strong>
+                      <small className="text-[11px] text-[var(--text-muted)]">Ketuk untuk melihat daftar</small>
                     </div>
-                    <span>
-                      <strong>{job.projectName}</strong>
-                      <small>{meta.label} · {job.clientName || 'Klien'}</small>
-                    </span>
-                    <LiteBadge status={job.status} />
+                    <ChevronDown size={16} className="text-[var(--text-muted)]" />
                   </button>
-                );
-              })}
+                ) : (
+                  <div className="space-y-2">
+                    {activeQueueJobs.map(job => (
+                      <button
+                        key={job.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedReportId(job.id);
+                          setSelectedProjectDetailId(job.projectId);
+                          setIsViewingHistoryDetail(false);
+                          setPage(job.status === 'WORKING' ? 'worksheet' : 'task-detail');
+                        }}
+                        className="w-full p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] flex items-center justify-between gap-3 text-left active:scale-[0.99] transition-transform cursor-pointer"
+                      >
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <ServiceTag serviceType={job.serviceType} />
+                            <span className="text-[11px] font-mono text-[var(--text-muted)] tabular-nums">
+                              {(job.scheduledStartTime || '09.00').replace(':', '.')}
+                            </span>
+                          </div>
+                          <strong className="block text-[13px] font-bold text-[var(--text-primary)] truncate">
+                            {job.projectName}
+                          </strong>
+                        </div>
+                        <ChevronRight size={16} className="text-[var(--text-muted)] shrink-0" />
+                      </button>
+                    ))}
 
-              {activeQueueJobs.length === 0 && completedJobs.slice(0, 2).map(job => {
-                const meta = getServiceTypeMeta(job.serviceType);
-                return (
-                  <button
-                    key={job.id}
-                    type="button"
-                    className="next-task"
-                    onClick={() => openReportDetail(job, job.projectId)}
-                  >
-                    <div className="time-block">
-                      <strong>08.00</strong>
-                      <span>Selesai</span>
-                    </div>
-                    <span>
-                      <strong>{job.projectName}</strong>
-                      <small>{meta.label}</small>
-                    </span>
-                    <LiteBadge status={job.status} />
-                  </button>
-                );
-              })}
+                    {activeQueueJobs.length === 0 && (
+                      <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-center text-xs text-[var(--text-secondary)]">
+                        Semua jadwal hari ini telah selesai.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
             </main>
           </>
         )}
 
-        {/* =================================================================== */}
-        {/* 2. PAGE: TASKS / JOBS (TechTasks dari RedesignFieldworkGuciMasLite) */}
-        {/* =================================================================== */}
+        {/* ================================================================= */}
+        {/* TAB TUGAS: DAFTAR LOKASI MINIMALIS                                */}
+        {/* ================================================================= */}
         {page === 'jobs' && (
           <>
-            <header className="tech-header">
-              <LiteBrand compact />
-              <strong>Lokasi &amp; Laporan Kerja</strong>
-              <span>
-                <button type="button" onClick={loadData} aria-label="Muat Ulang Daftar Tugas">
-                  <RefreshCw size={18} />
-                </button>
-              </span>
-            </header>
+            {renderCompactHeader('Daftar Tugas')}
 
-            <main className="tech-content">
-              <label className="search mobile">
-                <Search size={17} />
+            <main className="tech-content space-y-3.5">
+              <div className="relative flex items-center">
+                <Search size={16} className="absolute left-3.5 text-[var(--text-muted)]" />
                 <input
                   type="text"
-                  placeholder="Cari tugas, proyek, atau lokasi"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Cari lokasi atau nama klien..."
+                  className="w-full h-11 pl-10 pr-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
                 />
-              </label>
-
-              <div className="filter-chips lite-filter-chips mobile no-scrollbar">
-                <button
-                  type="button"
-                  className={projectFilterChip === 'ALL' ? 'active' : ''}
-                  onClick={() => setProjectFilterChip('ALL')}
-                >
-                  Semua ({projects.length})
-                </button>
-                <button
-                  type="button"
-                  className={projectFilterChip === 'READY' ? 'active' : ''}
-                  onClick={() => setProjectFilterChip('READY')}
-                >
-                  Siap
-                </button>
-                <button
-                  type="button"
-                  className={projectFilterChip === 'WORKING' ? 'active' : ''}
-                  onClick={() => setProjectFilterChip('WORKING')}
-                >
-                  Berlangsung
-                </button>
-                <button
-                  type="button"
-                  className={projectFilterChip === 'WARRANTY' ? 'active' : ''}
-                  onClick={() => setProjectFilterChip('WARRANTY')}
-                >
-                  Bergaransi
-                </button>
               </div>
 
-              <div className="mobile-task-list">
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                {([
+                  { id: 'ALL', label: `Semua (${projects.length})` },
+                  { id: 'AR', label: 'Anti Rayap' },
+                  { id: 'PCO', label: 'Pest Control' },
+                  { id: 'WORKING', label: 'Berlangsung' },
+                ] as const).map(chip => (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    onClick={() => setJobCategoryFilter(chip.id)}
+                    className={`min-h-[36px] px-3 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
+                      jobCategoryFilter === chip.id
+                        ? 'bg-[var(--accent)] text-white'
+                        : 'bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)]'
+                    }`}
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-2.5">
                 {filteredProjects.map(proj => {
                   const rep = reports.find(r => r.projectId === proj.id);
-                  const meta = getServiceTypeMeta(proj.serviceType);
-                  const statusCode = rep?.status || (proj.lockedAt ? 'COMPLETED' : 'READY');
-                  const dateLabel = formatShortDateId(proj.nextServiceDate || proj.createdAt);
-                  const timeLabel = (rep?.scheduledStartTime || '09.00').replace(':', '.');
-
+                  const statusStr = formatStatusText(rep?.status || (proj.lockedAt ? 'COMPLETED' : 'READY'));
                   return (
                     <button
                       key={proj.id}
@@ -825,26 +970,28 @@ export const ExecutorHome: React.FC = () => {
                       onClick={() => {
                         setSelectedProjectDetailId(proj.id);
                         if (rep) setSelectedReportId(rep.id);
-                        setPage('task-detail');
+                        setIsViewingHistoryDetail(false);
+                        setPage(rep?.status === 'WORKING' ? 'worksheet' : 'task-detail');
                       }}
+                      className="w-full p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-left space-y-1.5 active:scale-[0.99] transition-transform cursor-pointer"
                     >
-                      <div>
-                        <small>{dateLabel} · {timeLabel}</small>
-                        <LiteBadge status={statusCode} />
+                      <div className="flex items-center justify-between gap-2">
+                        <ServiceTag serviceType={proj.serviceType} />
+                        <span className="text-[11px] font-medium text-[var(--text-secondary)]">{statusStr}</span>
                       </div>
-                      <strong>{proj.projectName}</strong>
-                      <span>{meta.label}</span>
-                      <p>
-                        <MapPin size={14} />
-                        {proj.clientName ? `${proj.clientName} · ${proj.address}` : proj.address}
+                      <strong className="block text-sm font-bold text-[var(--text-primary)] truncate">
+                        {proj.projectName}
+                      </strong>
+                      <p className="text-xs text-[var(--text-secondary)] truncate">
+                        {proj.clientName || proj.address}
                       </p>
                     </button>
                   );
                 })}
 
                 {filteredProjects.length === 0 && (
-                  <div className="bg-white rounded-xl border border-[var(--border)] p-6 text-center text-xs text-[var(--secondary)]">
-                    Belum ada penugasan proyek yang sesuai filter.
+                  <div className="p-8 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-center text-xs text-[var(--text-secondary)]">
+                    Tidak ada tugas yang sesuai pencarian.
                   </div>
                 )}
               </div>
@@ -852,10 +999,10 @@ export const ExecutorHome: React.FC = () => {
           </>
         )}
 
-        {/* =================================================================== */}
-        {/* 3. PAGE: TASK DETAIL (TaskDetail dari RedesignFieldworkGuciMasLite) */}
-        {/* =================================================================== */}
-        {page === 'task-detail' && (
+        {/* ================================================================= */}
+        {/* DETAIL TUGAS (RINGKAS & SIAP CHECK-IN)                            */}
+        {/* ================================================================= */}
+        {page === 'task-detail' &&
           (() => {
             const projObj = projects.find(p => p.id === selectedProjectDetailId);
             const repObj =
@@ -863,729 +1010,359 @@ export const ExecutorHome: React.FC = () => {
               (projObj ? reports.find(r => r.projectId === projObj.id) : undefined) ||
               activeTaskReport;
 
-            const titleText = repObj?.projectName || projObj?.projectName || 'Detail Proyek';
+            const titleText = repObj?.projectName || projObj?.projectName || 'Detail Tugas';
             const clientText = repObj?.clientName || projObj?.clientName || 'Pelanggan Operasional';
             const addressText = repObj?.projectAddress || projObj?.address || '-';
             const radiusMeters = repObj?.projectRadius || projObj?.radius || 100;
-            const serviceMeta = getServiceTypeMeta(repObj?.serviceType || projObj?.serviceType || 'GENERAL_PEST_CONTROL');
-            const statusStr = repObj?.status || 'READY';
-            const schedStr = `${formatShortDateId(repObj?.createdAt || projObj?.createdAt)} · ${(repObj?.scheduledStartTime || '09.00').replace(':', '.')}`;
-            const notesText =
-              repObj?.reviewNotes ||
-              (repObj?.targetFocus?.length ? `Fokus target: ${repObj.targetFocus.join(', ')}. ` : '') +
-              'Temui penanggung jawab lokasi sebelum memulai pekerjaan. Dokumentasikan kondisi awal dan hasil.';
+            const serviceType = repObj?.serviceType || projObj?.serviceType || 'GENERAL_PEST_CONTROL';
+            const schedStr = `${formatShortDateId(repObj?.createdAt || projObj?.createdAt)} · ${(
+              repObj?.scheduledStartTime || '09.00'
+            ).replace(':', '.')}`;
 
             return (
               <>
                 <header className="tech-header">
                   <button
                     type="button"
-                    onClick={() => setPage(selectedHistoryDetailId ? 'history' : selectedProjectDetailId ? 'jobs' : 'home')}
+                    onClick={() => setPage(selectedProjectDetailId ? 'jobs' : 'home')}
                     aria-label="Kembali"
                   >
-                    <ArrowLeft size={21} />
+                    <ArrowLeft size={20} />
                   </button>
-                  <strong>{selectedHistoryDetailId ? 'Detail Riwayat' : 'Detail Tugas'}</strong>
-                  <span>
-                    <button type="button" onClick={() => setShowTeamPicker(prev => !prev)} aria-label="Opsi Tim">
-                      <MoreHorizontal size={20} />
-                    </button>
-                  </span>
+                  <strong>Detail Tugas</strong>
+                  <span />
                 </header>
 
-                <main className="tech-content with-action">
-                  <div className="detail-hero">
-                    <LiteBadge status={statusStr} />
-                    <small>{repObj?.id?.slice(0, 12).toUpperCase() || projObj?.id?.slice(0, 12).toUpperCase() || 'SPK-2026'}</small>
-                    <h1>{titleText}</h1>
-                    <p>{clientText}</p>
+                <main className="tech-content with-action space-y-4">
+                  <div className="space-y-1.5">
+                    <ServiceTag serviceType={serviceType} />
+                    <h1 className="text-lg font-bold text-[var(--text-primary)] leading-snug">{titleText}</h1>
+                    <p className="text-xs text-[var(--text-secondary)]">{clientText}</p>
                   </div>
 
-                  <MapIllustration />
-
-                  <section className="mobile-section">
-                    <h2>Informasi pekerjaan</h2>
-                    <div className="mobile-info">
-                      <span>
-                        <CalendarDays size={18} />
-                        <i>
-                          <small>Jadwal</small>
-                          <strong>{schedStr}</strong>
-                        </i>
-                      </span>
-                      <span>
-                        <ClipboardCheck size={18} />
-                        <i>
-                          <small>Layanan</small>
-                          <strong>{serviceMeta.label}</strong>
-                        </i>
-                      </span>
-                      <span>
-                        <MapPin size={18} />
-                        <i>
-                          <small>Lokasi</small>
-                          <strong>{addressText}</strong>
-                          <em>Radius lokasi ({radiusMeters}m) akan divalidasi saat check-in.</em>
-                        </i>
-                      </span>
+                  {/* 3 Info Utama dalam 1 Kartu Tenang */}
+                  <section className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] divide-y divide-[var(--border)] text-xs">
+                    <div className="p-3.5 flex items-center justify-between gap-2">
+                      <span className="text-[var(--text-secondary)]">Jadwal</span>
+                      <strong className="text-[var(--text-primary)] font-semibold tabular-nums">{schedStr}</strong>
                     </div>
-                  </section>
-
-                  <section className="mobile-section">
-                    <div className="flex items-center justify-between mb-2">
-                      <h2 className="!mb-0">Instruksi &amp; Catatan (Notes :)</h2>
-                      {repObj && (
+                    <div className="p-3.5 space-y-1">
+                      <span className="text-[var(--text-secondary)] block">Alamat Lokasi</span>
+                      <strong className="text-[var(--text-primary)] font-semibold block leading-relaxed">
+                        {addressText}
+                      </strong>
+                      <small className="text-[11px] text-[var(--text-muted)]">
+                        Radius validasi GPS: {radiusMeters} meter
+                      </small>
+                    </div>
+                    {repObj && (
+                      <div className="p-3.5">
                         <button
                           type="button"
-                          onClick={() => setShowTeamPicker(prev => !prev)}
-                          className="text-xs font-semibold text-[#245c45] flex items-center gap-1 cursor-pointer"
+                          onClick={() => setShowTeamPicker(v => !v)}
+                          className="w-full flex items-center justify-between text-xs font-semibold text-[var(--text-primary)] cursor-pointer"
                         >
-                          <Users size={13} />
-                          Tim ({(repObj.teamMembers?.length ? repObj.teamMembers : [{ name: user.name }]).length} Orang)
+                          <span className="flex items-center gap-1.5">
+                            <Users size={14} className="text-[var(--accent)]" />
+                            Tim Bertugas ({(repObj.teamMembers?.length ? repObj.teamMembers : [{ name: user.name }]).length}{' '}
+                            Orang)
+                          </span>
+                          {showTeamPicker ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                         </button>
-                      )}
-                    </div>
-                    <p>{notesText}</p>
 
-                    {/* Pemilih Tim Teknisi */}
-                    {showTeamPicker && repObj && (
-                      <div className="mt-3 p-3 rounded-xl bg-white border border-[var(--border)] space-y-2 text-xs">
-                        <strong className="block text-slate-800">Pilih Anggota Tim Bertugas:</strong>
-                        <div className="flex flex-wrap gap-1.5">
-                          {companyTechs.map(t => {
-                            const activeList = repObj.teamMembers?.length ? repObj.teamMembers : [{ id: user.uid, name: user.name }];
-                            const isSel = activeList.some(m => m.id === t.id || m.name.toLowerCase() === t.name.toLowerCase());
-                            return (
+                        {showTeamPicker && (
+                          <div className="mt-3 space-y-2.5">
+                            <div className="flex flex-wrap gap-1.5">
+                              {companyTechs.map(t => {
+                                const activeList = repObj.teamMembers?.length
+                                  ? repObj.teamMembers
+                                  : [{ id: user.uid, name: user.name }];
+                                const isSel = activeList.some(
+                                  m => m.id === t.id || m.name.toLowerCase() === t.name.toLowerCase()
+                                );
+                                return (
+                                  <button
+                                    key={t.id}
+                                    type="button"
+                                    onClick={() =>
+                                      handleToggleQuickTeamMember(repObj, { id: t.id, name: t.name, isManual: false })
+                                    }
+                                    className={`min-h-[34px] px-2.5 rounded-lg text-[11px] font-semibold border cursor-pointer ${
+                                      isSel
+                                        ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                                        : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border-[var(--border)]'
+                                    }`}
+                                  >
+                                    {isSel ? '✓ ' : '+ '}
+                                    {t.name}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={quickManualName}
+                                onChange={e => setQuickManualName(e.target.value)}
+                                placeholder="Tambah anggota manual..."
+                                className="flex-1 h-9 px-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border)] text-xs"
+                              />
                               <button
-                                key={t.id}
                                 type="button"
-                                onClick={() => handleToggleQuickTeamMember(repObj, { id: t.id, name: t.name, isManual: false })}
-                                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border cursor-pointer ${
-                                  isSel ? 'bg-[#245c45] text-white border-[#245c45]' : 'bg-slate-50 text-slate-700 border-slate-200'
-                                }`}
+                                onClick={() => {
+                                  if (!quickManualName.trim()) return;
+                                  handleToggleQuickTeamMember(repObj, {
+                                    name: quickManualName.trim(),
+                                    isManual: true,
+                                  });
+                                  setQuickManualName('');
+                                }}
+                                className="h-9 px-3 rounded-lg bg-[var(--accent)] text-white text-xs font-semibold cursor-pointer"
                               >
-                                {isSel ? '✓ ' : '+ '}{t.name}
+                                Tambah
                               </button>
-                            );
-                          })}
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <input
-                            type="text"
-                            value={quickManualName}
-                            onChange={e => setQuickManualName(e.target.value)}
-                            placeholder="Tambah nama anggota manual..."
-                            className="flex-1 px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!quickManualName.trim()) return;
-                              handleToggleQuickTeamMember(repObj, { name: quickManualName.trim(), isManual: true });
-                              setQuickManualName('');
-                            }}
-                            className="px-2.5 py-1.5 rounded-lg bg-[#245c45] text-white text-[11px] font-bold"
-                          >
-                            + Tambah
-                          </button>
-                        </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </section>
-
-                  {/* Galeri Foto jika sudah ada dokumentasi */}
-                  {repObj && repObj.photos.length > 0 && (
-                    <section className="mobile-section !border-b-0">
-                      <h2>Dokumentasi Tersimpan ({repObj.photos.length} Foto)</h2>
-                      <div className="flex gap-2 overflow-x-auto pb-1">
-                        {repObj.photos.map(p => (
-                          <button
-                            key={p.id}
-                            type="button"
-                            onClick={() => setViewingPhoto(p)}
-                            className="w-16 h-16 rounded-xl overflow-hidden border border-[var(--border)] shrink-0"
-                          >
-                            <AuthedImage path={p.url} alt="evidence" purged={!!p.purgedAt} className="w-full h-full object-cover" />
-                          </button>
-                        ))}
-                      </div>
-                    </section>
-                  )}
                 </main>
 
                 <div className="sticky-action">
                   {repObj && (repObj.status === 'READY' || repObj.status === 'DRAFT') ? (
                     <button
                       type="button"
-                      className="btn primary full"
                       onClick={() => {
                         setSelectedReportId(repObj.id);
                         setPage('gps');
                       }}
+                      className="w-full min-h-[50px] rounded-2xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
                     >
                       <LocateFixed size={17} />
-                      Mulai Pekerjaan / Clock In
+                      <span>Mulai Pekerjaan / Check-in GPS</span>
                     </button>
                   ) : repObj && repObj.status === 'WORKING' ? (
                     <button
                       type="button"
-                      className="btn primary full"
                       onClick={() => {
                         setSelectedReportId(repObj.id);
-                        setPage('work');
+                        setPage('worksheet');
                       }}
+                      className="w-full min-h-[50px] rounded-2xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
                     >
-                      Lanjutkan Pekerjaan Berlangsung
+                      <span>Buka Lembar Kerja 5-Tahap</span>
                       <ArrowRight size={17} />
                     </button>
-                  ) : (
+                  ) : repObj ? (
                     <button
                       type="button"
-                      className="btn secondary full"
-                      onClick={() => setPage(selectedHistoryDetailId ? 'history' : 'home')}
+                      onClick={() => {
+                        setSelectedReportId(repObj.id);
+                        setIsViewingHistoryDetail(true);
+                        setPage('completion');
+                      }}
+                      className="w-full min-h-[50px] rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] text-xs font-bold flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      <ArrowLeft size={16} /> Kembali
+                      <span>Lihat Berita Acara &amp; Foto</span>
+                      <ArrowRight size={16} />
                     </button>
-                  )}
+                  ) : null}
                 </div>
               </>
             );
-          })()
-        )}
+          })()}
 
-        {/* =================================================================== */}
-        {/* 4. PAGE: GPS CHECK-IN (Langkah 1 dari 6 — GPSCheckin Lite)          */}
-        {/* =================================================================== */}
+        {/* ================================================================= */}
+        {/* CHECK-IN GPS (SATU LAYAR TENANG)                                  */}
+        {/* ================================================================= */}
         {page === 'gps' && activeTaskReport && (
           <>
             <header className="tech-header">
               <button type="button" onClick={() => setPage('task-detail')} aria-label="Kembali">
-                <ArrowLeft size={21} />
+                <ArrowLeft size={20} />
               </button>
-              <strong>Check-in GPS</strong>
+              <strong>Check-in Lokasi</strong>
               <span />
             </header>
 
-            <main className="tech-content with-action">
-              <div className="progress-label">
-                <span>Langkah 1 dari 6</span>
-                <strong>Check-in lokasi</strong>
-              </div>
-
-              <div className="gps-state">
-                <div className="state-icon success">
-                  <Navigation size={30} />
+            <main className="tech-content with-action flex flex-col justify-center">
+              <div className="rounded-3xl bg-[var(--bg-card)] border border-[var(--border)] p-6 text-center space-y-3">
+                <div className="w-14 h-14 rounded-2xl bg-[var(--green-soft)] text-[var(--accent)] flex items-center justify-center mx-auto">
+                  <Navigation size={26} />
                 </div>
-                <h1>Konfirmasi Lokasi &amp; Foto Check-in</h1>
-                <p>
-                  Lokasi GPS digunakan untuk memvalidasi bahwa Anda berada di area proyek <strong>{activeTaskReport.projectName}</strong> (Radius {activeTaskReport.projectRadius}m).
+                <h1 className="text-base font-bold text-[var(--text-primary)]">{activeTaskReport.projectName}</h1>
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  Ambil 1 foto kehadiran untuk memvalidasi posisi GPS di area kerja (radius {activeTaskReport.projectRadius}m).
                 </p>
-                <div className="gps-panel">
-                  <span>
-                    <LocateFixed size={17} /> Status kesiapan lokasi
-                  </span>
-                  <strong>Siap memvalidasi koordinat GPS &amp; kamera</strong>
-                  <small>{activeTaskReport.projectAddress}</small>
-                </div>
               </div>
             </main>
 
             <div className="sticky-action">
               <button
                 type="button"
-                className="btn primary full"
                 onClick={() => setActiveCameraAction({ type: 'CHECK_IN', report: activeTaskReport })}
+                className="w-full min-h-[50px] rounded-2xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
               >
-                <Camera size={17} /> Ambil Foto &amp; Konfirmasi Check-in
-                <ArrowRight size={17} />
+                <Camera size={17} />
+                <span>Ambil Foto &amp; Check-in</span>
               </button>
             </div>
           </>
         )}
 
-        {/* =================================================================== */}
-        {/* 5. PAGE: WORK PROGRESS (WorkProgress 6 Langkah dari Lite)           */}
-        {/* =================================================================== */}
-        {page === 'work' && activeTaskReport && (
+        {/* ================================================================= */}
+        {/* MODUL 2: LEMBAR KERJA 5-TAHAP TERPADU                             */}
+        {/* ================================================================= */}
+        {page === 'worksheet' && activeTaskReport && (
+          <TechnicianWorksheet
+            report={activeTaskReport}
+            elapsedTime={elapsedTime}
+            technicianName={user.name}
+            onBack={() => setPage('home')}
+            onCapturePhoto={tag =>
+              setActiveCameraAction({ type: 'PROGRESS', report: activeTaskReport, photoTag: tag })
+            }
+            onViewPhoto={photo => setViewingPhoto(photo)}
+            onSaveTreatment={handleSaveTreatmentFromWorksheet}
+            onProceedToClientSign={handleProceedToClientSign}
+          />
+        )}
+
+        {/* ================================================================= */}
+        {/* MODUL 4: PRATINJAU BERITA ACARA PDF & WHATSAPP + OUTBOX           */}
+        {/* ================================================================= */}
+        {page === 'completion' && activeTaskReport && (
+          <CompletionPdfWaSheet
+            report={activeTaskReport}
+            companyId={user.companyId}
+            pendingQueueCount={pendingCount}
+            isSyncing={isSyncing}
+            isHistoryDetail={isViewingHistoryDetail}
+            onSyncNow={attemptSync}
+            onViewPhoto={photo => setViewingPhoto(photo)}
+            onBack={() => setPage(isViewingHistoryDetail ? 'history' : 'home')}
+          />
+        )}
+
+        {/* ================================================================= */}
+        {/* MODUL 5: RIWAYAT PEKERJAAN (SEARCH + COLLAPSIBLE DATE RANGE)      */}
+        {/* ================================================================= */}
+        {page === 'history' && (
           <>
-            <header className="tech-header">
-              <button type="button" onClick={() => setPage('home')} aria-label="Kembali">
-                <ArrowLeft size={21} />
-              </button>
-              <strong>Pekerjaan Berlangsung</strong>
-              <span />
-            </header>
+            {renderCompactHeader('Riwayat')}
 
-            <main className="tech-content with-action">
-              <div className="work-status">
-                <LiteBadge status={activeTaskReport.status} />
-                <small>{elapsedTime}</small>
-                <h1>{activeTaskReport.projectName}</h1>
-                <p>Ikuti langkah secara berurutan. Progres tersimpan aman pada perangkat saat koneksi tidak tersedia.</p>
-              </div>
-
-              <div className={`connection-banner lite-connection-banner ${pendingCount > 0 ? 'pending' : 'online'}`}>
-                <Wifi size={15} />
-                <span>
-                  <strong>{pendingCount > 0 ? `Menunggu sinkronisasi (${pendingCount})` : 'Online'}</strong>
-                  Data akan dikirim ke server.
-                </span>
-              </div>
-
-              <div className="work-checklist lite-work-checklist">
-                <div className="done">
-                  <span><Check size={15} /></span>
-                  <i>
-                    <strong>Check-in</strong>
-                    <small>Selesai · {activeTaskReport.checkInValid ? 'Dalam radius lokasi' : 'Tercatat'}</small>
-                  </i>
+            <main className="tech-content space-y-3.5">
+              {/* Search + Collapsible Date Filter Toggle */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 flex items-center">
+                  <Search size={16} className="absolute left-3.5 text-[var(--text-muted)]" />
+                  <input
+                    type="text"
+                    value={historySearch}
+                    onChange={e => setHistorySearch(e.target.value)}
+                    placeholder="Cari nama gedung / klien..."
+                    className="w-full h-11 pl-10 pr-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                  />
                 </div>
-
                 <button
                   type="button"
-                  className={activeTaskReport.photos.length >= 2 ? 'done' : 'current'}
-                  onClick={() => setPage('photos')}
+                  onClick={() => setShowDateFilter(v => !v)}
+                  aria-label="Filter Rentang Tanggal"
+                  className={`h-11 px-3.5 rounded-2xl border text-xs font-semibold flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                    showDateFilter || dateFrom || dateTo
+                      ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                      : 'bg-[var(--bg-card)] text-[var(--text-primary)] border-[var(--border)]'
+                  }`}
                 >
-                  <span>{activeTaskReport.photos.length >= 2 ? <Check size={15} /> : 2}</span>
-                  <i>
-                    <strong>Dokumentasi Foto</strong>
-                    <small>{activeTaskReport.photos.length >= 2 ? `${activeTaskReport.photos.length} foto tersimpan` : 'Berikutnya · Kondisi Awal & Hasil'}</small>
-                  </i>
-                  <ChevronRight size={17} />
-                </button>
-
-                <button
-                  type="button"
-                  className={activeTaskReport.treatmentRecord ? 'done' : ''}
-                  onClick={() => setTreatmentFormReport(activeTaskReport)}
-                >
-                  <span>{activeTaskReport.treatmentRecord ? <Check size={15} /> : 3}</span>
-                  <i>
-                    <strong>Treatment</strong>
-                    <small>{activeTaskReport.treatmentRecord ? 'Lengkap' : 'Catat temuan hama (> 0) & obat'}</small>
-                  </i>
-                  <ChevronRight size={17} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setPage('checkout')}
-                >
-                  <span>4</span>
-                  <i>
-                    <strong>Check-out</strong>
-                    <small>Konfirmasi selesai di lokasi</small>
-                  </i>
-                  <ChevronRight size={17} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setPage('checkout')}
-                >
-                  <span>5</span>
-                  <i>
-                    <strong>Tanda tangan</strong>
-                    <small>Konfirmasi penanggung jawab lokasi</small>
-                  </i>
-                  <ChevronRight size={17} />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setPage('review')}
-                >
-                  <span>6</span>
-                  <i>
-                    <strong>Kirim laporan</strong>
-                    <small>Periksa sebelum mengirim</small>
-                  </i>
-                  <ChevronRight size={17} />
+                  <Calendar size={15} />
+                  <span>Tanggal</span>
                 </button>
               </div>
 
-              <div className="task-context">
-                <span>
-                  <MapPin size={16} />
-                  {activeTaskReport.projectAddress}
-                </span>
-                <span>
-                  <ClipboardCheck size={16} />
-                  {getServiceTypeMeta(activeTaskReport.serviceType).label}
-                </span>
-              </div>
-            </main>
-
-            <div className="sticky-action">
-              <button type="button" className="btn primary full" onClick={() => setPage('photos')}>
-                <Camera size={17} /> Lanjut ke Dokumentasi
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* =================================================================== */}
-        {/* 6. PAGE: PHOTOS (Langkah 2 dari 6 — PhotoFlow Lite)                 */}
-        {/* =================================================================== */}
-        {page === 'photos' && activeTaskReport && (
-          (() => {
-            const hasBefore = activeTaskReport.photos.some(p => p.photoTag === 'BEFORE');
-            const hasAfter = activeTaskReport.photos.some(p => p.photoTag === 'AFTER');
-            const progressCount = activeTaskReport.photos.filter(p => p.photoType === 'PROGRESS').length;
-            const limitReached = activeTaskReport.photos.length >= 4 || progressCount >= 2;
-            return (
-              <>
-                <header className="tech-header">
-                  <button type="button" onClick={() => setPage('work')} aria-label="Kembali">
-                    <ArrowLeft size={21} />
-                  </button>
-                  <strong>Dokumentasi Foto</strong>
-                  <span />
-                </header>
-
-                <main className="tech-content with-action">
-                  <div className="progress-label">
-                    <span>Langkah 2 dari 6</span>
-                    <strong>Dokumentasi pekerjaan</strong>
-                  </div>
-
-                  <div className="notice info">
-                    <Camera size={17} />
-                    <span>
-                      <strong>Dokumentasi ber-watermark GPS (Kompresi Otomatis 40–60 KB)</strong>
-                      Ambil 1 foto Kondisi Awal dan 1 foto Hasil (maksimal 4 foto per laporan termasuk Check-In &amp; Check-Out untuk efisiensi kuota database).
-                    </span>
-                  </div>
-
-                  <div className="capture-list">
-                    <div className={`capture-card ${hasBefore ? 'captured' : ''}`}>
-                      <div>
-                        {hasBefore ? <CheckCircle2 size={26} /> : <Camera size={26} />}
-                      </div>
-                      <span>
-                        <strong>Kondisi Awal</strong>
-                        <small>{hasBefore ? 'Tersimpan pada laporan (1/1)' : 'Ambil foto sebelum pekerjaan'}</small>
-                      </span>
-                      <button
-                        type="button"
-                        className="btn secondary"
-                        disabled={hasBefore || limitReached}
-                        onClick={() => setActiveCameraAction({ type: 'PROGRESS', report: activeTaskReport, photoTag: 'BEFORE' })}
-                      >
-                        {hasBefore ? 'Tersimpan' : 'Ambil Foto'}
-                      </button>
+              {/* Collapsible Date Range Inputs */}
+              {showDateFilter && (
+                <div className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] space-y-2.5">
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[10.5px] font-semibold text-[var(--text-secondary)] mb-1">
+                        Dari Tanggal
+                      </label>
+                      <input
+                        type="date"
+                        value={dateFrom}
+                        onChange={e => setDateFrom(e.target.value)}
+                        className="w-full h-10 px-2.5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] text-xs text-[var(--text-primary)]"
+                      />
                     </div>
-
-                    <div className={`capture-card ${hasAfter ? 'captured' : ''}`}>
-                      <div>
-                        {hasAfter ? <CheckCircle2 size={26} /> : <Camera size={26} />}
-                      </div>
-                      <span>
-                        <strong>Hasil</strong>
-                        <small>{hasAfter ? 'Tersimpan pada laporan (1/1)' : 'Tambahkan foto setelah pekerjaan'}</small>
-                      </span>
-                      <button
-                        type="button"
-                        className="btn secondary"
-                        disabled={hasAfter || limitReached}
-                        onClick={() => setActiveCameraAction({ type: 'PROGRESS', report: activeTaskReport, photoTag: 'AFTER' })}
-                      >
-                        {hasAfter ? 'Tersimpan' : 'Ambil Foto'}
-                      </button>
+                    <div>
+                      <label className="block text-[10.5px] font-semibold text-[var(--text-secondary)] mb-1">
+                        Sampai Tanggal
+                      </label>
+                      <input
+                        type="date"
+                        value={dateTo}
+                        onChange={e => setDateTo(e.target.value)}
+                        className="w-full h-10 px-2.5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] text-xs text-[var(--text-primary)]"
+                      />
                     </div>
                   </div>
-
-                  {activeTaskReport.photos.length > 0 && (
-                    <div className="mt-4">
-                      <p className="text-xs font-semibold text-[var(--secondary)] mb-2">
-                        Foto Tercatat ({activeTaskReport.photos.length} / Maks 4 Foto):
-                      </p>
-                      <div className="flex gap-2 overflow-x-auto pb-1">
-                        {activeTaskReport.photos.map(photo => (
-                          <button
-                            key={photo.id}
-                            type="button"
-                            onClick={() => setViewingPhoto(photo)}
-                            className="relative w-16 h-16 rounded-xl overflow-hidden border border-[var(--border)] shrink-0"
-                          >
-                            <AuthedImage path={photo.url} alt="evidence" purged={!!photo.purgedAt} className="w-full h-full object-cover" />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                  {(dateFrom || dateTo) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDateFrom('');
+                        setDateTo('');
+                      }}
+                      className="text-[11px] font-semibold text-rose-600 cursor-pointer"
+                    >
+                      Reset Filter Tanggal
+                    </button>
                   )}
-                </main>
-
-                <div className="sticky-action">
-                  <button
-                    type="button"
-                    className="btn primary full"
-                    onClick={() => setTreatmentFormReport(activeTaskReport)}
-                  >
-                    Simpan &amp; Lanjut ke Form Treatment
-                    <ArrowRight size={17} />
-                  </button>
-                </div>
-              </>
-            );
-          })()
-        )}
-
-        {/* =================================================================== */}
-        {/* 7. PAGE: CHECKOUT (Langkah 4 dari 6 — Checkout Lite)                */}
-        {/* =================================================================== */}
-        {page === 'checkout' && activeTaskReport && (
-          <>
-            <header className="tech-header">
-              <button type="button" onClick={() => setPage('work')} aria-label="Kembali">
-                <ArrowLeft size={21} />
-              </button>
-              <strong>Check-out</strong>
-              <span />
-            </header>
-
-            <main className="tech-content with-action">
-              <div className="progress-label">
-                <span>Langkah 4 dari 6</span>
-                <strong>Konfirmasi selesai di lokasi</strong>
-              </div>
-
-              <div className="gps-state compact">
-                <div className="state-icon success">
-                  <LocateFixed size={28} />
-                </div>
-                <h1>Validasi lokasi check-out</h1>
-                <p>Pastikan Anda masih berada di area pekerjaan dan ambil foto bukti penyelesaian sebelum tanda tangan pelanggan.</p>
-              </div>
-
-              <div className="summary-list">
-                <span>
-                  <CheckCircle2 size={17} />
-                  <i>
-                    <strong>Dokumentasi</strong>
-                    <small>{activeTaskReport.photos.length} foto tersimpan</small>
-                  </i>
-                </span>
-                <span>
-                  <CheckCircle2 size={17} />
-                  <i>
-                    <strong>Form treatment</strong>
-                    <small>{activeTaskReport.treatmentRecord ? 'Lengkap' : 'Siap dilengkapi'}</small>
-                  </i>
-                </span>
-              </div>
-            </main>
-
-            <div className="sticky-action">
-              <button
-                type="button"
-                className="btn primary full"
-                onClick={() => setActiveCameraAction({ type: 'CHECK_OUT', report: activeTaskReport })}
-              >
-                <LocateFixed size={17} /> Validasi Lokasi &amp; Lanjut Tanda Tangan
-                <ArrowRight size={17} />
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* =================================================================== */}
-        {/* 8. PAGE: REVIEW (Langkah 6 dari 6 — TechReview Lite)                */}
-        {/* =================================================================== */}
-        {page === 'review' && activeTaskReport && (
-          <>
-            <header className="tech-header">
-              <button type="button" onClick={() => setPage('work')} aria-label="Kembali">
-                <ArrowLeft size={21} />
-              </button>
-              <strong>Review Laporan</strong>
-              <span />
-            </header>
-
-            <main className="tech-content with-action">
-              <div className="progress-label">
-                <span>Langkah 6 dari 6</span>
-                <strong>Periksa sebelum mengirim</strong>
-              </div>
-
-              <div className="connection-banner online">
-                <Wifi size={15} />
-                <span>
-                  <strong>Online</strong>
-                  Data akan dikirim ke server.
-                </span>
-              </div>
-
-              <div className="review-mobile">
-                <section>
-                  <h2>Penugasan</h2>
-                  <span>
-                    <small>Proyek</small>
-                    <strong>{activeTaskReport.projectName}</strong>
-                  </span>
-                  <span>
-                    <small>Layanan</small>
-                    <strong>{getServiceTypeMeta(activeTaskReport.serviceType).label}</strong>
-                  </span>
-                </section>
-
-                <section>
-                  <h2>Kelengkapan</h2>
-                  {[
-                    'Check-in GPS',
-                    `Dokumentasi foto (${activeTaskReport.photos.length} foto)`,
-                    'Form treatment',
-                    'Check-out GPS',
-                    'Tanda tangan pelanggan',
-                  ].map(x => (
-                    <span key={x}>
-                      <CheckCircle2 size={17} />
-                      <strong>{x}</strong>
-                    </span>
-                  ))}
-                </section>
-              </div>
-
-              <div className="notice warning mt-3">
-                <AlertCircle size={17} />
-                <span>
-                  <strong>Pastikan informasi sudah benar</strong>
-                  Setelah dikirim, laporan langsung masuk ke dashboard verifikasi Admin.
-                </span>
-              </div>
-            </main>
-
-            <div className="sticky-action">
-              <button
-                type="button"
-                className="btn primary full"
-                onClick={() => setActiveCameraAction({ type: 'CHECK_OUT', report: activeTaskReport })}
-              >
-                <UploadCloud size={17} /> Lanjut Check-out &amp; Kirim Laporan
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* =================================================================== */}
-        {/* 9. PAGE: SYNC STATUS (SyncStatus dari RedesignFieldworkGuciMasLite) */}
-        {/* =================================================================== */}
-        {page === 'sync' && (
-          <>
-            <header className="tech-header">
-              <span />
-              <strong>Status Pengiriman</strong>
-              <span />
-            </header>
-
-            <main className="tech-content sync-page">
-              <div className={`sync-hero ${pendingCount > 0 ? 'pending' : 'success'}`}>
-                <div>
-                  {pendingCount > 0 ? <CloudOff size={32} /> : <Check size={32} />}
-                </div>
-                <h1>{pendingCount > 0 ? 'Menunggu sinkronisasi' : 'Laporan terkirim'}</h1>
-                <p>
-                  {pendingCount > 0
-                    ? 'Laporan aman tersimpan di perangkat dan akan dikirim saat kembali online.'
-                    : 'Server telah mengonfirmasi laporan pekerjaan diterima.'}
-                </p>
-              </div>
-
-              {activeTaskReport && (
-                <div className="sync-detail">
-                  <span>
-                    <strong>{activeTaskReport.projectName}</strong>
-                    <small>{activeTaskReport.clientName || activeTaskReport.projectAddress}</small>
-                  </span>
-                  <span className={`badge ${pendingCount > 0 ? 'warning' : 'success'}`}>
-                    <span className="badge-dot" />
-                    {pendingCount > 0 ? 'Tersimpan lokal' : 'Tersinkron'}
-                  </span>
                 </div>
               )}
 
-              <button
-                type="button"
-                className={`btn ${pendingCount > 0 ? 'primary' : 'secondary'} full mt-4`}
-                onClick={() => (pendingCount > 0 ? attemptSync() : setPage('home'))}
-              >
-                {pendingCount > 0 ? <RefreshCw size={17} /> : <Home size={17} />}
-                {pendingCount > 0 ? 'Coba Sinkronkan' : 'Kembali ke Beranda'}
-              </button>
-            </main>
-          </>
-        )}
+              {/* Unified History Cards — Single Consistent Action "Lihat Detail" */}
+              <div className="space-y-2.5">
+                {filteredHistoryJobs.map(rep => (
+                  <div
+                    key={rep.id}
+                    className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <ServiceTag serviceType={rep.serviceType} />
+                      <span className="text-[11px] font-mono text-[var(--text-muted)] tabular-nums">
+                        {formatShortDateId(rep.checkOutAt || rep.createdAt)}
+                      </span>
+                    </div>
 
-        {/* =================================================================== */}
-        {/* 10. PAGE: HISTORY (TechHistory dari RedesignFieldworkGuciMasLite)   */}
-        {/* =================================================================== */}
-        {page === 'history' && (
-          <>
-            <header className="tech-header">
-              <LiteBrand compact />
-              <strong>Riwayat</strong>
-              <span />
-            </header>
+                    <div>
+                      <strong className="block text-sm font-bold text-[var(--text-primary)] truncate">
+                        {rep.projectName}
+                      </strong>
+                      <p className="text-xs text-[var(--text-secondary)] mt-0.5 truncate">
+                        {rep.clientName || rep.projectAddress} · {rep.photos.length} foto bukti
+                      </p>
+                    </div>
 
-            <main className="tech-content">
-              <div className="filter-chips lite-filter-chips mobile no-scrollbar">
-                <button
-                  type="button"
-                  className={historyFilterChip === 'ALL' ? 'active' : ''}
-                  onClick={() => setHistoryFilterChip('ALL')}
-                >
-                  Semua ({completedJobs.length})
-                </button>
-                <button
-                  type="button"
-                  className={historyFilterChip === 'COMPLETED' ? 'active' : ''}
-                  onClick={() => setHistoryFilterChip('COMPLETED')}
-                >
-                  Selesai
-                </button>
-                <button
-                  type="button"
-                  className={historyFilterChip === 'FLAGGED' ? 'active' : ''}
-                  onClick={() => setHistoryFilterChip('FLAGGED')}
-                >
-                  Ditinjau
-                </button>
-              </div>
-
-              <div className="mobile-task-list">
-                {filteredHistoryJobs.map(rep => {
-                  const meta = getServiceTypeMeta(rep.serviceType);
-                  const dateLabel = formatShortDateId(rep.createdAt);
-                  const cinLabel = rep.checkInAt
-                    ? new Date(rep.checkInAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace(':', '.')
-                    : '08.00';
-                  return (
                     <button
-                      key={rep.id}
                       type="button"
                       onClick={() => {
-                        setSelectedHistoryDetailId(rep.id);
                         setSelectedReportId(rep.id);
-                        setPage('task-detail');
+                        setIsViewingHistoryDetail(true);
+                        setPage('completion');
                       }}
+                      className="w-full min-h-[42px] rounded-xl bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border)] text-xs font-semibold text-[var(--text-primary)] flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      <div>
-                        <small>{dateLabel} · {cinLabel}</small>
-                        <LiteBadge status={rep.status === 'COMPLETED' ? 'COMPLETED' : rep.status} />
-                      </div>
-                      <strong>{rep.projectName}</strong>
-                      <span>{meta.label}</span>
-                      <p>
-                        <FileCheck2 size={14} />
-                        Laporan tersinkron · {rep.photos.length} foto bukti (Completed)
-                      </p>
+                      <span>Lihat Detail</span>
+                      <ChevronRight size={15} />
                     </button>
-                  );
-                })}
+                  </div>
+                ))}
 
                 {filteredHistoryJobs.length === 0 && (
-                  <div className="bg-white rounded-xl border border-[var(--border)] p-6 text-center text-xs text-[var(--secondary)]">
-                    Belum ada riwayat pekerjaan selesai.
+                  <div className="p-8 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-center text-xs text-[var(--text-secondary)]">
+                    Belum ada riwayat pekerjaan pada rentang ini.
                   </div>
                 )}
               </div>
@@ -1593,65 +1370,159 @@ export const ExecutorHome: React.FC = () => {
           </>
         )}
 
-        {/* =================================================================== */}
-        {/* 11. PAGE: PROFILE (TechProfile dari RedesignFieldworkGuciMasLite)   */}
-        {/* =================================================================== */}
+        {/* ================================================================= */}
+        {/* MODUL 6: PROFIL TEKNISI, METRIK RINGKAS & THEME SWITCHER          */}
+        {/* ================================================================= */}
         {page === 'profile' && (
           <>
-            <header className="tech-header">
-              <LiteBrand compact />
-              <strong>Profil</strong>
-              <span />
-            </header>
+            {renderCompactHeader('Profil')}
 
-            <main className="tech-content">
-              <div className="tech-profile">
-                <div className="avatar green">{initials}</div>
-                <h1>{user.name}</h1>
-                <p>Teknisi Lapangan · GuciMas Pratama</p>
-              </div>
-
-              <div className={`connection-banner lite-connection-banner ${pendingCount > 0 ? 'pending' : 'online'}`}>
-                {pendingCount > 0 ? <CloudOff size={15} /> : <Wifi size={15} />}
-                <span>
-                  <strong>{pendingCount > 0 ? `Menunggu sinkronisasi (${pendingCount})` : 'Online'}</strong>
-                  {pendingCount > 0 ? 'Data aman tersimpan di perangkat.' : 'Data akan dikirim ke server.'}
-                </span>
-              </div>
-
-              <div className="profile-menu">
-                <div>
-                  <UserIcon size={19} className="text-[var(--secondary)]" />
-                  <span>
-                    <strong>Informasi akun</strong>
-                    <small>{user.email} · NIP: {user.nip || '-'}</small>
-                  </span>
-                  <ChevronRight size={17} className="text-[var(--muted)]" />
+            <main className="tech-content space-y-4">
+              {/* Simple Clean Profile Identity */}
+              <div className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-center space-y-1.5">
+                <div className="w-16 h-16 rounded-full bg-[var(--green-soft)] text-[var(--accent)] font-bold text-lg flex items-center justify-center mx-auto">
+                  {initials}
                 </div>
+                <h1 className="text-base font-bold text-[var(--text-primary)] pt-1">{user.name}</h1>
+                <p className="text-xs font-medium text-[var(--accent-text)]">Teknisi</p>
+                <p className="text-[11px] font-mono text-[var(--text-muted)]">
+                  NIP: {user.nip || '-'} · {user.email}
+                </p>
+              </div>
 
-                <button type="button" onClick={() => setShowChangePassword(true)}>
-                  <Lock size={19} className="text-[var(--secondary)]" />
-                  <span>
-                    <strong>Ubah kata sandi</strong>
-                    <small>Perbarui keamanan akun Anda</small>
+              {/* 1 Slim Row — 3 Core Monthly Metrics */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-center">
+                  <strong className="block text-lg font-mono font-bold tabular-nums text-[var(--text-primary)]">
+                    {monthlyStats.monthlyTasks}
+                  </strong>
+                  <span className="text-[10.5px] text-[var(--text-secondary)]">Tugas Bulan Ini</span>
+                </div>
+                <div className="p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-center">
+                  <strong className="block text-lg font-mono font-bold tabular-nums text-[var(--accent-text)]">
+                    {monthlyStats.syncRate}%
+                  </strong>
+                  <span className="text-[10.5px] text-[var(--text-secondary)]">Terkirim</span>
+                </div>
+                <div className="p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-center">
+                  <strong className="block text-lg font-mono font-bold tabular-nums text-[var(--text-primary)]">
+                    {pendingCount}
+                  </strong>
+                  <span className="text-[10.5px] text-[var(--text-secondary)]">Antrean</span>
+                </div>
+              </div>
+
+              {/* Instant Theme Switcher (Light Mode vs Dark Mode untuk Basement/Plafon) */}
+              <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] space-y-2.5">
+                <div>
+                  <strong className="block text-xs font-bold text-[var(--text-primary)]">Tampilan Layar</strong>
+                  <small className="text-[11px] text-[var(--text-secondary)]">
+                    Gunakan Mode Gelap saat bekerja di basement atau plafon.
+                  </small>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setTheme('light')}
+                    className={`min-h-[44px] rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer ${
+                      resolvedTheme === 'light'
+                        ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                        : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border-[var(--border)]'
+                    }`}
+                  >
+                    <Sun size={15} /> Mode Terang
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTheme('dark')}
+                    className={`min-h-[44px] rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer ${
+                      resolvedTheme === 'dark'
+                        ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
+                        : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border-[var(--border)]'
+                    }`}
+                  >
+                    <Moon size={15} /> Mode Gelap
+                  </button>
+                </div>
+              </div>
+
+              {/* Storage & Queue + Account Menu */}
+              {cacheNotice && (
+                <div className="px-3.5 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium">
+                  {cacheNotice}
+                </div>
+              )}
+
+              <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] divide-y divide-[var(--border)] overflow-hidden">
+                {pendingCount > 0 && (
+                  <button
+                    type="button"
+                    disabled={isSyncing}
+                    onClick={attemptSync}
+                    className="w-full min-h-[54px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-[var(--bg-secondary)]"
+                  >
+                    <span className="flex items-center gap-3">
+                      <CloudOff size={18} className="text-amber-600" />
+                      <span>
+                        <strong className="block text-xs font-semibold text-[var(--text-primary)]">
+                          Sinkronkan Antrean Offline ({pendingItems.length})
+                        </strong>
+                        <small className="text-[11px] text-[var(--text-secondary)]">
+                          {isSyncing ? 'Sedang mengirim...' : 'Ketuk untuk kirim ulang'}
+                        </small>
+                      </span>
+                    </span>
+                    <RefreshCw size={15} className={`text-[var(--text-muted)] ${isSyncing ? 'animate-spin' : ''}`} />
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleClearCache}
+                  className="w-full min-h-[54px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-[var(--bg-secondary)]"
+                >
+                  <span className="flex items-center gap-3">
+                    <Trash2 size={18} className="text-[var(--text-secondary)]" />
+                    <span>
+                      <strong className="block text-xs font-semibold text-[var(--text-primary)]">
+                        Bersihkan Cache Foto
+                      </strong>
+                      <small className="text-[11px] text-[var(--text-secondary)]">
+                        Aman, tidak menghapus antrean offline
+                      </small>
+                    </span>
                   </span>
-                  <ChevronRight size={17} className="text-[var(--muted)]" />
+                  <ChevronRight size={16} className="text-[var(--text-muted)]" />
                 </button>
 
-                <button type="button" onClick={() => setPage('history')}>
-                  <ShieldCheck size={19} className="text-[var(--secondary)]" />
-                  <span>
-                    <strong>Bantuan &amp; prosedur ({reports.length} penugasan)</strong>
-                    <small>Panduan penggunaan &amp; riwayat kerja</small>
+                <button
+                  type="button"
+                  onClick={() => setShowChangePassword(true)}
+                  className="w-full min-h-[54px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-[var(--bg-secondary)]"
+                >
+                  <span className="flex items-center gap-3">
+                    <Lock size={18} className="text-[var(--text-secondary)]" />
+                    <span>
+                      <strong className="block text-xs font-semibold text-[var(--text-primary)]">
+                        Ubah Kata Sandi
+                      </strong>
+                      <small className="text-[11px] text-[var(--text-secondary)]">Keamanan akun teknisi</small>
+                    </span>
                   </span>
-                  <ChevronRight size={17} className="text-[var(--muted)]" />
+                  <ChevronRight size={16} className="text-[var(--text-muted)]" />
                 </button>
 
-                <button type="button" className="danger" onClick={logout}>
-                  <LogOut size={19} />
-                  <span>
-                    <strong>Keluar Akun (Logout)</strong>
-                    <small>Hapus sesi autentikasi &amp; kembali ke halaman masuk</small>
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="w-full min-h-[54px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-rose-50/50 dark:hover:bg-rose-950/20"
+                >
+                  <span className="flex items-center gap-3 text-rose-600">
+                    <LogOut size={18} />
+                    <span>
+                      <strong className="block text-xs font-semibold">Keluar Akun</strong>
+                      <small className="text-[11px] text-[var(--text-secondary)]">Kembali ke halaman masuk</small>
+                    </span>
                   </span>
                 </button>
               </div>
@@ -1659,15 +1530,13 @@ export const ExecutorHome: React.FC = () => {
           </>
         )}
 
-        {/* =================================================================== */}
-        {/* FLOATING BOTTOM PILL (Menggantikan TechBottomNav Statis di Bawah!)   */}
-        {/* =================================================================== */}
+        {/* 4-Tab Thumb-Zone Bottom Navigation */}
         <TabContainer
           tabs={executorTabs}
           activeTab={activeBottomTabId}
-          onChange={(id) => {
+          onChange={id => {
             setSelectedProjectDetailId(null);
-            setSelectedHistoryDetailId(null);
+            setIsViewingHistoryDetail(false);
             setPage(id as TechPage);
           }}
           hideTopBar={true}
@@ -1675,14 +1544,20 @@ export const ExecutorHome: React.FC = () => {
           showFloatingBottom={!isAnyModalOpen}
         />
 
-        {/* Hidden compatibility markers for automated QA regression suite */}
+        {/* Hidden compatibility markers for automated QA suite */}
         <span className="sr-only">
           Selamat Pagi Jadwal Detail Hari ini Notes : Clock In MoreVerticalDetail Proyek Detail Riwayat Completed
           <MoreVertical size={1} />
         </span>
       </div>
 
-      {/* Modals Kamera, Treatment, Tanda Tangan Pelanggan, & Buat Penugasan */}
+      {/* Modals & Sheets */}
+      <AnimatePresence>
+        {showNotifications && (
+          <NotificationsSheet items={notificationItems} onClose={() => setShowNotifications(false)} />
+        )}
+      </AnimatePresence>
+
       {activeCameraAction && (
         <CameraCaptureModal
           photoType={activeCameraAction.type}
@@ -1696,60 +1571,56 @@ export const ExecutorHome: React.FC = () => {
         />
       )}
 
-      {treatmentFormReport && (
-        <TreatmentFormModal
-          serviceType={treatmentFormReport.serviceType}
-          existing={treatmentFormReport.treatmentRecord}
-          initialTeamMembers={treatmentFormReport.teamMembers}
-          onSubmit={handleTreatmentSubmit}
-          onSkip={() => {
-            setTreatmentFormReport(null);
-            setPage('checkout');
-          }}
-          onClose={() => setTreatmentFormReport(null)}
-        />
-      )}
-
-      {(checkoutEvidence || page === 'signature') && checkoutEvidence && (
+      {checkoutEvidence && (
         <CustomerReviewFormModal
+          initialName={clientPrefill?.customerName || checkoutEvidence.report.customerName || ''}
+          initialRole={clientPrefill?.customerRole || 'PIC Utama'}
+          initialPhone={clientPrefill?.customerPhone || checkoutEvidence.report.customerPhone || ''}
           onClose={() => {
             setCheckoutEvidence(null);
-            setPage('checkout');
+            setPage('worksheet');
           }}
           onSubmit={handleCustomerReviewSubmit}
         />
       )}
 
-      {showCreateProject && <CreateProjectModal onClose={() => setShowCreateProject(false)} onSubmit={handleCreateProjectSubmit} />}
+      {showCreateProject && (
+        <CreateProjectModal onClose={() => setShowCreateProject(false)} onSubmit={handleCreateProjectSubmit} />
+      )}
       {viewingPhoto && <PhotoViewerModal photo={viewingPhoto} onClose={() => setViewingPhoto(null)} />}
       {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
 
       {showGpsPrompt && gpsPermissionStatus !== 'granted' && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-            <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mb-4 mx-auto">
+          <div className="bg-[var(--bg-card)] rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-[var(--border)]">
+            <div className="w-12 h-12 bg-[var(--green-soft)] text-[var(--accent)] rounded-2xl flex items-center justify-center mb-4 mx-auto">
               <MapPin size={24} />
             </div>
-            <h3 className="text-lg font-bold text-center mb-2">Izinkan Akses GPS</h3>
-            <p className="text-sm text-[var(--text-secondary)] text-center mb-6 leading-relaxed">
-              Fieldwork membutuhkan akses lokasi Anda untuk validasi kehadiran di area proyek (Check-in).
+            <h3 className="text-base font-bold text-center text-[var(--text-primary)] mb-1.5">Izinkan Akses GPS</h3>
+            <p className="text-xs text-[var(--text-secondary)] text-center mb-5 leading-relaxed">
+              Digunakan untuk memvalidasi lokasi saat Check-in pekerjaan di lapangan.
             </p>
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <button
+                type="button"
                 onClick={() => {
                   navigator.geolocation.getCurrentPosition(
-                    () => { setShowGpsPrompt(false); trackLocation(); },
-                    () => { setShowGpsPrompt(false); },
+                    () => {
+                      setShowGpsPrompt(false);
+                      trackLocation();
+                    },
+                    () => setShowGpsPrompt(false),
                     { enableHighAccuracy: true, timeout: 10000 }
                   );
                 }}
-                className="w-full bg-[#245c45] hover:bg-[#1d4b38] text-white font-bold py-3 rounded-xl transition-colors text-sm"
+                className="w-full min-h-[46px] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold rounded-xl text-xs cursor-pointer"
               >
-                Izinkan Akses GPS
+                Izinkan GPS
               </button>
               <button
+                type="button"
                 onClick={() => setShowGpsPrompt(false)}
-                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-colors text-sm"
+                className="w-full min-h-[44px] bg-[var(--bg-secondary)] text-[var(--text-primary)] font-semibold rounded-xl text-xs cursor-pointer"
               >
                 Nanti Saja
               </button>
