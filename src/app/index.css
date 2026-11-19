@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --font-sans: "Inter", "Outfit", ui-sans-serif, system-ui, sans-serif;
@@ -886,3 +887,107 @@ button, a, [role="button"] {
 @media (max-width: 640px) {
   .kpi-grid { grid-template-columns:repeat(2,1fr); }
 }
+
+/* ============================================================================
+   GuciMas Field Lite — Scoped Technician Role Design Tokens (Light + Dark)
+   Isolated inside .tech-lite-shell so Admin/Dashboard/Marketing remain untouched
+   ============================================================================ */
+.tech-lite-shell {
+  --tl-surface: #f8f9ff;
+  --tl-card: #ffffff;
+  --tl-low: #eff4ff;
+  --tl-container: #e6eeff;
+  --tl-high: #dce9ff;
+  --tl-highest: #d5e3fc;
+  --tl-primary: #012d1d;
+  --tl-primary-container: #1b4332;
+  --tl-on-primary: #ffffff;
+  --tl-on-primary-container: #86af99;
+  --tl-secondary: #006c48;
+  --tl-secondary-container: #92f7c3;
+  --tl-on-secondary-container: #00734d;
+  --tl-text: #0d1c2e;
+  --tl-text-variant: #414844;
+  --tl-outline: #717973;
+  --tl-outline-variant: #c1c8c2;
+  --tl-error: #ba1a1a;
+  --tl-error-container: #ffdad6;
+  --tl-on-error-container: #93000a;
+  --tl-shadow-card: 0 1px 3px rgba(13, 28, 46, 0.06), 0 1px 2px rgba(13, 28, 46, 0.03);
+  --tl-shadow-nav: 0 -2px 12px rgba(27, 67, 50, 0.06);
+  --tl-shadow-head: 0 1px 8px rgba(0, 0, 0, 0.04);
+}
+
+html.dark .tech-lite-shell {
+  --tl-surface: #101613;
+  --tl-card: #1A211D;
+  --tl-low: #222C26;
+  --tl-container: #2A362F;
+  --tl-high: #314037;
+  --tl-highest: #38493F;
+  --tl-primary: #4B9B70;
+  --tl-primary-container: #2B5E44;
+  --tl-on-primary: #ffffff;
+  --tl-on-primary-container: #A5D0B9;
+  --tl-secondary: #5CC48B;
+  --tl-secondary-container: rgba(75, 155, 112, 0.22);
+  --tl-on-secondary-container: #8BE6B5;
+  --tl-text: #F0F4F1;
+  --tl-text-variant: #A8B4AC;
+  --tl-outline: #87968C;
+  --tl-outline-variant: #344239;
+  --tl-error: #F87171;
+  --tl-error-container: rgba(239, 68, 68, 0.18);
+  --tl-on-error-container: #FCA5A5;
+  --tl-shadow-card: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --tl-shadow-nav: 0 -2px 14px rgba(0, 0, 0, 0.45);
+  --tl-shadow-head: 0 1px 8px rgba(0, 0, 0, 0.35);
+}
+
+.tech-lite-shell .phone-app {
+  background: var(--tl-surface);
+  color: var(--tl-text);
+  border-color: var(--tl-container);
+}
+
+.tech-lite-shell .tech-bottom-nav {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  margin-top: auto;
+  background: color-mix(in srgb, var(--tl-surface) 92%, transparent);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: var(--tl-shadow-nav);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.tech-lite-shell .tech-sticky-tray {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  margin-top: auto;
+  background: var(--tl-card);
+  box-shadow: 0 -4px 16px rgba(1, 45, 29, 0.08);
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 540px) {
+  .tech-lite-shell.technician-stage {
+    padding: 0;
+    background: var(--tl-surface);
+  }
+  .tech-lite-shell .tech-bottom-nav,
+  .tech-lite-shell .tech-sticky-tray {
+    position: fixed;
+  }
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
+

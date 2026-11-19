@@ -1,11 +1,12 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { X, Eraser, Star, Lock, ArrowRight, EyeOff } from 'lucide-react';
+import { X, RefreshCw, Star, Lock, ArrowRight, EyeOff, PenTool, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface CustomerReviewFormModalProps {
   initialName?: string;
   initialRole?: string;
   initialPhone?: string;
+  projectName?: string;
   onClose: () => void;
   onSubmit: (data: {
     customerName: string;
@@ -24,17 +25,18 @@ const QUICK_REVIEW_TAGS = [
 
 const RATING_LABELS: Record<number, string> = {
   0: 'Ketuk bintang untuk menilai layanan hari ini',
-  1: 'Perlu Banyak Perbaikan',
-  2: 'Kurang Memuaskan',
-  3: 'Cukup Baik',
-  4: 'Puas & Rapi',
-  5: 'Sangat Puas, Cepat & Bersih',
+  1: '1 Bintang: Perlu Banyak Perbaikan',
+  2: '2 Bintang: Kurang Memuaskan',
+  3: '3 Bintang: Cukup Baik',
+  4: '4 Bintang: Sangat Baik & Tepat Waktu',
+  5: '5 Bintang: Sangat Puas & Bersih',
 };
 
 export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = ({
   initialName = '',
   initialRole = 'PIC Utama',
   initialPhone = '',
+  projectName,
   onClose,
   onSubmit,
 }) => {
@@ -70,7 +72,7 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.lineWidth = 2.6;
-    ctx.strokeStyle = '#16241C';
+    ctx.strokeStyle = '#012d1d';
   }, [step]);
 
   const getCoordinates = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -135,11 +137,11 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
   const handleProceedToStrictEval = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
-      setError('Nama penerima / PIC wajib diisi.');
+      setError('Nama penandatangan / PIC wajib diisi.');
       return;
     }
     if (!hasSignature) {
-      setError('Silakan bubuhkan tanda tangan klien terlebih dahulu.');
+      setError('Silakan bubuhkan tanda tangan customer terlebih dahulu.');
       return;
     }
     const sigData = canvasRef.current?.toDataURL('image/png') || '';
@@ -181,30 +183,35 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/65 backdrop-blur-xs">
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-[#233144]/60 backdrop-blur-xs">
       <motion.div
         initial={{ opacity: 0, y: 24, scale: 0.99 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 20 }}
         transition={{ duration: 0.18, ease: 'easeOut' }}
-        className="bg-[var(--bg-card)] rounded-t-3xl sm:rounded-3xl w-full max-w-[430px] overflow-hidden flex flex-col max-h-[94dvh] shadow-2xl border border-[var(--border)]"
+        className="tech-lite-shell bg-[var(--tl-card)] rounded-t-2xl sm:rounded-2xl w-full max-w-[430px] overflow-hidden flex flex-col max-h-[92dvh] shadow-2xl"
       >
-        {/* Clean Header */}
-        <div className="px-5 py-4 border-b border-[var(--border)] flex items-center justify-between shrink-0 bg-[#1B4332] text-white">
-          <div>
-            <span className="text-[11px] font-medium text-emerald-200 block">
-              {step === 'SIGN_STAGE' ? 'Tanda Tangan Penerima' : 'Penilaian Rahasia Klien'}
-            </span>
-            <h2 className="text-base font-bold mt-0.5">
-              {step === 'SIGN_STAGE' ? 'Pengesahan Berita Acara' : 'Bagaimana layanan hari ini?'}
-            </h2>
+        {/* Reference-matched Bottom-Sheet Header */}
+        <div className="px-5 pt-5 pb-3.5 border-b border-[var(--tl-container)] flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] flex items-center justify-center shrink-0">
+              {step === 'SIGN_STAGE' ? <PenTool size={18} /> : <Star size={18} />}
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-[16px] font-bold text-[var(--tl-text)] leading-tight truncate">
+                {step === 'SIGN_STAGE' ? 'Tanda Tangan Customer' : 'Feedback Kualitas Pelayanan'}
+              </h2>
+              <p className="text-xs text-[var(--tl-text-variant)] truncate mt-0.5">
+                {name ? `${name}${projectName ? ` · ${projectName}` : ''}` : projectName || 'Pengesahan Berita Acara'}
+              </p>
+            </div>
           </div>
           {step === 'SIGN_STAGE' && (
             <button
               type="button"
               onClick={onClose}
               aria-label="Tutup"
-              className="w-9 h-9 rounded-xl text-emerald-100 hover:text-white hover:bg-white/10 flex items-center justify-center cursor-pointer"
+              className="w-9 h-9 rounded-full bg-[var(--tl-container)] flex items-center justify-center text-[var(--tl-text)] hover:bg-[var(--tl-high)] cursor-pointer shrink-0"
             >
               <X size={18} />
             </button>
@@ -220,10 +227,10 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
               exit={{ opacity: 0, x: -10 }}
               transition={{ duration: 0.16 }}
               onSubmit={handleProceedToStrictEval}
-              className="overflow-y-auto p-5 space-y-4 pb-7"
+              className="overflow-y-auto p-5 space-y-4 pb-6"
             >
               {error && (
-                <div className="px-3.5 py-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-medium">
+                <div className="px-3.5 py-2.5 bg-[var(--tl-error-container)] rounded-xl text-[var(--tl-on-error-container)] text-xs font-semibold">
                   {error}
                 </div>
               )}
@@ -231,51 +238,52 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
               {/* Compact Pre-filled Recipient Info */}
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1">
-                    Nama Penerima
+                  <label className="block text-[11px] font-semibold text-[var(--tl-text-variant)] mb-1">
+                    Nama Penandatangan
                   </label>
                   <input
                     type="text"
                     value={name}
                     onChange={e => setName(e.target.value)}
                     placeholder="Nama PIC"
-                    className="w-full h-11 px-3 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl text-xs font-medium text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                    className="w-full h-11 px-3 bg-[var(--tl-low)] rounded-lg text-xs font-medium text-[var(--tl-text)] focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-semibold text-[var(--text-secondary)] mb-1">
-                    Jabatan / Peran
+                  <label className="block text-[11px] font-semibold text-[var(--tl-text-variant)] mb-1">
+                    Jabatan / Status
                   </label>
                   <input
                     type="text"
                     value={roleTitle}
                     onChange={e => setRoleTitle(e.target.value)}
-                    placeholder="PIC / GA / Satpam"
-                    className="w-full h-11 px-3 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-xl text-xs font-medium text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                    placeholder="Supervisor GA / PIC"
+                    className="w-full h-11 px-3 bg-[var(--tl-low)] rounded-lg text-xs font-medium text-[var(--tl-text)] focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
                   />
                 </div>
               </div>
 
-              {/* Spacious Full-Width Client Signature Canvas */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-[var(--text-primary)]">
-                    Tanda Tangan Klien
-                  </label>
+              {/* Touch Signature Canvas Area */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-medium text-[var(--tl-text-variant)]">
+                    Goreskan tanda tangan pada bidang di bawah:
+                  </span>
                   {hasSignature && (
                     <button
                       type="button"
                       onClick={clearSignature}
-                      className="text-xs font-semibold text-rose-600 flex items-center gap-1 cursor-pointer"
+                      className="text-[11px] font-semibold text-[var(--tl-error)] flex items-center gap-1 cursor-pointer"
                     >
-                      <Eraser size={13} /> Ulang
+                      <RefreshCw size={13} /> Bersihkan
                     </button>
                   )}
                 </div>
-                <div className="border border-slate-300 rounded-2xl bg-white overflow-hidden touch-none h-52 relative">
+                <div className="h-48 rounded-xl bg-white border border-[var(--tl-container)] shadow-inner relative overflow-hidden touch-none">
                   {!hasSignature && (
-                    <div className="absolute inset-0 flex items-center justify-center text-slate-400 pointer-events-none text-xs font-medium">
-                      Silakan tanda tangan di area ini
+                    <div className="absolute inset-0 flex items-center justify-center gap-1.5 text-slate-400 pointer-events-none text-xs font-medium">
+                      <PenTool size={15} />
+                      <span>Tanda tangan di sini</span>
                     </div>
                   )}
                   <canvas
@@ -290,13 +298,22 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
                 </div>
               </div>
 
-              <button
-                type="submit"
-                className="w-full min-h-[50px] bg-[#1B4332] hover:bg-[#13462A] text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer"
-              >
-                <span>Lanjut ke Penilaian Klien</span>
-                <ArrowRight size={16} />
-              </button>
+              <div className="flex gap-2.5 pt-1">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="flex-1 min-h-[48px] bg-[var(--tl-container)] text-[var(--tl-text)] font-semibold rounded-xl text-xs cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="flex-[2] min-h-[48px] bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] font-semibold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-[0.98] transition-transform cursor-pointer"
+                >
+                  <span>Lanjut ke Penilaian</span>
+                  <ArrowRight size={16} />
+                </button>
+              </div>
             </motion.form>
           ) : (
             <motion.form
@@ -306,60 +323,65 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
               exit={{ opacity: 0, x: 12 }}
               transition={{ duration: 0.16 }}
               onSubmit={handleFinalStrictSubmit}
-              className="overflow-y-auto p-5 space-y-5 pb-7"
+              className="overflow-y-auto p-5 space-y-4 pb-6"
             >
               {/* Calm Privacy Assurance */}
-              <div className="px-3.5 py-2.5 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border)] flex items-center gap-2.5 text-xs text-[var(--text-secondary)]">
-                <EyeOff size={16} className="text-[var(--accent)] shrink-0" />
+              <div className="px-3.5 py-2.5 rounded-xl bg-[var(--tl-low)] flex items-center gap-2.5 text-xs text-[var(--tl-text-variant)]">
+                <EyeOff size={16} className="text-[var(--tl-secondary)] shrink-0" />
                 <span>Penilaian bersifat rahasia dan tidak ditampilkan di HP teknisi.</span>
               </div>
 
               {error && (
-                <div className="px-3.5 py-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-medium">
+                <div className="px-3.5 py-2.5 bg-[var(--tl-error-container)] rounded-xl text-[var(--tl-on-error-container)] text-xs font-semibold">
                   {error}
                 </div>
               )}
 
-              {/* Consumer-Grade Interactive 5 Stars */}
-              <div className="py-2 text-center space-y-3">
-                <div className="flex items-center justify-center gap-2.5">
-                  {[1, 2, 3, 4, 5].map(star => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => {
-                        setError('');
-                        setRating(star);
-                      }}
-                      aria-label={`${star} bintang`}
-                      className="w-12 h-12 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border)] flex items-center justify-center transition-transform active:scale-90 cursor-pointer"
-                    >
-                      <Star
-                        size={28}
-                        className={
-                          star <= rating
-                            ? 'fill-amber-400 text-amber-400 transition-colors'
-                            : 'text-slate-300 dark:text-slate-600'
-                        }
-                      />
-                    </button>
-                  ))}
+              {/* Confidential Customer Feedback Box */}
+              <div className="bg-[var(--tl-low)] p-4 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[var(--tl-text)]">Kepuasan Layanan (Rahasia)</span>
+                  <span className="text-[11px] font-semibold text-[var(--tl-secondary)]">1 Tap</span>
                 </div>
-                <p
-                  className={`text-sm font-bold ${
-                    rating >= 4
-                      ? 'text-emerald-700 dark:text-emerald-400'
-                      : rating > 0
-                      ? 'text-amber-700 dark:text-amber-300'
-                      : 'text-[var(--text-muted)] font-medium text-xs'
-                  }`}
-                >
+                <p className="text-xs text-[var(--tl-text-variant)] leading-relaxed">
+                  Bagaimana kepuasan Anda terhadap ketepatan waktu &amp; kerapihan kerja teknisi hari ini?
+                </p>
+
+                {/* Star Rating */}
+                <div className="flex items-center justify-center gap-2.5 py-1.5">
+                  {[1, 2, 3, 4, 5].map(star => {
+                    const filled = star <= rating;
+                    return (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => {
+                          setError('');
+                          setRating(star);
+                        }}
+                        aria-label={`${star} bintang`}
+                        className="w-11 h-11 rounded-xl bg-[var(--tl-card)] flex items-center justify-center shadow-xs active:scale-90 transition-transform cursor-pointer"
+                      >
+                        <Star
+                          size={24}
+                          className={
+                            filled
+                              ? 'fill-[var(--tl-secondary)] text-[var(--tl-secondary)]'
+                              : 'text-[var(--tl-outline-variant)]'
+                          }
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <p className="text-center text-xs font-bold text-[var(--tl-secondary)]">
                   {RATING_LABELS[rating]}
                 </p>
               </div>
 
               {/* 4 Quick Positive Tags */}
-              <div className="flex flex-wrap justify-center gap-2">
+              <div className="flex flex-wrap justify-center gap-1.5">
                 {QUICK_REVIEW_TAGS.map(tag => {
                   const active = selectedTags.includes(tag);
                   return (
@@ -367,10 +389,10 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
                       key={tag}
                       type="button"
                       onClick={() => toggleTag(tag)}
-                      className={`min-h-[40px] px-3.5 rounded-xl text-xs font-semibold border transition-all active:scale-[0.98] cursor-pointer ${
+                      className={`min-h-[38px] px-3 rounded-full text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer ${
                         active
-                          ? 'bg-[#1B4332] text-white border-[#1B4332]'
-                          : 'bg-[var(--bg-card)] text-[var(--text-primary)] border-[var(--border)]'
+                          ? 'bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] shadow-xs'
+                          : 'bg-[var(--tl-container)] text-[var(--tl-text-variant)] hover:text-[var(--tl-text)]'
                       }`}
                     >
                       {active ? '✓ ' : ''}{tag}
@@ -385,16 +407,21 @@ export const CustomerReviewFormModal: React.FC<CustomerReviewFormModalProps> = (
                 onChange={e => setFeedback(e.target.value)}
                 rows={2}
                 placeholder="Tulis masukan singkat untuk manajemen (opsional)..."
-                className="w-full p-3.5 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-2xl text-xs text-[var(--text-primary)] resize-none focus:outline-none focus:border-[var(--accent)]"
+                className="w-full p-3 bg-[var(--tl-low)] rounded-xl text-xs text-[var(--tl-text)] resize-none focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
               />
 
               <button
                 type="submit"
-                className="w-full min-h-[50px] bg-[#1B4332] hover:bg-[#13462A] text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer"
+                className="w-full min-h-[48px] bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] font-semibold rounded-xl text-xs flex items-center justify-center gap-2 shadow-md active:scale-[0.98] transition-transform cursor-pointer"
               >
-                <Lock size={15} />
-                <span>Kirim Penilaian &amp; Selesai</span>
+                <CheckCircle2 size={17} />
+                <span>Konfirmasi &amp; Selesaikan WO</span>
               </button>
+
+              <div className="flex items-center justify-center gap-1.5 text-[11px] text-[var(--tl-text-variant)]">
+                <Lock size={13} />
+                <span>Data terenkripsi &amp; langsung terkirim ke koordinator.</span>
+              </div>
             </motion.form>
           )}
         </AnimatePresence>

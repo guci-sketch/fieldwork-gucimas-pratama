@@ -1,18 +1,26 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
   ArrowRight,
+  Bug,
   Camera,
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Clock,
   Eraser,
+  Lock,
+  MapPin,
   Minus,
-  PenLine,
+  PenTool,
   Plus,
+  ShieldCheck,
+  Sparkles,
   Star,
+  UserCheck,
+  Wrench,
+  X,
 } from 'lucide-react';
 import {
   ApplicationMethod,
@@ -23,6 +31,13 @@ import {
 import { TreatmentInput, MAX_PHOTOS_PER_REPORT } from '@/shared/api/workReports';
 import { serializePestFindingsToNotes, parsePestFindingsFromNotes } from '@/shared/lib/permenkesRecapEngine';
 import { AuthedImage } from '../common/AuthedImage';
+import {
+  formatWoCode,
+  getInitials,
+  getTechSigStorageKey,
+  getTechSigTimeStorageKey,
+  isTermiteService,
+} from './techLiteUtils';
 
 export interface WorksheetClientPrefill {
   customerName: string;
@@ -35,6 +50,8 @@ interface TechnicianWorksheetProps {
   report: WorkReport;
   elapsedTime: string;
   technicianName: string;
+  technicianNip?: string | null;
+  isOnline?: boolean;
   onBack: () => void;
   onCapturePhoto: (tag: PhotoTag) => void;
   onViewPhoto: (photo: DocumentationPhoto) => void;
@@ -42,57 +59,168 @@ interface TechnicianWorksheetProps {
   onProceedToClientSign: (prefill: WorksheetClientPrefill) => void;
 }
 
-interface WorksheetDraft {
-  step: 1 | 2 | 3 | 4 | 5;
-  serviceMode: 'AR' | 'PCO';
-  // Step 1 — Anti Rayap
-  termiteSpecies: string[];
-  customSpecies: string;
+interface TermiteSpeciesEntry {
+  id: string;
+  name: string;
+  selected: boolean;
+  hasNest: boolean;
   hasMudTube: boolean;
   severity: 'Ringan' | 'Sedang' | 'Kritis';
-  colonyEstimate: '< 500' | '1rb – 3rb' | '> 5.000';
-  // Step 1 — Pest Control
-  pestCounts: Record<string, number>;
-  // Step 2 — Metode
+  colonyEstimate: '< 500' | '1rb - 3rb' | '> 5.000';
+  locationNote: string;
+}
+
+interface PestControlEntry {
+  id: string;
+  name: string;
+  selected: boolean;
+  quantity: number;
+  conditions: string[];
+  locationNote: string;
+}
+
+interface WorksheetDraft {
+  serviceMode: 'AR' | 'PCO';
+  // Bagian 1 — Anti Rayap per-species cards
+  termiteEntries: TermiteSpeciesEntry[];
+  // Bagian 1 — Pest Control per-pest cards
+  pestEntries: PestControlEntry[];
+  // Bagian 2 — Metode Treatment
   methods: string[];
-  customMethod: string;
+  customMethods: string[];
   chemicalName: string;
   dosage: string;
   treatmentAreaSqm: string;
-  // Step 3 — Area
+  // Bagian 3 — Area Tindakan
   selectedAreas: string[];
   priorityAreas: string[];
-  customArea: string;
-  // Step 4 — Saran
+  customAreas: string[];
+  // Bagian 4 — Saran & Rekomendasi
   recommendations: string;
-  // Step 5 — Pengesahan
+  // Bagian 5 — Pengesahan
   technicianSignature: string;
   clientName: string;
   clientRole: string;
-  clientCustomRole: string;
   clientPhone: string;
 }
 
-const TERMITE_SPECIES = ['Rayap Kayu Kering', 'Rayap Tanah', 'Rayap Coptotermes'];
-const COMMON_PESTS = ['Kecoa', 'Tikus', 'Nyamuk', 'Semut', 'Lalat'];
-
-const TREATMENT_METHODS: Array<{ label: string; apiMethod: ApplicationMethod; mode: 'AR' | 'PCO' | 'BOTH' }> = [
-  { label: 'Injeksi Termitisida Cair', apiMethod: 'DRILLING', mode: 'AR' },
-  { label: 'Umpan Rayap (Baiting)', apiMethod: 'BAITING', mode: 'AR' },
-  { label: 'Spraying Residual', apiMethod: 'SPRAYING', mode: 'BOTH' },
-  { label: 'Pengasapan Fogging', apiMethod: 'FOGGING', mode: 'PCO' },
-  { label: 'Mist Blower', apiMethod: 'MISTING', mode: 'PCO' },
-  { label: 'Dusting', apiMethod: 'DUSTING', mode: 'BOTH' },
-  { label: 'Cold Fogging (ULV)', apiMethod: 'MISTING', mode: 'PCO' },
+const DEFAULT_TERMITE_ENTRIES: TermiteSpeciesEntry[] = [
+  {
+    id: 'ar-kayu-kering',
+    name: 'Rayap Kayu Kering (Cryptotermes)',
+    selected: false,
+    hasNest: false,
+    hasMudTube: false,
+    severity: 'Sedang',
+    colonyEstimate: '1rb - 3rb',
+    locationNote: '',
+  },
+  {
+    id: 'ar-tanah',
+    name: 'Rayap Tanah (Coptotermes formosanus)',
+    selected: true,
+    hasNest: false,
+    hasMudTube: true,
+    severity: 'Sedang',
+    colonyEstimate: '1rb - 3rb',
+    locationNote: '',
+  },
 ];
 
-const AREA_OPTIONS = [
-  'Basement',
-  'Ruang Arsip',
-  'Plafon',
-  'Pantry / Dapur',
-  'Perimeter Luar',
-  'Area Lobi & Koridor',
+const DEFAULT_PEST_ENTRIES: PestControlEntry[] = [
+  {
+    id: 'pco-kecoa',
+    name: 'Kecoa Jerman',
+    selected: true,
+    quantity: 3,
+    conditions: ['Hidup'],
+    locationNote: '',
+  },
+  {
+    id: 'pco-tikus',
+    name: 'Tikus Got / Atap',
+    selected: false,
+    quantity: 1,
+    conditions: ['Telur/Jejak'],
+    locationNote: '',
+  },
+  {
+    id: 'pco-semut',
+    name: 'Semut Api / Merah',
+    selected: false,
+    quantity: 5,
+    conditions: ['Hidup'],
+    locationNote: '',
+  },
+  {
+    id: 'pco-lalat-nyamuk',
+    name: 'Lalat & Nyamuk',
+    selected: false,
+    quantity: 5,
+    conditions: ['Hidup'],
+    locationNote: '',
+  },
+];
+
+const PEST_CONDITION_OPTIONS = ['Hidup', 'Mati/Bangkai', 'Telur/Jejak'];
+
+const TREATMENT_METHODS: Array<{
+  label: string;
+  subtitle: string;
+  apiMethod: ApplicationMethod;
+  mode: 'AR' | 'PCO' | 'BOTH';
+}> = [
+  {
+    label: 'Injeksi Termitisida Cair',
+    subtitle: 'Pengeboran & injeksi barrier pondasi serta kusen',
+    apiMethod: 'DRILLING',
+    mode: 'AR',
+  },
+  {
+    label: 'Umpan Rayap (Baiting System)',
+    subtitle: 'Pemasangan stasiun umpan eliminasi koloni',
+    apiMethod: 'BAITING',
+    mode: 'AR',
+  },
+  {
+    label: 'Spraying Residual',
+    subtitle: 'Penyemprotan dinding, celah & perimeter bangunan',
+    apiMethod: 'SPRAYING',
+    mode: 'BOTH',
+  },
+  {
+    label: 'Cold Fogging (ULV)',
+    subtitle: 'Pengembunan halus area indoor & ruang tertutup',
+    apiMethod: 'MISTING',
+    mode: 'PCO',
+  },
+  {
+    label: 'Pengasapan Thermal Fogging',
+    subtitle: 'Pengasapan area outdoor, saluran & taman',
+    apiMethod: 'FOGGING',
+    mode: 'PCO',
+  },
+  {
+    label: 'Gel Baiting & Perangkap',
+    subtitle: 'Aplikasi gel kecoa/semut dan trap monitoring',
+    apiMethod: 'GEL_INJECTION',
+    mode: 'PCO',
+  },
+  {
+    label: 'Dusting Celah & Partisi',
+    subtitle: 'Penaburan serbuk anti hama di jalur tersembunyi',
+    apiMethod: 'DUSTING',
+    mode: 'BOTH',
+  },
+];
+
+const DEFAULT_AREAS: Array<{ name: string; zone: string }> = [
+  { name: 'Basement & Pondasi', zone: 'Struktur Bawah' },
+  { name: 'Ruang Arsip & Dokumen', zone: 'Area Kering' },
+  { name: 'Plafon & Partisi', zone: 'Area Atas' },
+  { name: 'Pantry / Dapur', zone: 'Zona Pangan' },
+  { name: 'Perimeter Luar', zone: 'Eksterior' },
+  { name: 'Area Lobi & Koridor', zone: 'Zona Umum' },
 ];
 
 const RECOMMENDATION_CHIPS_AR = [
@@ -109,50 +237,52 @@ const RECOMMENDATION_CHIPS_PCO = [
   'Kelola Tempat Sampah Tertutup',
 ];
 
-const CLIENT_ROLES = ['PIC Utama', 'Supervisor GA', 'Satpam / Security', 'Pengelola Gedung'];
-
-const STEP_LABELS = ['Temuan', 'Metode', 'Area', 'Saran & Foto', 'Pengesahan'] as const;
+const CLIENT_ROLES = ['PIC Utama', 'Supervisor GA', 'Pengelola Gedung', 'Pemilik / Perwakilan'];
 
 function buildDefaultDraft(report: WorkReport): WorksheetDraft {
-  const isTermite = report.serviceType === 'TERMITE_CONTROL';
+  const isTermite = isTermiteService(report.serviceType);
   const parsed = parsePestFindingsFromNotes(report.treatmentRecord?.technicianNotes);
 
-  const defaultCounts: Record<string, number> = {
-    Kecoa: 0,
-    Tikus: 0,
-    Nyamuk: 0,
-    Semut: 0,
-    Lalat: 0,
-  };
+  const pestEntries = DEFAULT_PEST_ENTRIES.map(entry => ({ ...entry, conditions: [...entry.conditions] }));
   if (!isTermite && parsed.findings.length > 0) {
-    parsed.findings.forEach(f => {
-      const match = COMMON_PESTS.find(p => f.pestName.toLowerCase().includes(p.toLowerCase()));
-      if (match) defaultCounts[match] = (defaultCounts[match] || 0) + (f.quantity || 1);
+    pestEntries.forEach(p => {
+      const match = parsed.findings.find(f =>
+        f.pestName.toLowerCase().includes(p.name.split(' ')[0].toLowerCase())
+      );
+      if (match) {
+        p.selected = true;
+        p.quantity = Math.max(1, match.quantity || 1);
+      }
     });
   }
 
+  let existingTechSig = '';
+  try {
+    existingTechSig = localStorage.getItem(getTechSigStorageKey(report.id)) || '';
+  } catch {
+    // ignore
+  }
+
   return {
-    step: 1,
     serviceMode: isTermite ? 'AR' : 'PCO',
-    termiteSpecies: isTermite ? ['Rayap Tanah'] : [],
-    customSpecies: '',
-    hasMudTube: isTermite,
-    severity: 'Sedang',
-    colonyEstimate: '1rb – 3rb',
-    pestCounts: defaultCounts,
+    termiteEntries: DEFAULT_TERMITE_ENTRIES.map(e => ({ ...e })),
+    pestEntries,
     methods: isTermite ? ['Injeksi Termitisida Cair'] : ['Spraying Residual'],
-    customMethod: '',
+    customMethods: [],
     chemicalName: report.treatmentRecord?.chemicalName || (isTermite ? 'Premise 200 SL' : 'Cypergard 100 EC'),
     dosage: report.treatmentRecord?.dosage || (isTermite ? '2.5 ml / L Air' : '10 ml / L Air'),
-    treatmentAreaSqm: report.treatmentRecord?.treatmentAreaSqm ? String(report.treatmentRecord.treatmentAreaSqm) : '120',
-    selectedAreas: isTermite ? ['Basement', 'Ruang Arsip'] : ['Pantry / Dapur', 'Perimeter Luar'],
+    treatmentAreaSqm: report.treatmentRecord?.treatmentAreaSqm
+      ? String(report.treatmentRecord.treatmentAreaSqm)
+      : '120',
+    selectedAreas: isTermite
+      ? ['Basement & Pondasi', 'Ruang Arsip & Dokumen']
+      : ['Pantry / Dapur', 'Perimeter Luar'],
     priorityAreas: [],
-    customArea: '',
+    customAreas: [],
     recommendations: parsed.cleanNotes || '',
-    technicianSignature: '',
+    technicianSignature: existingTechSig,
     clientName: report.customerName || '',
     clientRole: 'PIC Utama',
-    clientCustomRole: '',
     clientPhone: report.customerPhone || '',
   };
 }
@@ -161,6 +291,8 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
   report,
   elapsedTime,
   technicianName,
+  technicianNip,
+  isOnline = true,
   onBack,
   onCapturePhoto,
   onViewPhoto,
@@ -173,7 +305,11 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
     try {
       const saved = localStorage.getItem(draftKey);
       if (saved) {
-        return { ...buildDefaultDraft(report), ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        // Guard against legacy draft schema from previous stepper version
+        if (Array.isArray(parsed.termiteEntries) && Array.isArray(parsed.pestEntries)) {
+          return { ...buildDefaultDraft(report), ...parsed };
+        }
       }
     } catch {
       // ignore storage errors
@@ -181,16 +317,19 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
     return buildDefaultDraft(report);
   });
 
-  const [showTechDetails, setShowTechDetails] = useState(false);
+  const [newSpeciesInput, setNewSpeciesInput] = useState('');
+  const [newPestInput, setNewPestInput] = useState('');
+  const [newMethodInput, setNewMethodInput] = useState('');
   const [newAreaInput, setNewAreaInput] = useState('');
-  const [isSavingStep, setIsSavingStep] = useState(false);
+  const [showTechDetails, setShowTechDetails] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [validationMsg, setValidationMsg] = useState<string | null>(null);
 
-  // Technician Signature Canvas (Step 5A)
+  // Live signature canvas (Tahap 1 — Teknisi Utama)
   const techCanvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawingTech, setIsDrawingTech] = useState(false);
 
-  // Auto-save draft locally for offline resilience
+  // Autosave draft locally for offline resilience
   useEffect(() => {
     try {
       localStorage.setItem(draftKey, JSON.stringify(draft));
@@ -199,9 +338,8 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
     }
   }, [draft, draftKey]);
 
-  // Setup technician signature canvas when entering step 5
+  // Initialize signature canvas once on mount
   useEffect(() => {
-    if (draft.step !== 5) return;
     const canvas = techCanvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -209,13 +347,13 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
 
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    canvas.width = Math.max(1, rect.width) * dpr;
+    canvas.height = Math.max(1, rect.height) * dpr;
     ctx.scale(dpr, dpr);
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.lineWidth = 2.4;
-    ctx.strokeStyle = '#16241C';
+    ctx.strokeStyle = '#012d1d';
 
     if (draft.technicianSignature) {
       const img = new Image();
@@ -224,9 +362,10 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
       };
       img.src = draft.technicianSignature;
     }
-  }, [draft.step]);
+  }, []);
 
   const isTermite = draft.serviceMode === 'AR';
+  const woCode = formatWoCode(report.id);
   const progressPhotos = report.photos.filter(p => p.photoType === 'PROGRESS');
   const totalPhotos = report.photos.length;
   const canTakeMoreProgress = totalPhotos < MAX_PHOTOS_PER_REPORT && progressPhotos.length < 4;
@@ -236,10 +375,10 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
     setDraft(prev => ({ ...prev, [key]: value }));
   };
 
-  const toggleItem = (list: string[], item: string): string[] =>
+  const toggleStringItem = (list: string[], item: string): string[] =>
     list.includes(item) ? list.filter(x => x !== item) : [...list, item];
 
-  // Canvas Pointer Handlers for Technician Signature
+  // Canvas pointer handlers
   const getCanvasPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = techCanvasRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
@@ -276,7 +415,15 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
       // ignore
     }
     const sigUrl = techCanvasRef.current?.toDataURL('image/png') || '';
-    if (sigUrl) updateDraft('technicianSignature', sigUrl);
+    if (sigUrl) {
+      updateDraft('technicianSignature', sigUrl);
+      try {
+        localStorage.setItem(getTechSigStorageKey(report.id), sigUrl);
+        localStorage.setItem(getTechSigTimeStorageKey(report.id), new Date().toISOString());
+      } catch {
+        // ignore storage quota errors
+      }
+    }
   };
 
   const clearTechSign = () => {
@@ -286,39 +433,53 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
     const dpr = window.devicePixelRatio || 1;
     ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
     updateDraft('technicianSignature', '');
+    try {
+      localStorage.removeItem(getTechSigStorageKey(report.id));
+    } catch {
+      // ignore
+    }
   };
 
-  // Compile structured TreatmentInput compatible with Permenkes Recap & PDF Berita Acara
+  // Build TreatmentInput payload compatible with Permenkes Recap & PDF export
   const buildTreatmentPayload = (): TreatmentInput => {
-    const allMethods = [...draft.methods, ...(draft.customMethod.trim() ? [draft.customMethod.trim()] : [])];
+    const allMethods = [...draft.methods, ...draft.customMethods];
     const primaryMethodConfig = TREATMENT_METHODS.find(m => allMethods.includes(m.label));
-    const apiMethod: ApplicationMethod = primaryMethodConfig?.apiMethod || (isTermite ? 'DRILLING' : 'SPRAYING');
+    const apiMethod: ApplicationMethod =
+      primaryMethodConfig?.apiMethod || (isTermite ? 'DRILLING' : 'SPRAYING');
 
-    const areaList = [
-      ...draft.selectedAreas.map(a => (draft.priorityAreas.includes(a) ? `${a} (Prioritas)` : a)),
-      ...(draft.customArea.trim() ? [draft.customArea.trim()] : []),
-    ];
+    const areaList = draft.selectedAreas.map(a =>
+      draft.priorityAreas.includes(a) ? `${a} (Prioritas)` : a
+    );
     const areaSummary = areaList.join(', ') || (isTermite ? 'Area Pondasi & Kusen' : 'Area Operasional');
 
     const findings = isTermite
-      ? [
-          ...(draft.termiteSpecies.length > 0 ? draft.termiteSpecies : ['Rayap Tanah']),
-          ...(draft.customSpecies.trim() ? [draft.customSpecies.trim()] : []),
-        ].map(sp => ({
-          pestName: sp,
-          quantity: 1,
-          treatmentMethod: allMethods.join(', ') || 'Injeksi Termitisida',
-          location: areaSummary,
-          notes: `[Keparahan: ${draft.severity} | Koloni: ${draft.colonyEstimate}${draft.hasMudTube ? ' | Sarang/Mud Tube' : ''}]`,
-        }))
-      : Object.entries(draft.pestCounts)
-          .filter(([, count]) => count > 0)
-          .map(([pest, count]) => ({
-            pestName: pest,
-            quantity: count,
+      ? draft.termiteEntries
+          .filter(sp => sp.selected)
+          .map(sp => {
+            const flags = [
+              sp.hasNest ? 'Sarang Terdeteksi' : '',
+              sp.hasMudTube ? 'Jalur Mud Tube' : '',
+            ]
+              .filter(Boolean)
+              .join(', ');
+            return {
+              pestName: sp.name,
+              quantity: 1,
+              treatmentMethod: allMethods.join(', ') || 'Injeksi Termitisida Cair',
+              location: sp.locationNote.trim() || areaSummary,
+              notes: `[Keparahan: ${sp.severity} | Koloni: ${sp.colonyEstimate}${flags ? ` | ${flags}` : ''}]`,
+            };
+          })
+      : draft.pestEntries
+          .filter(p => p.selected && p.quantity > 0)
+          .map(p => ({
+            pestName: p.name,
+            quantity: p.quantity,
             treatmentMethod: allMethods.join(', ') || 'Spraying Residual',
-            location: areaSummary,
-            notes: `Ditemukan ${count} titik/ekor`,
+            location: p.locationNote.trim() || areaSummary,
+            notes: `Ditemukan ${p.quantity} titik/ekor${
+              p.conditions.length > 0 ? ` (${p.conditions.join(', ')})` : ''
+            }`,
           }));
 
     const safeFindings =
@@ -347,80 +508,64 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
       chemicalName: draft.chemicalName.trim() || (isTermite ? 'Premise 200 SL' : 'Cypergard 100 EC'),
       dosage: draft.dosage.trim() || (isTermite ? '2.5 ml / L Air' : '10 ml / L Air'),
       treatmentAreaSqm: Number(draft.treatmentAreaSqm) || 120,
+      // CRITICAL: cleanNotes is 1st parameter, findings is 2nd parameter
       technicianNotes: serializePestFindingsToNotes(compiledNotes, safeFindings),
     };
   };
 
-  const handleNextStep = async () => {
+  const handleProceed = async () => {
     setValidationMsg(null);
-    if (draft.step === 1 && isTermite && draft.termiteSpecies.length === 0 && !draft.customSpecies.trim()) {
-      setValidationMsg('Pilih minimal 1 spesies rayap atau isi kolom kustom.');
+    const allMethods = [...draft.methods, ...draft.customMethods];
+    if (allMethods.length === 0) {
+      setValidationMsg('Pilih minimal 1 tindakan treatment pada Bagian 2.');
       return;
     }
-    if (draft.step === 2 && draft.methods.length === 0 && !draft.customMethod.trim()) {
-      setValidationMsg('Pilih minimal 1 tindakan treatment.');
+    if (draft.selectedAreas.length === 0) {
+      setValidationMsg('Pilih minimal 1 area pengerjaan pada Bagian 3.');
       return;
     }
-    if (draft.step === 3 && draft.selectedAreas.length === 0 && !draft.customArea.trim()) {
-      setValidationMsg('Pilih minimal 1 area pengerjaan.');
-      return;
-    }
-
-    if (draft.step === 4) {
-      // Save treatment record cleanly before entering final approval stage
-      setIsSavingStep(true);
-      try {
-        await onSaveTreatment(buildTreatmentPayload());
-      } catch {
-        // Offline queue handled upstream; allow moving smoothly to Step 5
-      } finally {
-        setIsSavingStep(false);
-      }
-      updateDraft('step', 5);
-      return;
-    }
-
-    if (draft.step < 5) {
-      updateDraft('step', (draft.step + 1) as WorksheetDraft['step']);
-      return;
-    }
-
-    // Step 5 -> Validate technician sign & client name, then open fullscreen client signature + confidential feedback
     if (!draft.technicianSignature) {
-      setValidationMsg('Bubuhkan tanda tangan teknisi terlebih dahulu pada kotak Tahap 5A.');
+      setValidationMsg('Bubuhkan tanda tangan teknisi terlebih dahulu pada Bagian 5 (Tahap 1).');
       return;
     }
     if (!draft.clientName.trim()) {
-      setValidationMsg('Isi nama perwakilan klien / PIC terlebih dahulu.');
+      setValidationMsg('Isi nama perwakilan customer / PIC pada Bagian 5 (Tahap 2).');
       return;
     }
 
-    setIsSavingStep(true);
+    setIsSaving(true);
     try {
       await onSaveTreatment(buildTreatmentPayload());
     } catch {
-      // handled upstream
+      // Offline queue handled upstream
     } finally {
-      setIsSavingStep(false);
+      setIsSaving(false);
     }
 
-    const finalRole = draft.clientCustomRole.trim() || draft.clientRole;
+    try {
+      localStorage.setItem(getTechSigStorageKey(report.id), draft.technicianSignature);
+      localStorage.setItem(getTechSigTimeStorageKey(report.id), new Date().toISOString());
+    } catch {
+      // ignore
+    }
+
     onProceedToClientSign({
       customerName: draft.clientName.trim(),
-      customerRole: finalRole,
+      customerRole: draft.clientRole.trim() || 'PIC Utama',
       customerPhone: draft.clientPhone.trim(),
       technicianSignature: draft.technicianSignature,
     });
   };
 
-  const handlePrevStep = () => {
-    setValidationMsg(null);
-    if (draft.step > 1) {
-      updateDraft('step', (draft.step - 1) as WorksheetDraft['step']);
-    } else {
-      onBack();
-    }
-  };
+  const availableMethods = TREATMENT_METHODS.filter(
+    m => m.mode === 'BOTH' || m.mode === draft.serviceMode
+  );
+  const suggestionChips = isTermite ? RECOMMENDATION_CHIPS_AR : RECOMMENDATION_CHIPS_PCO;
+
+  const allAreaRows = [
+    ...DEFAULT_AREAS,
+    ...draft.customAreas.map(name => ({ name, zone: 'Area Tambahan' })),
+  ];
 
   const photoSlots: Array<{ label: string; tag: PhotoTag; hint: string }> = [
     { label: 'Kondisi Awal', tag: 'BEFORE', hint: 'Sebelum treatment' },
@@ -429,736 +574,1142 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
     { label: 'Hasil Akhir', tag: 'AFTER', hint: 'Setelah selesai' },
   ];
 
-  const availableMethods = TREATMENT_METHODS.filter(m => m.mode === 'BOTH' || m.mode === draft.serviceMode);
-  const suggestionChips = isTermite ? RECOMMENDATION_CHIPS_AR : RECOMMENDATION_CHIPS_PCO;
-
   return (
-    <div className="flex flex-col min-h-full">
-      {/* Compact Sticky Header */}
-      <header className="tech-header">
-        <button type="button" onClick={handlePrevStep} aria-label="Kembali">
-          <ArrowLeft size={20} />
-        </button>
-        <div className="text-center min-w-0">
-          <strong className="block text-[14px] font-bold text-[var(--text-primary)] truncate">
-            {report.projectName}
-          </strong>
-          <span className="block text-[10.5px] font-mono tabular-nums text-[var(--text-secondary)]">
-            Tahap {draft.step}/5 · {STEP_LABELS[draft.step - 1]} · {elapsedTime}
-          </span>
-        </div>
-        <span className="justify-end">
-          <span
-            className={`px-2 py-0.5 rounded-md text-[10px] font-semibold whitespace-nowrap ${
-              isTermite
-                ? 'bg-amber-50 text-amber-800 border border-amber-200/80'
-                : 'bg-sky-50 text-sky-800 border border-sky-200/80'
-            }`}
+    <div className="flex flex-col min-h-full bg-[var(--tl-surface)]">
+      {/* Frosted Sticky Header */}
+      <header
+        className="sticky top-0 z-30 px-4 h-16 flex items-center justify-between gap-2 backdrop-blur-md shrink-0"
+        style={{
+          background: 'color-mix(in srgb, var(--tl-surface) 90%, transparent)',
+          boxShadow: 'var(--tl-shadow-head)',
+        }}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Kembali"
+            className="w-10 h-10 rounded-full flex items-center justify-center text-[var(--tl-text)] hover:bg-[var(--tl-low)] active:scale-95 transition-transform cursor-pointer shrink-0"
           >
-            {isTermite ? 'Rayap' : 'Pest'}
+            <ArrowLeft size={20} />
+          </button>
+          <div className="min-w-0">
+            <span className="block text-[10.5px] font-bold uppercase tracking-wider text-[var(--tl-secondary)] leading-none">
+              GuciMas Pratama
+            </span>
+            <h1 className="text-[15px] font-bold text-[var(--tl-text)] truncate mt-0.5">
+              Form Laporan Pekerjaan
+            </h1>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[var(--tl-low)] text-[11px] font-mono font-bold tabular-nums text-[var(--tl-text)]">
+            <Clock size={12} className="text-[var(--tl-secondary)]" />
+            <span>{elapsedTime}</span>
           </span>
-        </span>
+          <span
+            aria-label={isOnline ? 'Status Online' : 'Status Offline'}
+            className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-rose-500'}`}
+          />
+        </div>
       </header>
 
-      {/* Calm 5-Step Progress Bar */}
-      <div className="px-4 pt-3 pb-2 bg-[var(--bg-card)] border-b border-[var(--border)]">
-        <div className="grid grid-cols-5 gap-1.5">
-          {STEP_LABELS.map((lbl, idx) => {
-            const num = (idx + 1) as WorksheetDraft['step'];
-            const active = draft.step === num;
-            const completed = draft.step > num;
-            return (
-              <button
-                key={lbl}
-                type="button"
-                onClick={() => updateDraft('step', num)}
-                className="text-left group cursor-pointer focus:outline-none"
-              >
-                <div
-                  className={`h-1.5 rounded-full transition-colors duration-200 ${
-                    completed
-                      ? 'bg-[var(--accent)]'
-                      : active
-                      ? isTermite
-                        ? 'bg-amber-500'
-                        : 'bg-sky-600'
-                      : 'bg-[var(--border)]'
-                  }`}
-                />
-                <span
-                  className={`block mt-1 text-[10px] truncate transition-colors ${
-                    active
-                      ? 'font-bold text-[var(--text-primary)]'
-                      : completed
-                      ? 'font-semibold text-[var(--accent-text)]'
-                      : 'text-[var(--text-muted)]'
-                  }`}
-                >
-                  {num}. {lbl}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Main Step Viewport — One Calm Focus Per Screen */}
-      <main className="tech-content with-action flex-1">
+      <main className="flex-1 px-4 pt-4 pb-36 space-y-4">
         {validationMsg && (
-          <div className="mb-4 px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+          <div
+            role="alert"
+            className="px-4 py-3 rounded-xl bg-[var(--tl-error-container)] text-[var(--tl-on-error-container)] text-xs font-semibold"
+          >
             {validationMsg}
           </div>
         )}
 
-        <AnimatePresence mode="wait">
-          {/* ============================================================== */}
-          {/* TAHAP 1: DETAIL TEMUAN PER HAMA                                */}
-          {/* ============================================================== */}
-          {draft.step === 1 && (
-            <motion.div
-              key="step-1"
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              transition={{ duration: 0.16 }}
-              className="space-y-5"
+        {/* ================================================================ */}
+        {/* TOP WORK ORDER CONTEXT CARD + 2-TAB SERVICE SWITCHER             */}
+        {/* ================================================================ */}
+        <section className="rounded-2xl bg-[var(--tl-card)] p-4 space-y-3.5 shadow-[var(--tl-shadow-card)]">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-1.5 text-[11px] font-mono font-bold text-[var(--tl-text-variant)]">
+              <span className="px-2 py-0.5 rounded-md bg-[var(--tl-container)] text-[var(--tl-text)]">
+                {woCode}
+              </span>
+              <span>·</span>
+              <span>{(report.scheduledStartTime || '09.00').replace(':', '.')} WIB</span>
+            </div>
+            <span
+              className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                isTermite
+                  ? 'bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)]'
+                  : 'bg-[var(--tl-high)] text-[var(--tl-text)]'
+              }`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h2 className="text-[16px] font-bold text-[var(--text-primary)]">Temuan di Lapangan</h2>
-                  <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                    Ketuk kategori temuan yang terlihat di lokasi.
-                  </p>
-                </div>
-                {/* Segmented Service Mode Switch */}
-                <div className="flex items-center p-0.5 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border)] shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => updateDraft('serviceMode', 'AR')}
-                    className={`px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
-                      isTermite ? 'bg-amber-600 text-white shadow-2xs' : 'text-[var(--text-secondary)]'
-                    }`}
-                  >
-                    Anti Rayap
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => updateDraft('serviceMode', 'PCO')}
-                    className={`px-2.5 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
-                      !isTermite ? 'bg-sky-600 text-white shadow-2xs' : 'text-[var(--text-secondary)]'
-                    }`}
-                  >
-                    Pest Control
-                  </button>
-                </div>
+              {isTermite ? 'Anti Rayap' : 'Pest Control'}
+            </span>
+          </div>
+
+          {/* 2-Tab Service Mode Switcher */}
+          <div
+            role="tablist"
+            aria-label="Jenis Layanan Laporan"
+            className="grid grid-cols-2 p-1 rounded-xl bg-[var(--tl-low)] gap-1"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={isTermite}
+              onClick={() => updateDraft('serviceMode', 'AR')}
+              className={`min-h-[42px] rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                isTermite
+                  ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)] shadow-xs'
+                  : 'text-[var(--tl-text-variant)] hover:text-[var(--tl-text)]'
+              }`}
+            >
+              Anti Rayap
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!isTermite}
+              onClick={() => updateDraft('serviceMode', 'PCO')}
+              className={`min-h-[42px] rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                !isTermite
+                  ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)] shadow-xs'
+                  : 'text-[var(--tl-text-variant)] hover:text-[var(--tl-text)]'
+              }`}
+            >
+              Pest Control
+            </button>
+          </div>
+
+          {/* Inset Client & Address Summary */}
+          <div className="rounded-xl bg-[var(--tl-low)] p-3 flex items-start gap-2.5">
+            <MapPin size={15} className="text-[var(--tl-secondary)] shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <strong className="block text-xs font-bold text-[var(--tl-text)] leading-snug">
+                {report.projectName}
+              </strong>
+              <p className="text-[11px] text-[var(--tl-text-variant)] mt-0.5 leading-snug">
+                {report.clientName ? `${report.clientName} · ` : ''}
+                {report.projectAddress}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* ================================================================ */}
+        {/* BAGIAN 1 — DETAIL TEMUAN PER HAMA                                */}
+        {/* ================================================================ */}
+        <section className="rounded-2xl bg-[var(--tl-card)] p-4 space-y-3.5 shadow-[var(--tl-shadow-card)]">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[11px] font-bold flex items-center justify-center shrink-0">
+                1
+              </span>
+              <div>
+                <h2 className="text-sm font-bold text-[var(--tl-text)]">Detail Temuan Per Hama</h2>
+                <p className="text-[11px] text-[var(--tl-text-variant)]">
+                  {isTermite
+                    ? 'Centang spesies rayap & tandai estimasi keparahan'
+                    : 'Pilih hama yang ditemukan & atur jumlah titik/ekor'}
+                </p>
               </div>
+            </div>
+            <Bug size={16} className="text-[var(--tl-secondary)] shrink-0" />
+          </div>
 
-              {isTermite ? (
-                <>
-                  {/* Spesies Rayap */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-[var(--text-secondary)]">Spesies Rayap</label>
-                    <div className="flex flex-wrap gap-2">
-                      {TERMITE_SPECIES.map(sp => {
-                        const selected = draft.termiteSpecies.includes(sp);
-                        return (
-                          <button
-                            key={sp}
-                            type="button"
-                            onClick={() => updateDraft('termiteSpecies', toggleItem(draft.termiteSpecies, sp))}
-                            className={`min-h-[44px] px-3.5 rounded-xl text-xs font-semibold border transition-all active:scale-[0.98] cursor-pointer ${
-                              selected
-                                ? 'bg-amber-50 text-amber-900 border-amber-400'
-                                : 'bg-[var(--bg-card)] text-[var(--text-primary)] border-[var(--border)]'
-                            }`}
-                          >
-                            {selected ? '✓ ' : ''}{sp}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <input
-                      type="text"
-                      value={draft.customSpecies}
-                      onChange={e => updateDraft('customSpecies', e.target.value)}
-                      placeholder="Spesies lain (opsional)..."
-                      className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-                    />
-                  </div>
-
-                  {/* Sakelar Sarang / Mud Tube */}
+          {isTermite ? (
+            /* ANTI RAYAP — Per-Species Structured Cards */
+            <div className="space-y-2.5">
+              {draft.termiteEntries.map(sp => (
+                <div
+                  key={sp.id}
+                  className={`rounded-xl p-3.5 transition-colors space-y-3 ${
+                    sp.selected ? 'bg-[var(--tl-low)] ring-1 ring-[var(--tl-secondary)]/40' : 'bg-[var(--tl-low)]/55'
+                  }`}
+                >
                   <button
                     type="button"
-                    onClick={() => updateDraft('hasMudTube', !draft.hasMudTube)}
-                    className="w-full min-h-[52px] px-4 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] flex items-center justify-between gap-3 cursor-pointer"
+                    onClick={() =>
+                      updateDraft(
+                        'termiteEntries',
+                        draft.termiteEntries.map(item =>
+                          item.id === sp.id ? { ...item, selected: !item.selected } : item
+                        )
+                      )
+                    }
+                    className="w-full flex items-center justify-between gap-2.5 text-left cursor-pointer"
                   >
-                    <span className="text-left">
-                      <strong className="block text-xs font-semibold text-[var(--text-primary)]">
-                        Ditemukan Sarang / Jalur Tanah (Mud Tube)
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span
+                        className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 transition-colors ${
+                          sp.selected
+                            ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)]'
+                            : 'bg-[var(--tl-card)] border border-[var(--tl-outline-variant)]'
+                        }`}
+                      >
+                        {sp.selected && <Check size={13} />}
+                      </span>
+                      <strong className="text-xs font-bold text-[var(--tl-text)] leading-snug">
+                        {sp.name}
                       </strong>
-                      <small className="text-[11px] text-[var(--text-secondary)]">
-                        {draft.hasMudTube ? 'Ya, terlihat jalur aktif' : 'Tidak ditemukan jalur tanah'}
-                      </small>
-                    </span>
-                    <span
-                      className={`w-11 h-6 rounded-full p-0.5 transition-colors flex items-center ${
-                        draft.hasMudTube ? 'bg-[var(--accent)] justify-end' : 'bg-slate-300 dark:bg-slate-600 justify-start'
-                      }`}
-                    >
-                      <span className="w-5 h-5 rounded-full bg-white shadow-xs" />
-                    </span>
+                    </div>
+                    {sp.selected && (
+                      <span className="px-2 py-0.5 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-[10px] font-bold shrink-0">
+                        Aktif
+                      </span>
+                    )}
                   </button>
 
-                  {/* Tingkat Keparahan */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-[var(--text-secondary)]">Tingkat Keparahan</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(['Ringan', 'Sedang', 'Kritis'] as const).map(level => {
-                        const active = draft.severity === level;
-                        const activeStyle =
-                          level === 'Kritis'
-                            ? 'bg-rose-50 text-rose-800 border-rose-400'
-                            : level === 'Sedang'
-                            ? 'bg-amber-50 text-amber-900 border-amber-400'
-                            : 'bg-emerald-50 text-emerald-900 border-emerald-400';
-                        return (
-                          <button
-                            key={level}
-                            type="button"
-                            onClick={() => updateDraft('severity', level)}
-                            className={`min-h-[44px] rounded-xl text-xs font-semibold border transition-all active:scale-[0.98] cursor-pointer ${
-                              active ? activeStyle : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border)]'
-                            }`}
-                          >
-                            {level}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Estimasi Populasi Koloni */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-[var(--text-secondary)]">Estimasi Koloni</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(['< 500', '1rb – 3rb', '> 5.000'] as const).map(est => (
+                  {sp.selected && (
+                    <div className="space-y-3 pt-2 border-t border-[var(--tl-container)]">
+                      {/* Indicator Chips */}
+                      <div className="flex flex-wrap gap-1.5">
                         <button
-                          key={est}
                           type="button"
-                          onClick={() => updateDraft('colonyEstimate', est)}
-                          className={`min-h-[44px] rounded-xl text-xs font-mono font-semibold border transition-all active:scale-[0.98] cursor-pointer ${
-                            draft.colonyEstimate === est
-                              ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
-                              : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border)]'
+                          onClick={() =>
+                            updateDraft(
+                              'termiteEntries',
+                              draft.termiteEntries.map(item =>
+                                item.id === sp.id ? { ...item, hasNest: !item.hasNest } : item
+                              )
+                            )
+                          }
+                          className={`min-h-[34px] px-3 rounded-full text-[11px] font-semibold transition-colors cursor-pointer ${
+                            sp.hasNest
+                              ? 'bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)]'
+                              : 'bg-[var(--tl-card)] text-[var(--tl-text-variant)]'
                           }`}
                         >
-                          {est}
+                          {sp.hasNest ? '✓ ' : ''}Sarang Terdeteksi
                         </button>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                /* Pest Control Counter Cards */
-                <div className="space-y-2.5">
-                  {COMMON_PESTS.map(pest => {
-                    const count = draft.pestCounts[pest] || 0;
-                    return (
-                      <div
-                        key={pest}
-                        className={`px-4 py-3 rounded-2xl border flex items-center justify-between gap-3 transition-colors ${
-                          count > 0
-                            ? 'bg-sky-50/70 dark:bg-sky-950/30 border-sky-300 dark:border-sky-700'
-                            : 'bg-[var(--bg-card)] border-[var(--border)]'
-                        }`}
-                      >
-                        <div>
-                          <strong className="block text-sm font-semibold text-[var(--text-primary)]">{pest}</strong>
-                          <small className="text-[11px] text-[var(--text-secondary)]">
-                            {count > 0 ? `${count} ekor / titik ditemukan` : 'Tidak ada temuan'}
-                          </small>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updateDraft('pestCounts', { ...draft.pestCounts, [pest]: Math.max(0, count - 1) })
-                            }
-                            aria-label={`Kurangi ${pest}`}
-                            className="w-10 h-10 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] flex items-center justify-center text-[var(--text-primary)] active:scale-95 cursor-pointer"
-                          >
-                            <Minus size={16} />
-                          </button>
-                          <span className="w-8 text-center font-mono font-bold text-sm tabular-nums text-[var(--text-primary)]">
-                            {count}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updateDraft('pestCounts', { ...draft.pestCounts, [pest]: count + 1 })
-                            }
-                            aria-label={`Tambah ${pest}`}
-                            className="w-10 h-10 rounded-xl bg-[var(--accent)] text-white flex items-center justify-center active:scale-95 cursor-pointer"
-                          >
-                            <Plus size={16} />
-                          </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateDraft(
+                              'termiteEntries',
+                              draft.termiteEntries.map(item =>
+                                item.id === sp.id ? { ...item, hasMudTube: !item.hasMudTube } : item
+                              )
+                            )
+                          }
+                          className={`min-h-[34px] px-3 rounded-full text-[11px] font-semibold transition-colors cursor-pointer ${
+                            sp.hasMudTube
+                              ? 'bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)]'
+                              : 'bg-[var(--tl-card)] text-[var(--tl-text-variant)]'
+                          }`}
+                        >
+                          {sp.hasMudTube ? '✓ ' : ''}Jalur Mud Tube
+                        </button>
+                      </div>
+
+                      {/* Estimasi Keparahan */}
+                      <div className="space-y-1">
+                        <span className="block text-[10.5px] font-semibold text-[var(--tl-text-variant)]">
+                          Estimasi Keparahan
+                        </span>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {(['Ringan', 'Sedang', 'Kritis'] as const).map(level => {
+                            const active = sp.severity === level;
+                            return (
+                              <button
+                                key={level}
+                                type="button"
+                                onClick={() =>
+                                  updateDraft(
+                                    'termiteEntries',
+                                    draft.termiteEntries.map(item =>
+                                      item.id === sp.id ? { ...item, severity: level } : item
+                                    )
+                                  )
+                                }
+                                className={`min-h-[38px] rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                                  active
+                                    ? level === 'Kritis'
+                                      ? 'bg-[var(--tl-error)] text-white'
+                                      : 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)]'
+                                    : 'bg-[var(--tl-card)] text-[var(--tl-text-variant)]'
+                                }`}
+                              >
+                                {level}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </motion.div>
-          )}
 
-          {/* ============================================================== */}
-          {/* TAHAP 2: TINDAKAN TREATMENT / METODE                           */}
-          {/* ============================================================== */}
-          {draft.step === 2 && (
-            <motion.div
-              key="step-2"
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              transition={{ duration: 0.16 }}
-              className="space-y-5"
-            >
-              <div>
-                <h2 className="text-[16px] font-bold text-[var(--text-primary)]">Tindakan Treatment</h2>
-                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                  Pilih metode penanganan yang dikerjakan hari ini.
-                </p>
-              </div>
+                      {/* Estimasi Populasi Koloni */}
+                      <div className="space-y-1">
+                        <span className="block text-[10.5px] font-semibold text-[var(--tl-text-variant)]">
+                          Estimasi Populasi Koloni
+                        </span>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {(['< 500', '1rb - 3rb', '> 5.000'] as const).map(est => {
+                            const active = sp.colonyEstimate === est;
+                            return (
+                              <button
+                                key={est}
+                                type="button"
+                                onClick={() =>
+                                  updateDraft(
+                                    'termiteEntries',
+                                    draft.termiteEntries.map(item =>
+                                      item.id === sp.id ? { ...item, colonyEstimate: est } : item
+                                    )
+                                  )
+                                }
+                                className={`min-h-[38px] rounded-lg text-[11px] font-mono font-bold transition-colors cursor-pointer ${
+                                  active
+                                    ? 'bg-[var(--tl-secondary)] text-white'
+                                    : 'bg-[var(--tl-card)] text-[var(--tl-text-variant)]'
+                                }`}
+                              >
+                                {est}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
 
-              <div className="space-y-2">
-                {availableMethods.map(m => {
-                  const selected = draft.methods.includes(m.label);
-                  return (
-                    <button
-                      key={m.label}
-                      type="button"
-                      onClick={() => updateDraft('methods', toggleItem(draft.methods, m.label))}
-                      className={`w-full min-h-[50px] px-4 py-3 rounded-2xl border flex items-center justify-between gap-3 text-left transition-all active:scale-[0.99] cursor-pointer ${
-                        selected
-                          ? 'bg-[var(--green-soft)] border-[var(--accent)] text-[var(--text-primary)]'
-                          : 'bg-[var(--bg-card)] border-[var(--border)] text-[var(--text-primary)]'
-                      }`}
-                    >
-                      <span className="text-xs font-semibold">{m.label}</span>
-                      <span
-                        className={`w-5 h-5 rounded-md flex items-center justify-center border ${
-                          selected
-                            ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
-                            : 'border-[var(--border)] bg-[var(--bg-secondary)]'
-                        }`}
-                      >
-                        {selected && <Check size={13} />}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <input
-                type="text"
-                value={draft.customMethod}
-                onChange={e => updateDraft('customMethod', e.target.value)}
-                placeholder="Tindakan kustom lainnya (opsional)..."
-                className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
-              />
-
-              {/* Progressive Disclosure: Detail Obat & Dosis */}
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setShowTechDetails(v => !v)}
-                  className="w-full min-h-[48px] px-4 py-3 flex items-center justify-between text-xs font-semibold text-[var(--text-secondary)] cursor-pointer"
-                >
-                  <span>Detail Obat &amp; Dosis (Opsional)</span>
-                  {showTechDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                </button>
-                {showTechDetails && (
-                  <div className="px-4 pb-4 pt-1 space-y-3 border-t border-[var(--border)]">
-                    <div>
-                      <label className="block text-[11px] font-medium text-[var(--text-secondary)] mb-1">
-                        Nama Bahan / Termitisida
-                      </label>
+                      {/* Infestation Location Note */}
                       <input
                         type="text"
-                        value={draft.chemicalName}
-                        onChange={e => updateDraft('chemicalName', e.target.value)}
-                        className="w-full h-10 px-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] text-xs text-[var(--text-primary)]"
+                        value={sp.locationNote}
+                        onChange={e =>
+                          updateDraft(
+                            'termiteEntries',
+                            draft.termiteEntries.map(item =>
+                              item.id === sp.id ? { ...item, locationNote: e.target.value } : item
+                            )
+                          )
+                        }
+                        placeholder="Titik serangan (cth: Kusen & plafon)"
+                        className="w-full h-10 px-3 rounded-lg bg-[var(--tl-card)] text-xs text-[var(--tl-text)] focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-2.5">
-                      <div>
-                        <label className="block text-[11px] font-medium text-[var(--text-secondary)] mb-1">
-                          Dosis Campuran
-                        </label>
-                        <input
-                          type="text"
-                          value={draft.dosage}
-                          onChange={e => updateDraft('dosage', e.target.value)}
-                          className="w-full h-10 px-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] text-xs text-[var(--text-primary)]"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-medium text-[var(--text-secondary)] mb-1">
-                          Estimasi Luas (m²)
-                        </label>
-                        <input
-                          type="number"
-                          value={draft.treatmentAreaSqm}
-                          onChange={e => updateDraft('treatmentAreaSqm', e.target.value)}
-                          className="w-full h-10 px-3 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] text-xs font-mono text-[var(--text-primary)]"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          )}
+                  )}
+                </div>
+              ))}
 
-          {/* ============================================================== */}
-          {/* TAHAP 3: AREA TINDAKAN & PERLINDUNGAN                          */}
-          {/* ============================================================== */}
-          {draft.step === 3 && (
-            <motion.div
-              key="step-3"
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              transition={{ duration: 0.16 }}
-              className="space-y-5"
-            >
-              <div>
-                <h2 className="text-[16px] font-bold text-[var(--text-primary)]">Area Tindakan</h2>
-                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                  Ketuk area yang ditangani. Ketuk bintang untuk menandai prioritas.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2.5">
-                {Array.from(new Set([...AREA_OPTIONS, ...draft.selectedAreas])).map(area => {
-                  const selected = draft.selectedAreas.includes(area);
-                  const isPriority = draft.priorityAreas.includes(area);
-                  return (
-                    <div
-                      key={area}
-                      className={`rounded-2xl border p-3 flex flex-col justify-between min-h-[74px] transition-all ${
-                        selected
-                          ? 'bg-[var(--green-soft)] border-[var(--accent)]'
-                          : 'bg-[var(--bg-card)] border-[var(--border)]'
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextAreas = toggleItem(draft.selectedAreas, area);
-                          updateDraft('selectedAreas', nextAreas);
-                          if (!nextAreas.includes(area) && isPriority) {
-                            updateDraft('priorityAreas', draft.priorityAreas.filter(p => p !== area));
-                          }
-                        }}
-                        className="text-left flex-1 cursor-pointer"
-                      >
-                        <strong className="block text-xs font-semibold text-[var(--text-primary)] leading-snug">
-                          {area}
-                        </strong>
-                      </button>
-
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="text-[10.5px] text-[var(--text-secondary)]">
-                          {selected ? (isPriority ? 'Prioritas' : 'Dipilih') : 'Ketuk pilih'}
-                        </span>
-                        {selected && (
-                          <button
-                            type="button"
-                            onClick={() => updateDraft('priorityAreas', toggleItem(draft.priorityAreas, area))}
-                            aria-label={`Tandai prioritas ${area}`}
-                            className={`p-1 rounded-lg cursor-pointer ${
-                              isPriority ? 'text-amber-500' : 'text-[var(--text-muted)]'
-                            }`}
-                          >
-                            <Star size={15} className={isPriority ? 'fill-amber-400' : ''} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="flex items-center gap-2">
+              {/* + Tambah Spesies Rayap Kustom */}
+              <div className="flex items-center gap-2 pt-1">
                 <input
                   type="text"
-                  value={newAreaInput}
-                  onChange={e => setNewAreaInput(e.target.value)}
-                  placeholder="Tambah area lain (cth: Gudang Lt. 3)..."
-                  className="flex-1 h-11 px-3.5 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                  value={newSpeciesInput}
+                  onChange={e => setNewSpeciesInput(e.target.value)}
+                  placeholder="Tambah spesies rayap kustom..."
+                  className="flex-1 h-11 px-3 rounded-xl bg-[var(--tl-low)] text-xs text-[var(--tl-text)] focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
                 />
                 <button
                   type="button"
                   onClick={() => {
-                    const clean = newAreaInput.trim();
+                    const clean = newSpeciesInput.trim();
                     if (!clean) return;
-                    if (!draft.selectedAreas.includes(clean)) {
-                      updateDraft('selectedAreas', [...draft.selectedAreas, clean]);
-                    }
-                    setNewAreaInput('');
+                    updateDraft('termiteEntries', [
+                      ...draft.termiteEntries,
+                      {
+                        id: `ar-custom-${Date.now()}`,
+                        name: clean,
+                        selected: true,
+                        hasNest: false,
+                        hasMudTube: false,
+                        severity: 'Sedang',
+                        colonyEstimate: '1rb - 3rb',
+                        locationNote: '',
+                      },
+                    ]);
+                    setNewSpeciesInput('');
                   }}
-                  className="h-11 px-4 rounded-xl bg-[var(--accent)] text-white text-xs font-semibold shrink-0 cursor-pointer"
+                  className="min-h-[44px] px-3.5 rounded-xl bg-[var(--tl-container)] hover:bg-[var(--tl-high)] text-[var(--tl-text)] text-xs font-bold inline-flex items-center gap-1 shrink-0 cursor-pointer"
                 >
-                  Tambah
+                  <Plus size={14} />
+                  <span>Tambah</span>
                 </button>
               </div>
-            </motion.div>
-          )}
-
-          {/* ============================================================== */}
-          {/* TAHAP 4: SARAN REKOMENDASI & DOKUMENTASI FOTO (MAKS 6 FOTO)    */}
-          {/* ============================================================== */}
-          {draft.step === 4 && (
-            <motion.div
-              key="step-4"
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              transition={{ duration: 0.16 }}
-              className="space-y-5"
-            >
-              {/* Saran Instan */}
-              <div className="space-y-2.5">
-                <div>
-                  <h2 className="text-[16px] font-bold text-[var(--text-primary)]">Saran &amp; Dokumentasi</h2>
-                  <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                    Tambahkan rekomendasi singkat dan foto bukti lapangan.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap gap-1.5">
-                  {suggestionChips.map(chip => (
+            </div>
+          ) : (
+            /* PEST CONTROL — Per-Pest Counter & Condition Cards */
+            <div className="space-y-2.5">
+              {draft.pestEntries.map(pest => (
+                <div
+                  key={pest.id}
+                  className={`rounded-xl p-3.5 transition-colors space-y-3 ${
+                    pest.selected ? 'bg-[var(--tl-low)] ring-1 ring-[var(--tl-secondary)]/40' : 'bg-[var(--tl-low)]/55'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
                     <button
-                      key={chip}
                       type="button"
-                      onClick={() => {
-                        const cur = draft.recommendations.trim();
-                        if (cur.includes(chip)) return;
-                        updateDraft('recommendations', cur ? `${cur}. ${chip}` : chip);
-                      }}
-                      className="min-h-[38px] px-3 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-[11.5px] font-medium text-[var(--text-primary)] active:scale-[0.98] cursor-pointer"
+                      onClick={() =>
+                        updateDraft(
+                          'pestEntries',
+                          draft.pestEntries.map(item =>
+                            item.id === pest.id
+                              ? { ...item, selected: !item.selected, quantity: Math.max(1, item.quantity) }
+                              : item
+                          )
+                        )
+                      }
+                      className="flex items-center gap-2.5 text-left min-w-0 flex-1 cursor-pointer"
                     >
-                      + {chip}
-                    </button>
-                  ))}
-                </div>
-
-                <textarea
-                  rows={2}
-                  value={draft.recommendations}
-                  onChange={e => updateDraft('recommendations', e.target.value)}
-                  placeholder="Catatan perbaikan sanitasi / kelembaban untuk klien..."
-                  className="w-full p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-xs text-[var(--text-primary)] resize-none focus:outline-none focus:border-[var(--accent)]"
-                />
-              </div>
-
-              {/* Dokumentasi Foto (Maks 6 Foto Terkompresi 40–60 KB) */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-[var(--text-primary)]">
-                    Dokumentasi Foto ({totalPhotos}/{MAX_PHOTOS_PER_REPORT})
-                  </span>
-                  <span className="text-[11px] text-[var(--text-muted)]">Kompresi 40–60 KB</span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2.5">
-                  {photoSlots.map((slot, idx) => {
-                    const matchedPhoto =
-                      slot.tag === 'BEFORE'
-                        ? progressPhotos.find(p => p.photoTag === 'BEFORE')
-                        : slot.tag === 'AFTER'
-                        ? progressPhotos.find(p => p.photoTag === 'AFTER')
-                        : progressPhotos.filter(p => !p.photoTag)[idx === 1 ? 0 : 1];
-
-                    return (
-                      <div
-                        key={slot.label}
-                        className="rounded-2xl border border-[var(--border)] bg-[var(--bg-card)] p-2.5 flex flex-col gap-2"
+                      <span
+                        className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 transition-colors ${
+                          pest.selected
+                            ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)]'
+                            : 'bg-[var(--tl-card)] border border-[var(--tl-outline-variant)]'
+                        }`}
                       >
-                        {matchedPhoto ? (
-                          <button
-                            type="button"
-                            onClick={() => onViewPhoto(matchedPhoto)}
-                            className="relative w-full h-24 rounded-xl overflow-hidden border border-[var(--border)] cursor-pointer"
-                          >
-                            <AuthedImage
-                              path={matchedPhoto.url}
-                              alt={slot.label}
-                              purged={!!matchedPhoto.purgedAt}
-                              className="w-full h-full object-cover"
-                            />
-                            <span className="absolute bottom-1.5 right-1.5 w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-sm">
-                              <Check size={13} />
-                            </span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            disabled={!canTakeMoreProgress}
-                            onClick={() => onCapturePhoto(slot.tag)}
-                            className="w-full h-24 rounded-xl border border-dashed border-[var(--border)] bg-[var(--bg-secondary)] flex flex-col items-center justify-center gap-1.5 text-[var(--text-secondary)] disabled:opacity-45 active:scale-[0.98] cursor-pointer"
-                          >
-                            <Camera size={20} className="text-[var(--accent)]" />
-                            <span className="text-[11px] font-semibold">Ambil Foto</span>
-                          </button>
-                        )}
-                        <div className="px-0.5">
-                          <strong className="block text-[11.5px] font-semibold text-[var(--text-primary)]">
-                            {slot.label}
-                          </strong>
-                          <small className="text-[10px] text-[var(--text-muted)]">{slot.hint}</small>
-                        </div>
+                        {pest.selected && <Check size={13} />}
+                      </span>
+                      <div className="min-w-0">
+                        <strong className="block text-xs font-bold text-[var(--tl-text)] truncate">
+                          {pest.name}
+                        </strong>
+                        <span className="block text-[10.5px] text-[var(--tl-text-variant)]">
+                          {pest.selected ? `${pest.quantity} ekor / titik ditemukan` : 'Ketuk untuk mencatat temuan'}
+                        </span>
                       </div>
-                    );
-                  })}
+                    </button>
+
+                    {pest.selected && (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          aria-label={`Kurangi ${pest.name}`}
+                          onClick={() =>
+                            updateDraft(
+                              'pestEntries',
+                              draft.pestEntries.map(item =>
+                                item.id === pest.id
+                                  ? { ...item, quantity: Math.max(1, item.quantity - 1) }
+                                  : item
+                              )
+                            )
+                          }
+                          className="w-9 h-9 rounded-lg bg-[var(--tl-card)] text-[var(--tl-text)] flex items-center justify-center active:scale-95 cursor-pointer"
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className="w-7 text-center font-mono text-xs font-bold tabular-nums text-[var(--tl-text)]">
+                          {pest.quantity}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`Tambah ${pest.name}`}
+                          onClick={() =>
+                            updateDraft(
+                              'pestEntries',
+                              draft.pestEntries.map(item =>
+                                item.id === pest.id ? { ...item, quantity: item.quantity + 1 } : item
+                              )
+                            )
+                          }
+                          className="w-9 h-9 rounded-lg bg-[var(--tl-primary)] text-[var(--tl-on-primary)] flex items-center justify-center active:scale-95 cursor-pointer"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {pest.selected && (
+                    <div className="space-y-2.5 pt-2 border-t border-[var(--tl-container)]">
+                      {/* Quick quantity presets */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10.5px] font-semibold text-[var(--tl-text-variant)] mr-1">
+                          Cepat:
+                        </span>
+                        {[
+                          { label: '1-5', val: 3 },
+                          { label: '6-15', val: 10 },
+                          { label: '>20', val: 25 },
+                        ].map(preset => (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            onClick={() =>
+                              updateDraft(
+                                'pestEntries',
+                                draft.pestEntries.map(item =>
+                                  item.id === pest.id ? { ...item, quantity: preset.val } : item
+                                )
+                              )
+                            }
+                            className={`px-2.5 py-1 rounded-full text-[10.5px] font-mono font-bold cursor-pointer ${
+                              pest.quantity === preset.val
+                                ? 'bg-[var(--tl-secondary)] text-white'
+                                : 'bg-[var(--tl-card)] text-[var(--tl-text-variant)]'
+                            }`}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Condition tags */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {PEST_CONDITION_OPTIONS.map(cond => {
+                          const active = pest.conditions.includes(cond);
+                          return (
+                            <button
+                              key={cond}
+                              type="button"
+                              onClick={() =>
+                                updateDraft(
+                                  'pestEntries',
+                                  draft.pestEntries.map(item =>
+                                    item.id === pest.id
+                                      ? { ...item, conditions: toggleStringItem(item.conditions, cond) }
+                                      : item
+                                  )
+                                )
+                              }
+                              className={`min-h-[32px] px-2.5 rounded-full text-[10.5px] font-semibold cursor-pointer ${
+                                active
+                                  ? 'bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)]'
+                                  : 'bg-[var(--tl-card)] text-[var(--tl-text-variant)]'
+                              }`}
+                            >
+                              {active ? '✓ ' : ''}
+                              {cond}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Location note */}
+                      <input
+                        type="text"
+                        value={pest.locationNote}
+                        onChange={e =>
+                          updateDraft(
+                            'pestEntries',
+                            draft.pestEntries.map(item =>
+                              item.id === pest.id ? { ...item, locationNote: e.target.value } : item
+                            )
+                          )
+                        }
+                        placeholder="Lokasi temuan (cth: Pantry & saluran)"
+                        className="w-full h-10 px-3 rounded-lg bg-[var(--tl-card)] text-xs text-[var(--tl-text)] focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
+                      />
+                    </div>
+                  )}
                 </div>
+              ))}
 
-                {report.photos.length > 0 && (
-                  <p className="text-[11px] text-[var(--text-muted)]">
-                    Termasuk foto Check-In otomatis; foto Check-Out diambil pada langkah akhir.
-                  </p>
-                )}
+              {/* + Tambah Jenis Hama Kustom */}
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="text"
+                  value={newPestInput}
+                  onChange={e => setNewPestInput(e.target.value)}
+                  placeholder="Tambah jenis hama kustom..."
+                  className="flex-1 h-11 px-3 rounded-xl bg-[var(--tl-low)] text-xs text-[var(--tl-text)] focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const clean = newPestInput.trim();
+                    if (!clean) return;
+                    updateDraft('pestEntries', [
+                      ...draft.pestEntries,
+                      {
+                        id: `pco-custom-${Date.now()}`,
+                        name: clean,
+                        selected: true,
+                        quantity: 1,
+                        conditions: ['Hidup'],
+                        locationNote: '',
+                      },
+                    ]);
+                    setNewPestInput('');
+                  }}
+                  className="min-h-[44px] px-3.5 rounded-xl bg-[var(--tl-container)] hover:bg-[var(--tl-high)] text-[var(--tl-text)] text-xs font-bold inline-flex items-center gap-1 shrink-0 cursor-pointer"
+                >
+                  <Plus size={14} />
+                  <span>Tambah</span>
+                </button>
               </div>
-            </motion.div>
+            </div>
           )}
+        </section>
 
-          {/* ============================================================== */}
-          {/* TAHAP 5: PENGESAHAN LAPANGAN DUA TAHAP                         */}
-          {/* ============================================================== */}
-          {draft.step === 5 && (
-            <motion.div
-              key="step-5"
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              transition={{ duration: 0.16 }}
-              className="space-y-5"
-            >
+        {/* ================================================================ */}
+        {/* BAGIAN 2 — TINDAKAN TREATMENT / METODE                           */}
+        {/* ================================================================ */}
+        <section className="rounded-2xl bg-[var(--tl-card)] p-4 space-y-3.5 shadow-[var(--tl-shadow-card)]">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[11px] font-bold flex items-center justify-center shrink-0">
+                2
+              </span>
               <div>
-                <h2 className="text-[16px] font-bold text-[var(--text-primary)]">Pengesahan Lapangan</h2>
-                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                  Tanda tangan teknisi dulu, lalu serahkan HP ke perwakilan klien.
+                <h2 className="text-sm font-bold text-[var(--tl-text)]">Tindakan Treatment &amp; Metode</h2>
+                <p className="text-[11px] text-[var(--tl-text-variant)]">
+                  Pilih metode penanganan yang diterapkan di lokasi
                 </p>
               </div>
+            </div>
+            <Wrench size={16} className="text-[var(--tl-secondary)] shrink-0" />
+          </div>
 
-              {/* 5A: Tanda Tangan Teknisi */}
-              <div className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
-                    {draft.technicianSignature ? (
-                      <CheckCircle2 size={15} className="text-emerald-600" />
-                    ) : (
-                      <PenLine size={15} className="text-[var(--accent)]" />
-                    )}
-                    1. Tanda Tangan Teknisi ({technicianName.split(' ')[0]})
+          <div className="space-y-2">
+            {availableMethods.map(m => {
+              const selected = draft.methods.includes(m.label);
+              return (
+                <button
+                  key={m.label}
+                  type="button"
+                  onClick={() => updateDraft('methods', toggleStringItem(draft.methods, m.label))}
+                  className={`w-full min-h-[54px] px-3.5 py-2.5 rounded-xl flex items-center justify-between gap-3 text-left transition-all active:scale-[0.99] cursor-pointer ${
+                    selected
+                      ? 'bg-[var(--tl-low)] ring-1 ring-[var(--tl-secondary)]/50'
+                      : 'bg-[var(--tl-low)]/55'
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <strong className="block text-xs font-bold text-[var(--tl-text)]">{m.label}</strong>
+                    <small className="block text-[11px] text-[var(--tl-text-variant)] mt-0.5">
+                      {m.subtitle}
+                    </small>
+                  </div>
+                  <span
+                    className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${
+                      selected
+                        ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)]'
+                        : 'bg-[var(--tl-card)] border border-[var(--tl-outline-variant)]'
+                    }`}
+                  >
+                    {selected && <Check size={13} />}
                   </span>
-                  {draft.technicianSignature && (
-                    <button
-                      type="button"
-                      onClick={clearTechSign}
-                      className="text-[11px] font-semibold text-rose-600 flex items-center gap-1 cursor-pointer"
-                    >
-                      <Eraser size={12} /> Ulang
-                    </button>
-                  )}
-                </div>
-                <div className="relative h-28 rounded-xl bg-white border border-slate-200 overflow-hidden touch-none">
-                  {!draft.technicianSignature && (
-                    <span className="absolute inset-0 flex items-center justify-center text-xs text-slate-400 pointer-events-none">
-                      Goreskan tanda tangan teknisi di sini
-                    </span>
-                  )}
-                  <canvas
-                    ref={techCanvasRef}
-                    onPointerDown={startTechSign}
-                    onPointerMove={drawTechSign}
-                    onPointerUp={endTechSign}
-                    onPointerOut={endTechSign}
-                    className="w-full h-full relative z-10 cursor-crosshair"
-                    style={{ touchAction: 'none' }}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Custom Treatment Tags */}
+          {draft.customMethods.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {draft.customMethods.map(cm => (
+                <span
+                  key={cm}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-[11px] font-bold"
+                >
+                  <span>{cm}</span>
+                  <button
+                    type="button"
+                    aria-label={`Hapus ${cm}`}
+                    onClick={() =>
+                      updateDraft(
+                        'customMethods',
+                        draft.customMethods.filter(x => x !== cm)
+                      )
+                    }
+                    className="p-0.5 rounded-full hover:bg-black/10 cursor-pointer"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={newMethodInput}
+              onChange={e => setNewMethodInput(e.target.value)}
+              placeholder="Tambah treatment khusus..."
+              className="flex-1 h-11 px-3 rounded-xl bg-[var(--tl-low)] text-xs text-[var(--tl-text)] focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const clean = newMethodInput.trim();
+                if (!clean) return;
+                if (!draft.customMethods.includes(clean)) {
+                  updateDraft('customMethods', [...draft.customMethods, clean]);
+                }
+                setNewMethodInput('');
+              }}
+              className="min-h-[44px] px-3.5 rounded-xl bg-[var(--tl-container)] hover:bg-[var(--tl-high)] text-[var(--tl-text)] text-xs font-bold inline-flex items-center gap-1 shrink-0 cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Tambah</span>
+            </button>
+          </div>
+
+          {/* Collapsible Detail Obat & Dosis */}
+          <div className="rounded-xl bg-[var(--tl-low)] overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowTechDetails(v => !v)}
+              className="w-full min-h-[44px] px-3.5 py-2.5 flex items-center justify-between text-xs font-semibold text-[var(--tl-text-variant)] cursor-pointer"
+            >
+              <span>Detail Obat &amp; Dosis (Opsional)</span>
+              {showTechDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            </button>
+            {showTechDetails && (
+              <div className="px-3.5 pb-3.5 pt-1 space-y-2.5 border-t border-[var(--tl-container)]">
+                <div>
+                  <label className="block text-[11px] font-semibold text-[var(--tl-text-variant)] mb-1">
+                    Nama Bahan / Termitisida
+                  </label>
+                  <input
+                    type="text"
+                    value={draft.chemicalName}
+                    onChange={e => updateDraft('chemicalName', e.target.value)}
+                    className="w-full h-10 px-3 rounded-lg bg-[var(--tl-card)] text-xs text-[var(--tl-text)] focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
                   />
                 </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[var(--tl-text-variant)] mb-1">
+                      Dosis Campuran
+                    </label>
+                    <input
+                      type="text"
+                      value={draft.dosage}
+                      onChange={e => updateDraft('dosage', e.target.value)}
+                      className="w-full h-10 px-3 rounded-lg bg-[var(--tl-card)] text-xs text-[var(--tl-text)] focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-[var(--tl-text-variant)] mb-1">
+                      Estimasi Luas (m²)
+                    </label>
+                    <input
+                      type="number"
+                      value={draft.treatmentAreaSqm}
+                      onChange={e => updateDraft('treatmentAreaSqm', e.target.value)}
+                      className="w-full h-10 px-3 rounded-lg bg-[var(--tl-card)] text-xs font-mono text-[var(--tl-text)] focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
+                    />
+                  </div>
+                </div>
               </div>
+            )}
+          </div>
+        </section>
 
-              {/* 5B: Data Perwakilan Klien */}
-              <div className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3">
-                <span className="block text-xs font-semibold text-[var(--text-primary)]">
-                  2. Penerima / Perwakilan Klien
+        {/* ================================================================ */}
+        {/* BAGIAN 3 — AREA TINDAKAN & PERLINDUNGAN                          */}
+        {/* ================================================================ */}
+        <section className="rounded-2xl bg-[var(--tl-card)] p-4 space-y-3.5 shadow-[var(--tl-shadow-card)]">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[11px] font-bold flex items-center justify-center shrink-0">
+                3
+              </span>
+              <div>
+                <h2 className="text-sm font-bold text-[var(--tl-text)]">Area Tindakan &amp; Perlindungan</h2>
+                <p className="text-[11px] text-[var(--tl-text-variant)]">
+                  Tandai area pengerjaan &amp; titik prioritas tinggi
+                </p>
+              </div>
+            </div>
+            <span className="px-2.5 py-0.5 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-[10.5px] font-bold shrink-0">
+              {draft.selectedAreas.length} Area
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {allAreaRows.map(area => {
+              const selected = draft.selectedAreas.includes(area.name);
+              const isPriority = draft.priorityAreas.includes(area.name);
+              return (
+                <div
+                  key={area.name}
+                  className={`min-h-[50px] px-3.5 py-2.5 rounded-xl flex items-center justify-between gap-2 transition-colors ${
+                    selected
+                      ? 'bg-[var(--tl-low)] ring-1 ring-[var(--tl-secondary)]/45'
+                      : 'bg-[var(--tl-low)]/55'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextAreas = toggleStringItem(draft.selectedAreas, area.name);
+                      updateDraft('selectedAreas', nextAreas);
+                      if (!nextAreas.includes(area.name) && isPriority) {
+                        updateDraft(
+                          'priorityAreas',
+                          draft.priorityAreas.filter(p => p !== area.name)
+                        );
+                      }
+                    }}
+                    className="flex items-center gap-2.5 text-left min-w-0 flex-1 cursor-pointer"
+                  >
+                    <span
+                      className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${
+                        selected
+                          ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)]'
+                          : 'bg-[var(--tl-card)] border border-[var(--tl-outline-variant)]'
+                      }`}
+                    >
+                      {selected && <Check size={13} />}
+                    </span>
+                    <div className="min-w-0">
+                      <strong className="block text-xs font-bold text-[var(--tl-text)] truncate">
+                        {area.name}
+                      </strong>
+                      <span className="block text-[10.5px] text-[var(--tl-text-variant)]">
+                        {area.zone}
+                      </span>
+                    </div>
+                  </button>
+
+                  {selected ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateDraft('priorityAreas', toggleStringItem(draft.priorityAreas, area.name))
+                      }
+                      className={`min-h-[32px] px-2.5 rounded-full text-[10.5px] font-bold inline-flex items-center gap-1 shrink-0 cursor-pointer ${
+                        isPriority
+                          ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300'
+                          : 'bg-[var(--tl-card)] text-[var(--tl-text-variant)]'
+                      }`}
+                    >
+                      <Star size={12} className={isPriority ? 'fill-amber-500 text-amber-500' : ''} />
+                      <span>{isPriority ? 'Prioritas Tinggi' : 'Standar'}</span>
+                    </button>
+                  ) : (
+                    <span className="text-[10.5px] text-[var(--tl-outline)] shrink-0">Ketuk pilih</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={newAreaInput}
+              onChange={e => setNewAreaInput(e.target.value)}
+              placeholder="Tambah area (cth: Gudang Lt. 3)..."
+              className="flex-1 h-11 px-3 rounded-xl bg-[var(--tl-low)] text-xs text-[var(--tl-text)] focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const clean = newAreaInput.trim();
+                if (!clean) return;
+                if (!allAreaRows.some(a => a.name.toLowerCase() === clean.toLowerCase())) {
+                  updateDraft('customAreas', [...draft.customAreas, clean]);
+                }
+                if (!draft.selectedAreas.includes(clean)) {
+                  updateDraft('selectedAreas', [...draft.selectedAreas, clean]);
+                }
+                setNewAreaInput('');
+              }}
+              className="min-h-[44px] px-3.5 rounded-xl bg-[var(--tl-container)] hover:bg-[var(--tl-high)] text-[var(--tl-text)] text-xs font-bold inline-flex items-center gap-1 shrink-0 cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Tambah</span>
+            </button>
+          </div>
+        </section>
+
+        {/* ================================================================ */}
+        {/* BAGIAN 4 — SARAN, REKOMENDASI & DOKUMENTASI FOTO (MAKS 6 FOTO)   */}
+        {/* ================================================================ */}
+        <section className="rounded-2xl bg-[var(--tl-card)] p-4 space-y-3.5 shadow-[var(--tl-shadow-card)]">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[11px] font-bold flex items-center justify-center shrink-0">
+                4
+              </span>
+              <div>
+                <h2 className="text-sm font-bold text-[var(--tl-text)]">Saran &amp; Dokumentasi Foto</h2>
+                <p className="text-[11px] text-[var(--tl-text-variant)]">
+                  Rekomendasi sanitasi &amp; bukti lapangan terkompresi
+                </p>
+              </div>
+            </div>
+            <Sparkles size={16} className="text-[var(--tl-secondary)] shrink-0" />
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            {suggestionChips.map(chip => (
+              <button
+                key={chip}
+                type="button"
+                onClick={() => {
+                  const cur = draft.recommendations.trim();
+                  if (cur.includes(chip)) return;
+                  updateDraft('recommendations', cur ? `${cur}. ${chip}` : chip);
+                }}
+                className="min-h-[34px] px-3 rounded-full bg-[var(--tl-low)] hover:bg-[var(--tl-container)] text-[11px] font-semibold text-[var(--tl-text)] active:scale-[0.98] cursor-pointer"
+              >
+                + {chip}
+              </button>
+            ))}
+          </div>
+
+          <textarea
+            rows={3}
+            value={draft.recommendations}
+            onChange={e => updateDraft('recommendations', e.target.value)}
+            placeholder="Tulis saran perbaikan sanitasi, kelembaban, atau jadwal kontrol lanjutan untuk klien..."
+            className="w-full p-3 rounded-xl bg-[var(--tl-low)] text-xs text-[var(--tl-text)] resize-none focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
+          />
+
+          {/* 2-Column Photo Capture Grid (Max 6 compressed photos) */}
+          <div className="space-y-2 pt-1">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-[var(--tl-text)]">
+                Dokumentasi Foto ({totalPhotos}/{MAX_PHOTOS_PER_REPORT})
+              </span>
+              <span className="text-[10.5px] font-medium text-[var(--tl-text-variant)]">
+                Otomatis terkompresi
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              {photoSlots.map((slot, idx) => {
+                const matchedPhoto =
+                  slot.tag === 'BEFORE'
+                    ? progressPhotos.find(p => p.photoTag === 'BEFORE')
+                    : slot.tag === 'AFTER'
+                    ? progressPhotos.find(p => p.photoTag === 'AFTER')
+                    : progressPhotos.filter(p => !p.photoTag)[idx === 1 ? 0 : 1];
+
+                return (
+                  <div
+                    key={slot.label}
+                    className="rounded-xl bg-[var(--tl-low)] p-2 flex flex-col gap-1.5"
+                  >
+                    {matchedPhoto ? (
+                      <button
+                        type="button"
+                        onClick={() => onViewPhoto(matchedPhoto)}
+                        className="relative w-full h-24 rounded-lg overflow-hidden cursor-pointer"
+                      >
+                        <AuthedImage
+                          path={matchedPhoto.url}
+                          alt={slot.label}
+                          purged={!!matchedPhoto.purgedAt}
+                          className="w-full h-full object-cover"
+                        />
+                        <span className="absolute bottom-1.5 right-1.5 w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-sm">
+                          <Check size={13} />
+                        </span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={!canTakeMoreProgress}
+                        onClick={() => onCapturePhoto(slot.tag)}
+                        className="w-full h-24 rounded-lg border border-dashed border-[var(--tl-outline-variant)] bg-[var(--tl-card)] flex flex-col items-center justify-center gap-1 text-[var(--tl-text-variant)] disabled:opacity-45 active:scale-[0.98] cursor-pointer"
+                      >
+                        <Camera size={18} className="text-[var(--tl-secondary)]" />
+                        <span className="text-[10.5px] font-semibold">Ambil Foto</span>
+                      </button>
+                    )}
+                    <div className="px-0.5">
+                      <strong className="block text-[11px] font-bold text-[var(--tl-text)]">
+                        {slot.label}
+                      </strong>
+                      <span className="block text-[10px] text-[var(--tl-text-variant)]">
+                        {slot.hint}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* ================================================================ */}
+        {/* BAGIAN 5 — PENGESAHAN LAPANGAN (2 TAHAP VALIDASI)                */}
+        {/* ================================================================ */}
+        <section className="rounded-2xl bg-[var(--tl-card)] p-4 space-y-4 shadow-[var(--tl-shadow-card)]">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-[11px] font-bold flex items-center justify-center shrink-0">
+                5
+              </span>
+              <div>
+                <h2 className="text-sm font-bold text-[var(--tl-text)]">Pengesahan Lapangan</h2>
+                <p className="text-[11px] text-[var(--tl-text-variant)]">
+                  2 tahap validasi: Teknisi Utama &amp; Customer (PIC)
+                </p>
+              </div>
+            </div>
+            <ShieldCheck size={16} className="text-[var(--tl-secondary)] shrink-0" />
+          </div>
+
+          {/* Tahap 1: Teknisi Utama */}
+          <div className="rounded-xl bg-[var(--tl-low)] p-3.5 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-xs font-bold flex items-center justify-center shrink-0">
+                  {getInitials(technicianName)}
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-[var(--tl-text-variant)]">
+                    Tahap 1 · Teknisi Utama
+                  </span>
+                  <strong className="block text-xs font-bold text-[var(--tl-text)] truncate">
+                    {technicianName}
+                    {technicianNip ? ` (${technicianNip})` : ''}
+                  </strong>
+                </div>
+              </div>
+              {draft.technicianSignature ? (
+                <span className="px-2 py-0.5 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-[10px] font-bold inline-flex items-center gap-1 shrink-0">
+                  <CheckCircle2 size={11} />
+                  <span>Tervalidasi</span>
                 </span>
+              ) : (
+                <span className="text-[10.5px] font-semibold text-amber-700 dark:text-amber-300 shrink-0">
+                  Wajib TTD
+                </span>
+              )}
+            </div>
 
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-[var(--tl-text-variant)]">
+                  Tanda tangan teknisi pelaksana:
+                </span>
+                {draft.technicianSignature && (
+                  <button
+                    type="button"
+                    onClick={clearTechSign}
+                    className="text-[11px] font-semibold text-[var(--tl-error)] inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    <Eraser size={12} /> Bersihkan
+                  </button>
+                )}
+              </div>
+              <div className="h-32 rounded-xl bg-white border border-[var(--tl-container)] relative overflow-hidden touch-none">
+                {!draft.technicianSignature && (
+                  <div className="absolute inset-0 flex items-center justify-center gap-1.5 text-slate-400 pointer-events-none text-xs">
+                    <PenTool size={14} />
+                    <span>Goreskan tanda tangan teknisi</span>
+                  </div>
+                )}
+                <canvas
+                  ref={techCanvasRef}
+                  data-testid="tech-signature-canvas"
+                  onPointerDown={startTechSign}
+                  onPointerMove={drawTechSign}
+                  onPointerUp={endTechSign}
+                  onPointerOut={endTechSign}
+                  className="w-full h-full cursor-crosshair relative z-10"
+                  style={{ touchAction: 'none' }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Tahap 2: Customer / Pihak Lokasi */}
+          <div className="rounded-xl bg-[var(--tl-low)] p-3.5 space-y-3">
+            <div className="flex items-center gap-2">
+              <UserCheck size={15} className="text-[var(--tl-secondary)] shrink-0" />
+              <div>
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-[var(--tl-text-variant)]">
+                  Tahap 2 · Customer / Pihak Lokasi
+                </span>
+                <strong className="block text-xs font-bold text-[var(--tl-text)]">
+                  Data PIC &amp; Serah Terima Layar
+                </strong>
+              </div>
+            </div>
+
+            <div className="space-y-2.5">
+              <div>
+                <label className="block text-[11px] font-semibold text-[var(--tl-text-variant)] mb-1">
+                  Nama Penerima / PIC *
+                </label>
                 <input
                   type="text"
                   value={draft.clientName}
                   onChange={e => updateDraft('clientName', e.target.value)}
-                  placeholder="Nama penerima (cth: Pak Bambang)"
-                  className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                  placeholder="cth: Bapak Hendra Wijaya"
+                  className="w-full h-11 px-3 rounded-xl bg-[var(--tl-card)] text-xs font-medium text-[var(--tl-text)] focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
                 />
+              </div>
 
-                <div className="flex flex-wrap gap-1.5">
+              <div>
+                <label className="block text-[11px] font-semibold text-[var(--tl-text-variant)] mb-1">
+                  Jabatan / Peran
+                </label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
                   {CLIENT_ROLES.map(role => (
                     <button
                       key={role}
                       type="button"
                       onClick={() => updateDraft('clientRole', role)}
-                      className={`min-h-[36px] px-3 rounded-xl text-[11px] font-semibold border transition-colors cursor-pointer ${
+                      className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold cursor-pointer ${
                         draft.clientRole === role
-                          ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
-                          : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] border-[var(--border)]'
+                          ? 'bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)]'
+                          : 'bg-[var(--tl-card)] text-[var(--tl-text-variant)]'
                       }`}
                     >
                       {role}
                     </button>
                   ))}
                 </div>
+              </div>
 
+              <div>
+                <label className="block text-[11px] font-semibold text-[var(--tl-text-variant)] mb-1">
+                  Nomor WhatsApp PIC (Opsional)
+                </label>
                 <input
                   type="tel"
                   value={draft.clientPhone}
                   onChange={e => updateDraft('clientPhone', e.target.value)}
-                  placeholder="Nomor WhatsApp PIC (untuk kirim Berita Acara)"
-                  className="w-full h-11 px-3.5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                  placeholder="cth: 081234567890"
+                  className="w-full h-11 px-3 rounded-xl bg-[var(--tl-card)] text-xs font-mono text-[var(--tl-text)] focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
                 />
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+
+              {/* Handoff Trigger Box */}
+              <button
+                type="button"
+                disabled={isSaving}
+                onClick={handleProceed}
+                className="w-full p-3.5 rounded-xl border border-dashed border-[var(--tl-secondary)] bg-[var(--tl-card)] hover:bg-[var(--tl-container)]/40 flex items-center justify-between gap-3 text-left active:scale-[0.99] transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] flex items-center justify-center shrink-0">
+                    <PenTool size={16} />
+                  </div>
+                  <div className="min-w-0">
+                    <strong className="block text-xs font-bold text-[var(--tl-text)]">
+                      Tap untuk Tanda Tangan Customer
+                    </strong>
+                    <small className="block text-[10.5px] text-[var(--tl-text-variant)]">
+                      Ambil foto akhir &amp; serahkan HP ke PIC untuk TTD + penilaian rahasia
+                    </small>
+                  </div>
+                </div>
+                <ArrowRight size={16} className="text-[var(--tl-secondary)] shrink-0" />
+              </button>
+            </div>
+          </div>
+        </section>
       </main>
 
-      {/* Thumb-Zone Sticky Bottom Action Bar */}
-      <div className="sticky-action flex items-center gap-2.5">
+      {/* Sticky Bottom Action Tray */}
+      <div className="tech-sticky-tray space-y-2">
         <button
           type="button"
-          onClick={handlePrevStep}
-          className="min-h-[48px] px-4 rounded-xl bg-[var(--bg-card)] border border-[var(--border)] text-xs font-semibold text-[var(--text-primary)] shrink-0 cursor-pointer"
+          disabled={isSaving}
+          onClick={handleProceed}
+          className="w-full min-h-[48px] px-4 rounded-xl bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] text-xs font-bold flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-all cursor-pointer disabled:opacity-60"
         >
-          {draft.step === 1 ? 'Tutup' : 'Kembali'}
-        </button>
-        <button
-          type="button"
-          disabled={isSavingStep}
-          onClick={handleNextStep}
-          className="flex-1 min-h-[48px] px-4 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-60 active:scale-[0.98] transition-all cursor-pointer"
-        >
-          <span>
-            {isSavingStep
-              ? 'Menyimpan...'
-              : draft.step < 5
-              ? `Lanjut: ${STEP_LABELS[draft.step as 1 | 2 | 3 | 4]}`
-              : 'Tanda Tangan Klien (Layar Penuh)'}
-          </span>
+          <span>{isSaving ? 'Menyimpan Laporan...' : 'Lanjut ke Tanda Tangan & Feedback'}</span>
           <ArrowRight size={16} />
         </button>
+        <div className="flex items-center justify-center gap-1.5 text-[10.5px] text-[var(--tl-text-variant)]">
+          <Lock size={11} />
+          <span>Penilaian kepuasan klien bersifat rahasia &amp; langsung ke manajemen.</span>
+        </div>
       </div>
     </div>
   );

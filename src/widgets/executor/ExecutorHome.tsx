@@ -36,7 +36,6 @@ import { CompletionPdfWaSheet } from './CompletionPdfWaSheet';
 import { NotificationsSheet, TechNotificationItem } from './NotificationsSheet';
 import { formatDistance, calculateDistanceMeters } from '@/shared/utils/geo';
 import { postLocation } from '@/shared/api/location';
-import { TabContainer } from '@/shared/ui/TabContainer';
 import {
   AlertCircle,
   ArrowLeft,
@@ -45,11 +44,14 @@ import {
   Calendar,
   Camera,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   ChevronUp,
   ClipboardList,
+  Clock,
   CloudOff,
+  ExternalLink,
   History,
   Home,
   LocateFixed,
@@ -59,14 +61,27 @@ import {
   Moon,
   MoreVertical,
   Navigation,
+  Phone,
+  PlusCircle,
   RefreshCw,
   Search,
+  ShieldCheck,
   Sun,
   Trash2,
   User as UserIcon,
   Users,
   X,
 } from 'lucide-react';
+import {
+  DayBucket,
+  formatDurationId,
+  formatTimeWib,
+  formatWoCode,
+  getDayBucket,
+  getInitials,
+  getServiceLabel,
+  isTermiteService,
+} from './techLiteUtils';
 
 type TechPage =
   | 'home'
@@ -78,35 +93,69 @@ type TechPage =
   | 'history'
   | 'profile';
 
-function ServiceTag({ serviceType }: { serviceType?: string }) {
-  const isTermite = serviceType === 'TERMITE_CONTROL';
+function ServicePill({ serviceType }: { serviceType?: string | null }) {
+  const isTermite = isTermiteService(serviceType);
   return (
     <span
-      className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-semibold whitespace-nowrap ${
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold whitespace-nowrap ${
         isTermite
-          ? 'bg-amber-50 text-amber-800 border border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60'
-          : 'bg-sky-50 text-sky-800 border border-sky-200/80 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800/60'
+          ? 'bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)]'
+          : 'bg-[var(--tl-high)] text-[var(--tl-text)]'
       }`}
     >
-      {isTermite ? 'Anti Rayap' : 'Pest Control'}
+      {getServiceLabel(serviceType)}
     </span>
   );
 }
 
-function LiteBrand({ compact = false }: { compact?: boolean }) {
+function StatusPill({ status }: { status: string }) {
+  if (status === 'WORKING') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/45 dark:text-amber-300 text-[10.5px] font-bold whitespace-nowrap">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+        <span>Berlangsung</span>
+      </span>
+    );
+  }
+  if (status === 'COMPLETED' || status === 'REVIEWED') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-[10.5px] font-bold whitespace-nowrap">
+        <CheckCircle2 size={11} />
+        <span>Selesai</span>
+      </span>
+    );
+  }
+  if (status === 'FLAGGED') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-[var(--tl-error-container)] text-[var(--tl-on-error-container)] text-[10.5px] font-bold whitespace-nowrap">
+        Ditinjau
+      </span>
+    );
+  }
   return (
-    <div className="brand">
-      <div className="brand-mark emerald-bg">
-        <span />
-        <span />
-        <span />
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-[var(--tl-container)] text-[var(--tl-text-variant)] text-[10.5px] font-bold whitespace-nowrap">
+      Siap
+    </span>
+  );
+}
+
+function GuciMasBrandLockup() {
+  return (
+    <div className="flex items-center gap-2.5 min-w-0">
+      <div
+        aria-hidden="true"
+        className="w-9 h-9 rounded-xl bg-[var(--tl-primary)] text-[var(--tl-on-primary)] flex items-center justify-center shadow-xs shrink-0"
+      >
+        <ShieldCheck size={19} />
       </div>
-      {!compact && (
-        <div>
-          <strong>Fieldwork</strong>
-          <small>GuciMas Pratama</small>
-        </div>
-      )}
+      <div className="min-w-0 leading-tight">
+        <strong className="block text-[14px] font-extrabold tracking-tight text-[var(--tl-text)] truncate">
+          GuciMas
+        </strong>
+        <span className="block text-[10.5px] font-semibold text-[var(--tl-secondary)] tracking-wide truncate">
+          Field Lite
+        </span>
+      </div>
     </div>
   );
 }
@@ -119,26 +168,21 @@ function getTimeGreeting(): string {
   return 'Selamat Malam';
 }
 
+function formatFullDateId(date: Date = new Date()): string {
+  return date.toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
 function formatShortDateId(dateStr?: string | null): string {
   const d = dateStr ? new Date(dateStr) : new Date();
   if (Number.isNaN(d.getTime())) {
     return new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
   }
   return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-function formatStatusText(status: string): string {
-  switch (status) {
-    case 'WORKING':
-      return 'Berlangsung';
-    case 'COMPLETED':
-    case 'REVIEWED':
-      return 'Selesai';
-    case 'FLAGGED':
-      return 'Ditinjau';
-    default:
-      return 'Siap';
-  }
 }
 
 export const ExecutorHome: React.FC = () => {
@@ -149,13 +193,15 @@ export const ExecutorHome: React.FC = () => {
   const [isOnline, setIsOnline] = useState<boolean>(() =>
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
-  const [isScheduleExpanded, setIsScheduleExpanded] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // Jobs & History Filters
+  // Menu Tugas filters (3-Day Temporal Switcher + All fallback)
+  const [taskDayTab, setTaskDayTab] = useState<'yesterday' | 'today' | 'tomorrow' | 'all'>('today');
   const [searchQuery, setSearchQuery] = useState('');
-  const [jobCategoryFilter, setJobCategoryFilter] = useState<'ALL' | 'AR' | 'PCO' | 'WORKING'>('ALL');
+
+  // Riwayat Pekerjaan filters (Search + Date Range + Category Pills)
   const [historySearch, setHistorySearch] = useState('');
+  const [historyCategory, setHistoryCategory] = useState<'ALL' | 'AR' | 'PCO'>('ALL');
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -319,7 +365,11 @@ export const ExecutorHome: React.FC = () => {
 
   const attemptSync = useCallback(async () => {
     const count = await getQueueLength();
-    if (count === 0) return;
+    if (count === 0) {
+      await loadData();
+      showToast('Data jadwal & laporan sudah tersinkron terbaru.');
+      return;
+    }
     setIsSyncing(true);
     const { synced } = await syncQueue(remaining => setPendingCount(remaining));
     setIsSyncing(false);
@@ -375,46 +425,94 @@ export const ExecutorHome: React.FC = () => {
     activeQueueJobs[0] ||
     completedJobs[0];
 
+  // Primary card for Beranda (prefers active WORKING/READY job)
+  const homePrimaryTask: WorkReport | undefined = ongoingJob || readyJob || activeQueueJobs[0];
+  const upcomingHomeJobs = activeQueueJobs.filter(job => job.id !== homePrimaryTask?.id);
+
+  // Classify projects into Kemarin / Hari Ini / Besok / Lainnya for Menu Tugas
+  const categorizedProjects = useMemo(() => {
+    const ref = new Date();
+    const map: Record<DayBucket | 'all', Array<{ project: Project; report?: WorkReport }>> = {
+      yesterday: [],
+      today: [],
+      tomorrow: [],
+      other: [],
+      all: [],
+    };
+    projects.forEach(proj => {
+      const rep = reports.find(r => r.projectId === proj.id);
+      const item = { project: proj, report: rep };
+      map.all.push(item);
+
+      // Active WORKING jobs always show up under Hari Ini so they are never hidden
+      if (rep?.status === 'WORKING') {
+        map.today.push(item);
+        return;
+      }
+
+      const bucket = getDayBucket(proj.workDate || rep?.createdAt || proj.createdAt, ref);
+      map[bucket].push(item);
+    });
+    return map;
+  }, [projects, reports]);
+
+  const hasOutsideThreeDayTasks = categorizedProjects.other.length > 0;
+
   // Filtered Projects for "Tugas" tab
-  const filteredProjects = projects.filter(p => {
+  const filteredDayTasks = useMemo(() => {
+    const source =
+      taskDayTab === 'all'
+        ? categorizedProjects.all
+        : taskDayTab === 'today'
+        ? categorizedProjects.today.length > 0
+          ? categorizedProjects.today
+          : categorizedProjects.all.filter(x => x.report?.status === 'READY' || x.report?.status === 'DRAFT')
+        : categorizedProjects[taskDayTab];
+
     const q = searchQuery.trim().toLowerCase();
-    const matchSearch =
-      !q ||
-      p.projectName.toLowerCase().includes(q) ||
-      (p.clientName && p.clientName.toLowerCase().includes(q)) ||
-      p.address.toLowerCase().includes(q);
-    if (!matchSearch) return false;
-    const rep = reports.find(r => r.projectId === p.id);
-    if (jobCategoryFilter === 'AR') return p.serviceType === 'TERMITE_CONTROL';
-    if (jobCategoryFilter === 'PCO') return p.serviceType !== 'TERMITE_CONTROL';
-    if (jobCategoryFilter === 'WORKING') return rep?.status === 'WORKING';
-    return true;
-  });
+    if (!q) return source;
+    return source.filter(({ project, report }) => {
+      const wo = formatWoCode(report?.id || project.id).toLowerCase();
+      return (
+        project.projectName.toLowerCase().includes(q) ||
+        (project.clientName && project.clientName.toLowerCase().includes(q)) ||
+        project.address.toLowerCase().includes(q) ||
+        wo.includes(q)
+      );
+    });
+  }, [categorizedProjects, taskDayTab, searchQuery]);
 
-  // Filtered History with Search + Date Range (Modul 5)
-  const filteredHistoryJobs = completedJobs.filter(rep => {
-    const q = historySearch.trim().toLowerCase();
-    if (
-      q &&
-      !rep.projectName.toLowerCase().includes(q) &&
-      !(rep.clientName || '').toLowerCase().includes(q) &&
-      !rep.projectAddress.toLowerCase().includes(q)
-    ) {
-      return false;
-    }
-    const repDate = new Date(rep.checkOutAt || rep.createdAt);
-    if (dateFrom) {
-      const from = new Date(`${dateFrom}T00:00:00`);
-      if (repDate < from) return false;
-    }
-    if (dateTo) {
-      const to = new Date(`${dateTo}T23:59:59`);
-      if (repDate > to) return false;
-    }
-    return true;
-  });
+  // Filtered History with Search + Date Range + Category Pills
+  const filteredHistoryJobs = useMemo(() => {
+    return completedJobs.filter(rep => {
+      if (historyCategory === 'AR' && !isTermiteService(rep.serviceType)) return false;
+      if (historyCategory === 'PCO' && isTermiteService(rep.serviceType)) return false;
 
-  // Monthly Performance Metrics (Modul 6 — clean & privacy-safe)
+      const q = historySearch.trim().toLowerCase();
+      if (q) {
+        const wo = formatWoCode(rep.id).toLowerCase();
+        const match =
+          rep.projectName.toLowerCase().includes(q) ||
+          (rep.clientName || '').toLowerCase().includes(q) ||
+          rep.projectAddress.toLowerCase().includes(q) ||
+          wo.includes(q);
+        if (!match) return false;
+      }
+
+      const repDate = new Date(rep.checkOutAt || rep.createdAt);
+      if (dateFrom) {
+        const from = new Date(`${dateFrom}T00:00:00`);
+        if (repDate < from) return false;
+      }
+      if (dateTo) {
+        const to = new Date(`${dateTo}T23:59:59`);
+        if (repDate > to) return false;
+      }
+      return true;
+    });
+  }, [completedJobs, historyCategory, historySearch, dateFrom, dateTo]);
+
+  // Monthly Performance Metrics (clean & privacy-safe)
   const monthlyStats = useMemo(() => {
     const now = new Date();
     const thisMonth = reports.filter(r => {
@@ -424,14 +522,16 @@ export const ExecutorHome: React.FC = () => {
     const doneCount = thisMonth.filter(r => ['COMPLETED', 'REVIEWED', 'FLAGGED'].includes(r.status)).length;
     const totalCount = thisMonth.length || completedJobs.length;
     const syncRate =
-      totalCount > 0 ? Math.min(100, Math.round(((totalCount - Math.min(pendingCount, totalCount)) / totalCount) * 100)) : 100;
+      totalCount > 0
+        ? Math.min(100, Math.round(((totalCount - Math.min(pendingCount, totalCount)) / totalCount) * 100))
+        : 100;
     return {
       monthlyTasks: doneCount || completedJobs.length,
       syncRate,
     };
   }, [reports, completedJobs.length, pendingCount]);
 
-  // Interactive Notifications (Modul 7 — Deep-links to Tasks, Offline Queue, History)
+  // Interactive Notifications
   const notificationItems: TechNotificationItem[] = useMemo(() => {
     const list: TechNotificationItem[] = [];
     if (pendingCount > 0) {
@@ -453,7 +553,7 @@ export const ExecutorHome: React.FC = () => {
         id: `notif-task-${job.id}`,
         category: 'task',
         title: job.status === 'WORKING' ? `Lanjutkan: ${job.projectName}` : `Tugas baru: ${job.projectName}`,
-        subtitle: `${job.clientName || 'Pelanggan'} · ${(job.scheduledStartTime || '09.00').replace(':', '.')}`,
+        subtitle: `${job.clientName || 'Pelanggan'} · ${formatTimeWib(job.scheduledStartTime)}`,
         timeLabel: job.status === 'WORKING' ? 'Aktif' : 'Hari ini',
         unread: true,
         onPress: () => {
@@ -469,7 +569,7 @@ export const ExecutorHome: React.FC = () => {
         id: `notif-done-${rep.id}`,
         category: 'system',
         title: `Terkirim: ${rep.projectName}`,
-        subtitle: `${rep.photos.length} foto bukti · Ketuk untuk lihat Berita Acara`,
+        subtitle: `${rep.photos.length} foto bukti · Ketuk untuk lihat Detail Pekerjaan`,
         timeLabel: formatShortDateId(rep.checkOutAt || rep.createdAt),
         unread: false,
         onPress: () => {
@@ -508,6 +608,7 @@ export const ExecutorHome: React.FC = () => {
     await createProject(data);
     setShowCreateProject(false);
     await loadData();
+    showToast('Lokasi tugas baru berhasil ditambahkan.');
   };
 
   const handleCaptureComplete = async (capturedData: {
@@ -548,7 +649,8 @@ export const ExecutorHome: React.FC = () => {
       }
     } catch (err) {
       if (err instanceof ApiError && err.status === 0) {
-        const queueAction: QueuedAction = type === 'CHECK_IN' ? 'CHECK_IN' : type === 'PROGRESS' ? 'PROGRESS' : 'CHECK_OUT';
+        const queueAction: QueuedAction =
+          type === 'CHECK_IN' ? 'CHECK_IN' : type === 'PROGRESS' ? 'PROGRESS' : 'CHECK_OUT';
         await enqueue(queueAction, report.id, evidence);
         await refreshQueueState();
         setActiveCameraAction(null);
@@ -635,24 +737,12 @@ export const ExecutorHome: React.FC = () => {
     setTimeout(() => setCacheNotice(null), 3500);
   };
 
-  const initials = user.name
-    .split(' ')
-    .map(n => n[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  const initials = getInitials(user.name);
   const firstName = user.name.split(' ')[0] || 'Teknisi';
+  const currentMonthLabel = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
 
-  // Bottom Navigation (4 Clean Tabs)
   const activeBottomTabId =
     page === 'jobs' ? 'jobs' : page === 'history' ? 'history' : page === 'profile' ? 'profile' : 'home';
-
-  const executorTabs = [
-    { id: 'home', label: 'Beranda', shortLabel: 'Beranda', icon: <Home size={16} /> },
-    { id: 'jobs', label: 'Tugas', shortLabel: 'Tugas', icon: <ClipboardList size={16} />, badge: activeQueueJobs.length || undefined },
-    { id: 'history', label: 'Riwayat', shortLabel: 'Riwayat', icon: <History size={16} /> },
-    { id: 'profile', label: 'Profil', shortLabel: 'Profil', icon: <UserIcon size={16} /> },
-  ];
 
   const isWorkflowSubpage = ['task-detail', 'gps', 'worksheet', 'completion'].includes(page);
   const isAnyModalOpen = Boolean(
@@ -666,55 +756,46 @@ export const ExecutorHome: React.FC = () => {
       (showGpsPrompt && gpsPermissionStatus !== 'granted')
   );
 
-  // Reusable Compact Top Bar (Header Tipis — Indikator Online/Offline Ringkas + Bell)
-  const renderCompactHeader = (title?: string) => (
-    <header className="px-4 h-14 bg-[var(--bg-card)] border-b border-[var(--border)] flex items-center justify-between gap-2 sticky top-0 z-20 shrink-0">
-      {title ? (
-        <div className="flex items-center gap-2.5 min-w-0">
-          <LiteBrand compact />
-          <strong className="text-[15px] font-bold text-[var(--text-primary)] truncate">{title}</strong>
-        </div>
-      ) : (
-        <LiteBrand />
-      )}
+  // Reusable Frosted GuciMas Field Lite Top Header
+  const renderLiteHeader = () => (
+    <header
+      className="sticky top-0 z-30 px-4 h-16 flex items-center justify-between gap-2 backdrop-blur-md shrink-0"
+      style={{
+        background: 'color-mix(in srgb, var(--tl-surface) 90%, transparent)',
+        boxShadow: 'var(--tl-shadow-head)',
+      }}
+    >
+      <GuciMasBrandLockup />
 
       <div className="flex items-center gap-2 shrink-0">
-        {/* Ringkas: Online / Offline / Antrean di dekat profil */}
         <button
           type="button"
           onClick={() => (pendingCount > 0 ? attemptSync() : setShowNotifications(true))}
-          className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-secondary)] px-2 py-1 rounded-lg hover:bg-[var(--bg-secondary)] cursor-pointer"
+          aria-label="Status Koneksi dan Sinkronisasi"
+          className="inline-flex items-center gap-1.5 min-h-[34px] px-2.5 rounded-full bg-[var(--tl-low)] hover:bg-[var(--tl-container)] text-[11px] font-bold text-[var(--tl-text)] cursor-pointer"
         >
           <span
             className={`w-2 h-2 rounded-full ${
-              !isOnline ? 'bg-rose-500' : pendingCount > 0 ? 'bg-amber-500' : 'bg-emerald-500'
+              !isOnline ? 'bg-rose-500' : pendingCount > 0 ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'
             }`}
           />
-          <span>
-            {!isOnline ? 'Offline' : pendingCount > 0 ? `${pendingCount} Antrean` : 'Online'}
-          </span>
+          <span>{!isOnline ? 'Offline' : pendingCount > 0 ? `${pendingCount} Antrean` : 'Online'}</span>
         </button>
 
-        {/* Pusat Notifikasi */}
         <button
           type="button"
-          onClick={() => setShowNotifications(true)}
-          aria-label="Pusat Notifikasi"
-          className="relative w-10 h-10 rounded-xl flex items-center justify-center text-[var(--text-primary)] hover:bg-[var(--bg-secondary)] cursor-pointer"
+          onClick={() => setPage('profile')}
+          aria-label="Buka Profil Teknisi"
+          className="w-9 h-9 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-xs font-bold flex items-center justify-center shadow-xs active:scale-95 transition-transform cursor-pointer"
         >
-          <Bell size={18} />
-          {unreadNotifCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-amber-500 text-white text-[9.5px] font-bold flex items-center justify-center">
-              {unreadNotifCount}
-            </span>
-          )}
+          {initials}
         </button>
       </div>
     </header>
   );
 
   return (
-    <div className="technician-stage">
+    <div className="technician-stage tech-lite-shell">
       {/* Subtle Comforting Toast */}
       <AnimatePresence>
         {toastMsg && (
@@ -724,12 +805,17 @@ export const ExecutorHome: React.FC = () => {
             exit={{ opacity: 0, y: -14 }}
             className="fixed top-4 left-1/2 -translate-x-1/2 z-[110] w-[calc(100%-2rem)] max-w-[400px]"
           >
-            <div className="px-4 py-3 rounded-2xl bg-[#1B4332] text-white shadow-xl flex items-center justify-between gap-2 text-xs font-medium">
+            <div className="px-4 py-3 rounded-2xl bg-[var(--tl-primary)] text-[var(--tl-on-primary)] shadow-xl flex items-center justify-between gap-2 text-xs font-semibold">
               <span className="flex items-center gap-2 min-w-0">
-                <Check size={15} className="text-emerald-300 shrink-0" />
+                <Check size={15} className="text-[var(--tl-secondary-container)] shrink-0" />
                 <span className="truncate">{toastMsg}</span>
               </span>
-              <button type="button" onClick={() => setToastMsg(null)} className="text-emerald-200 p-1 cursor-pointer">
+              <button
+                type="button"
+                aria-label="Tutup notifikasi"
+                onClick={() => setToastMsg(null)}
+                className="opacity-80 hover:opacity-100 p-1 cursor-pointer"
+              >
                 <X size={14} />
               </button>
             </div>
@@ -741,12 +827,20 @@ export const ExecutorHome: React.FC = () => {
       <div className={`phone-app ${isWorkflowSubpage ? 'workflow-mode' : ''}`}>
         {actionError && (
           <div className="px-4 pt-3">
-            <div className="px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center justify-between gap-2">
+            <div
+              role="alert"
+              className="px-3.5 py-2.5 rounded-xl bg-[var(--tl-error-container)] text-[var(--tl-on-error-container)] text-xs font-semibold flex items-center justify-between gap-2"
+            >
               <span className="flex items-center gap-2 min-w-0">
                 <AlertCircle size={15} className="shrink-0" />
                 <span>{actionError}</span>
               </span>
-              <button type="button" onClick={() => setActionError(null)} className="p-1 cursor-pointer">
+              <button
+                type="button"
+                aria-label="Tutup pesan error"
+                onClick={() => setActionError(null)}
+                className="p-1 cursor-pointer"
+              >
                 <X size={14} />
               </button>
             </div>
@@ -754,132 +848,426 @@ export const ExecutorHome: React.FC = () => {
         )}
 
         {/* ================================================================= */}
-        {/* MODUL 1: BERANDA TENANG & MINIMALIS (EXPANDED / COLLAPSED)        */}
+        {/* BERANDA — GUCIMAS FIELD LITE (COLLAPSED + PROGRESSIVE DISCLOSURE) */}
         {/* ================================================================= */}
         {page === 'home' && (
           <>
-            {renderCompactHeader()}
+            {renderLiteHeader()}
 
-            <main className="tech-content space-y-5">
-              {/* Warm Minimal Greeting */}
-              <div className="pt-1">
-                <span className="text-xs text-[var(--text-secondary)]">
-                  {getTimeGreeting()}, {firstName}
-                </span>
-                <h1 className="text-xl font-bold tracking-tight text-[var(--text-primary)] mt-0.5">
-                  Siap bertugas hari ini
-                </h1>
+            <main className="flex-1 px-4 pt-4 pb-24 space-y-4">
+              {/* Greeting + Date + Circular Notification Bell */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h1 className="text-[20px] font-extrabold tracking-tight text-[var(--tl-text)] leading-tight truncate">
+                    {getTimeGreeting()}, {firstName}
+                  </h1>
+                  <p className="text-xs font-medium text-[var(--tl-text-variant)] mt-0.5">
+                    {formatFullDateId()}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowNotifications(true)}
+                  aria-label="Pusat Notifikasi"
+                  className="relative w-10 h-10 rounded-full bg-[var(--tl-card)] text-[var(--tl-text)] shadow-[var(--tl-shadow-card)] flex items-center justify-center active:scale-95 transition-transform cursor-pointer shrink-0"
+                >
+                  <Bell size={18} />
+                  {unreadNotifCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[9.5px] font-bold flex items-center justify-center ring-2 ring-[var(--tl-surface)]">
+                      {unreadNotifCount}
+                    </span>
+                  )}
+                </button>
               </div>
 
+              {/* 3-Column Divided Compact KPI Strip */}
+              <section
+                aria-label="Ringkasan Tugas Hari Ini"
+                className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] grid grid-cols-3 divide-x divide-[var(--tl-container)] py-3"
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTaskDayTab('today');
+                    setPage('jobs');
+                  }}
+                  className="px-2 text-center cursor-pointer"
+                >
+                  <strong className="block text-[20px] font-extrabold font-mono tabular-nums text-[var(--tl-text)] leading-none">
+                    {activeQueueJobs.length}
+                  </strong>
+                  <span className="block text-[11px] font-semibold text-[var(--tl-text-variant)] mt-1">
+                    Hari Ini
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage('history')}
+                  className="px-2 text-center cursor-pointer"
+                >
+                  <strong className="block text-[20px] font-extrabold font-mono tabular-nums text-[var(--tl-secondary)] leading-none">
+                    {completedJobs.length}
+                  </strong>
+                  <span className="block text-[11px] font-semibold text-[var(--tl-text-variant)] mt-1">
+                    Selesai
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => (pendingCount > 0 ? attemptSync() : setPage('jobs'))}
+                  className="px-2 text-center cursor-pointer"
+                >
+                  <strong className="block text-[20px] font-extrabold font-mono tabular-nums text-amber-600 dark:text-amber-400 leading-none">
+                    {pendingCount > 0 ? pendingCount : activeQueueJobs.filter(j => j.status !== 'WORKING').length}
+                  </strong>
+                  <span className="block text-[11px] font-semibold text-[var(--tl-text-variant)] mt-1">
+                    Pending
+                  </span>
+                </button>
+              </section>
+
               {isLoading && (
-                <div className="py-12 text-center text-xs text-[var(--text-secondary)]">
-                  Memuat jadwal hari ini...
+                <div className="py-10 rounded-2xl bg-[var(--tl-card)] text-center text-xs font-medium text-[var(--tl-text-variant)] shadow-[var(--tl-shadow-card)]">
+                  Memuat jadwal lapangan hari ini...
                 </div>
               )}
 
               {!isLoading && loadError && (
-                <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-center space-y-2.5">
-                  <p className="text-xs text-[var(--text-secondary)]">{loadError}</p>
+                <div className="p-4 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] text-center space-y-2.5">
+                  <p className="text-xs text-[var(--tl-text-variant)]">{loadError}</p>
                   <button
                     type="button"
                     onClick={loadData}
-                    className="min-h-[40px] px-4 rounded-xl bg-[var(--accent)] text-white text-xs font-semibold cursor-pointer"
+                    className="min-h-[42px] px-4 rounded-xl bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-xs font-bold cursor-pointer"
                   >
-                    Coba Lagi
+                    Muat Ulang
                   </button>
                 </div>
               )}
 
-              {/* Primary Active Task Card (Aturan 3-Info Inti) */}
-              {!isLoading && !loadError && activeTaskReport && (
-                <article className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-4 space-y-3.5 shadow-2xs">
-                  <div className="flex items-center justify-between gap-2">
-                    <ServiceTag serviceType={activeTaskReport.serviceType} />
-                    <span className="text-xs font-mono font-semibold tabular-nums text-[var(--text-secondary)]">
-                      {activeTaskReport.status === 'WORKING'
-                        ? `Aktif · ${elapsedTime}`
-                        : (activeTaskReport.scheduledStartTime || '09.00').replace(':', '.')}
-                    </span>
+              {/* Primary Active Task Card (Tugas Utama) with Progressive Disclosure */}
+              {!isLoading && !loadError && homePrimaryTask && (
+                <article className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] overflow-hidden">
+                  {/* Top Soft Header Strip */}
+                  <div className="px-4 py-2.5 bg-[var(--tl-low)] flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[10.5px] font-extrabold uppercase tracking-wider text-[var(--tl-primary)]">
+                        Tugas Utama
+                      </span>
+                      <span className="text-[10.5px] font-mono font-bold text-[var(--tl-text-variant)]">
+                        {formatWoCode(homePrimaryTask.id)}
+                      </span>
+                    </div>
+                    <ServicePill serviceType={homePrimaryTask.serviceType} />
                   </div>
 
+                  <div className="p-4 space-y-3.5">
+                    {/* Status + Time + Radius */}
+                    <div className="flex items-center justify-between gap-2 text-[11px]">
+                      <div className="flex items-center gap-2">
+                        <StatusPill status={homePrimaryTask.status} />
+                        <span className="font-mono font-semibold tabular-nums text-[var(--tl-text-variant)]">
+                          {homePrimaryTask.status === 'WORKING'
+                            ? elapsedTime
+                            : formatTimeWib(homePrimaryTask.scheduledStartTime)}
+                        </span>
+                      </div>
+                      <span className="inline-flex items-center gap-1 text-[var(--tl-text-variant)] font-medium">
+                        <LocateFixed size={12} className="text-[var(--tl-secondary)]" />
+                        <span>Radius {homePrimaryTask.projectRadius || 100}m</span>
+                      </span>
+                    </div>
+
+                    {/* Title */}
+                    <div>
+                      <h2 className="text-[18px] font-extrabold text-[var(--tl-text)] leading-snug">
+                        {homePrimaryTask.projectName}
+                      </h2>
+                    </div>
+
+                    {/* Inset Location & Time Card */}
+                    <div className="rounded-xl bg-[var(--tl-low)] p-3 space-y-2 text-xs">
+                      <div className="flex items-start gap-2">
+                        <MapPin size={15} className="text-[var(--tl-secondary)] shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <strong className="block text-[var(--tl-text)] font-bold truncate">
+                            {homePrimaryTask.clientName || 'Lokasi Klien'}
+                          </strong>
+                          <span className="block text-[11px] text-[var(--tl-text-variant)] line-clamp-2 mt-0.5">
+                            {homePrimaryTask.projectAddress}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Progressive Disclosure Accordion (Collapsed by Default) */}
+                    <details className="group rounded-xl bg-[var(--tl-low)]/75 overflow-hidden">
+                      <summary className="min-h-[42px] px-3.5 py-2.5 flex items-center justify-between text-xs font-bold text-[var(--tl-primary)] cursor-pointer select-none list-none">
+                        <span>Lihat Detail Rute &amp; Scope</span>
+                        <ChevronDown
+                          size={16}
+                          className="transition-transform duration-200 group-open:rotate-180 text-[var(--tl-secondary)]"
+                        />
+                      </summary>
+
+                      <div className="px-3.5 pb-3.5 pt-1 space-y-3 border-t border-[var(--tl-container)] text-xs">
+                        {/* Clean Styled Route & Geofence Panel (Zero external placeholder images) */}
+                        <div className="rounded-xl bg-[var(--tl-card)] p-3 flex items-center justify-between gap-2.5">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] flex items-center justify-center shrink-0">
+                              <Navigation size={16} />
+                            </div>
+                            <div className="min-w-0">
+                              <strong className="block text-[11.5px] font-bold text-[var(--tl-text)]">
+                                Titik GPS Lokasi
+                              </strong>
+                              <span className="block text-[10.5px] font-mono text-[var(--tl-text-variant)] truncate">
+                                {homePrimaryTask.projectLatitude.toFixed(5)}, {homePrimaryTask.projectLongitude.toFixed(5)}
+                              </span>
+                            </div>
+                          </div>
+                          <a
+                            href={`https://maps.google.com/?q=${homePrimaryTask.projectLatitude},${homePrimaryTask.projectLongitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="min-h-[34px] px-2.5 rounded-lg bg-[var(--tl-low)] hover:bg-[var(--tl-container)] text-[var(--tl-primary)] text-[11px] font-bold inline-flex items-center gap-1 shrink-0"
+                          >
+                            <span>Peta</span>
+                            <ExternalLink size={12} />
+                          </a>
+                        </div>
+
+                        {/* Scope / Focus Target */}
+                        {(homePrimaryTask.targetFocus?.length > 0 || homePrimaryTask.focusTarget) && (
+                          <div className="space-y-1.5">
+                            <span className="block text-[10.5px] font-bold uppercase tracking-wider text-[var(--tl-text-variant)]">
+                              Target Pengendalian
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {(homePrimaryTask.targetFocus?.length > 0
+                                ? homePrimaryTask.targetFocus
+                                : [homePrimaryTask.focusTarget!]
+                              ).map(target => (
+                                <span
+                                  key={target}
+                                  className="px-2.5 py-1 rounded-lg bg-[var(--tl-card)] text-[var(--tl-text)] text-[11px] font-semibold"
+                                >
+                                  {target}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Team Assignment Toggle */}
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setShowTeamPicker(v => !v)}
+                            className="w-full min-h-[38px] px-3 rounded-lg bg-[var(--tl-card)] flex items-center justify-between text-xs font-semibold text-[var(--tl-text)] cursor-pointer"
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <Users size={14} className="text-[var(--tl-secondary)]" />
+                              <span>
+                                Tim Pelaksana (
+                                {(homePrimaryTask.teamMembers?.length
+                                  ? homePrimaryTask.teamMembers
+                                  : [{ name: user.name }]
+                                ).length}{' '}
+                                Orang)
+                              </span>
+                            </span>
+                            {showTeamPicker ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                          </button>
+
+                          {showTeamPicker && (
+                            <div className="mt-2.5 space-y-2">
+                              <div className="flex flex-wrap gap-1.5">
+                                {companyTechs.map(t => {
+                                  const activeList = homePrimaryTask.teamMembers?.length
+                                    ? homePrimaryTask.teamMembers
+                                    : [{ id: user.uid, name: user.name }];
+                                  const isSel = activeList.some(
+                                    m => m.id === t.id || m.name.toLowerCase() === t.name.toLowerCase()
+                                  );
+                                  return (
+                                    <button
+                                      key={t.id}
+                                      type="button"
+                                      onClick={() =>
+                                        handleToggleQuickTeamMember(homePrimaryTask, {
+                                          id: t.id,
+                                          name: t.name,
+                                          isManual: false,
+                                        })
+                                      }
+                                      className={`min-h-[32px] px-2.5 rounded-full text-[11px] font-semibold cursor-pointer ${
+                                        isSel
+                                          ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)]'
+                                          : 'bg-[var(--tl-card)] text-[var(--tl-text)]'
+                                      }`}
+                                    >
+                                      {isSel ? '✓ ' : '+ '}
+                                      {t.name}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  value={quickManualName}
+                                  onChange={e => setQuickManualName(e.target.value)}
+                                  placeholder="Tambah rekan manual..."
+                                  className="flex-1 h-9 px-3 rounded-lg bg-[var(--tl-card)] text-xs text-[var(--tl-text)]"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!quickManualName.trim()) return;
+                                    handleToggleQuickTeamMember(homePrimaryTask, {
+                                      name: quickManualName.trim(),
+                                      isManual: true,
+                                    });
+                                    setQuickManualName('');
+                                  }}
+                                  className="h-9 px-3 rounded-lg bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-xs font-bold cursor-pointer"
+                                >
+                                  Tambah
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* PIC Quick Call if available */}
+                        {homePrimaryTask.customerPhone && (
+                          <div className="flex items-center justify-between pt-1">
+                            <span className="text-[11px] text-[var(--tl-text-variant)]">
+                              PIC: <strong className="text-[var(--tl-text)]">{homePrimaryTask.customerName || 'Klien'}</strong>
+                            </span>
+                            <a
+                              href={`tel:${homePrimaryTask.customerPhone.replace(/\s+/g, '')}`}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-[var(--tl-secondary)]"
+                            >
+                              <Phone size={12} />
+                              <span>{homePrimaryTask.customerPhone}</span>
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </details>
+
+                    {/* Dominant Primary Forest CTA */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedReportId(homePrimaryTask.id);
+                        setSelectedProjectDetailId(homePrimaryTask.projectId);
+                        setIsViewingHistoryDetail(false);
+                        setPage(homePrimaryTask.status === 'WORKING' ? 'worksheet' : 'gps');
+                      }}
+                      className="w-full min-h-[48px] px-4 rounded-xl bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] text-xs font-bold flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-all cursor-pointer"
+                    >
+                      <span>
+                        {homePrimaryTask.status === 'WORKING'
+                          ? 'Lanjutkan Lembar Kerja'
+                          : 'Mulai Perjalanan & Check-in'}
+                      </span>
+                      <ArrowRight size={16} />
+                    </button>
+                  </div>
+                </article>
+              )}
+
+              {/* Empty Active State */}
+              {!isLoading && !loadError && !homePrimaryTask && (
+                <article className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-5 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-2xl bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] flex items-center justify-center mx-auto">
+                    <CheckCircle2 size={24} />
+                  </div>
                   <div>
-                    <h2 className="text-[17px] font-bold text-[var(--text-primary)] leading-snug">
-                      {activeTaskReport.projectName}
-                    </h2>
-                    <p className="text-xs text-[var(--text-secondary)] mt-1 truncate">
-                      {activeTaskReport.clientName || activeTaskReport.projectAddress}
+                    <h2 className="text-sm font-bold text-[var(--tl-text)]">Semua Tugas Hari Ini Selesai</h2>
+                    <p className="text-xs text-[var(--tl-text-variant)] mt-1">
+                      Buka menu Tugas untuk memeriksa jadwal lain atau tambahkan lokasi lapangan baru.
                     </p>
                   </div>
-
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedReportId(activeTaskReport.id);
-                      setSelectedProjectDetailId(activeTaskReport.projectId);
-                      setIsViewingHistoryDetail(false);
-                      setPage(activeTaskReport.status === 'WORKING' ? 'worksheet' : 'task-detail');
+                      setTaskDayTab('all');
+                      setPage('jobs');
                     }}
-                    className="w-full min-h-[48px] px-4 rounded-xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer"
+                    className="w-full min-h-[46px] rounded-xl bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-xs font-bold cursor-pointer"
                   >
-                    <span>
-                      {activeTaskReport.status === 'WORKING' ? 'Lanjutkan Lembar Kerja' : 'Buka Detail Tugas'}
+                    Lihat Semua Tugas
+                  </button>
+                </article>
+              )}
+
+              {/* 2-Column Functional Operational Shortcuts (Zero Dead Clicks) */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateProject(true)}
+                  className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-3.5 flex items-center gap-3 text-left active:scale-[0.98] transition-transform cursor-pointer"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-[var(--tl-low)] text-[var(--tl-primary)] flex items-center justify-center shrink-0">
+                    <PlusCircle size={19} />
+                  </div>
+                  <div className="min-w-0">
+                    <strong className="block text-xs font-bold text-[var(--tl-text)] truncate">
+                      Tugas Baru
+                    </strong>
+                    <span className="block text-[10.5px] text-[var(--tl-text-variant)] truncate">
+                      Tambah Lokasi
                     </span>
-                    <ArrowRight size={16} />
-                  </button>
-                </article>
-              )}
+                  </div>
+                </button>
 
-              {!isLoading && !loadError && !activeTaskReport && (
-                <article className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] p-5 text-center space-y-3">
-                  <h2 className="text-sm font-bold text-[var(--text-primary)]">Belum ada tugas aktif</h2>
-                  <p className="text-xs text-[var(--text-secondary)]">
-                    Pilih lokasi pada tab Tugas untuk memulai laporan kerja.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setPage('jobs')}
-                    className="w-full min-h-[46px] rounded-xl bg-[var(--accent)] text-white text-xs font-bold cursor-pointer"
-                  >
-                    Lihat Daftar Tugas
-                  </button>
-                </article>
-              )}
+                <button
+                  type="button"
+                  disabled={isSyncing}
+                  onClick={attemptSync}
+                  className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-3.5 flex items-center gap-3 text-left active:scale-[0.98] transition-transform cursor-pointer"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-[var(--tl-low)] text-[var(--tl-secondary)] flex items-center justify-center shrink-0">
+                    <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
+                  </div>
+                  <div className="min-w-0">
+                    <strong className="block text-xs font-bold text-[var(--tl-text)] truncate">
+                      Sinkron Data
+                    </strong>
+                    <span className="block text-[10.5px] text-[var(--tl-text-variant)] truncate">
+                      {isSyncing
+                        ? 'Menyinkronkan...'
+                        : pendingCount > 0
+                        ? `${pendingCount} Antrean`
+                        : 'Tersinkron'}
+                    </span>
+                  </div>
+                </button>
+              </div>
 
-              {/* Jadwal Hari Ini — State Expanded / Collapsed */}
+              {/* Jadwal Berikutnya */}
               <section className="space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-bold text-[var(--text-primary)]">
-                    Jadwal Hari Ini ({activeQueueJobs.length})
+                <div className="flex items-center justify-between px-0.5">
+                  <h2 className="text-sm font-extrabold text-[var(--tl-text)]">
+                    Jadwal Berikutnya ({upcomingHomeJobs.length})
                   </h2>
                   <button
                     type="button"
-                    onClick={() => setIsScheduleExpanded(v => !v)}
-                    className="min-h-[34px] px-2.5 rounded-lg text-xs font-semibold text-[var(--accent-text)] flex items-center gap-1 hover:bg-[var(--bg-secondary)] cursor-pointer"
+                    onClick={() => setPage('jobs')}
+                    className="text-xs font-bold text-[var(--tl-secondary)] hover:underline cursor-pointer"
                   >
-                    <span>{isScheduleExpanded ? 'Ringkas' : 'Perluas'}</span>
-                    {isScheduleExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    Lihat Semua
                   </button>
                 </div>
 
-                {!isScheduleExpanded ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsScheduleExpanded(true)}
-                    className="w-full min-h-[54px] px-4 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] flex items-center justify-between text-left cursor-pointer"
-                  >
-                    <div>
-                      <strong className="block text-xs font-semibold text-[var(--text-primary)]">
-                        {activeQueueJobs.length > 0
-                          ? `${activeQueueJobs.length} lokasi dijadwalkan hari ini`
-                          : `${completedJobs.length} pekerjaan selesai tersimpan`}
-                      </strong>
-                      <small className="text-[11px] text-[var(--text-muted)]">Ketuk untuk melihat daftar</small>
-                    </div>
-                    <ChevronDown size={16} className="text-[var(--text-muted)]" />
-                  </button>
-                ) : (
-                  <div className="space-y-2">
-                    {activeQueueJobs.map(job => (
+                {upcomingHomeJobs.length > 0 ? (
+                  <div className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] divide-y divide-[var(--tl-container)] overflow-hidden">
+                    {upcomingHomeJobs.map(job => (
                       <button
                         key={job.id}
                         type="button"
@@ -889,28 +1277,32 @@ export const ExecutorHome: React.FC = () => {
                           setIsViewingHistoryDetail(false);
                           setPage(job.status === 'WORKING' ? 'worksheet' : 'task-detail');
                         }}
-                        className="w-full p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] flex items-center justify-between gap-3 text-left active:scale-[0.99] transition-transform cursor-pointer"
+                        className="w-full p-3.5 flex items-center justify-between gap-3 text-left hover:bg-[var(--tl-low)]/50 active:scale-[0.99] transition-all cursor-pointer"
                       >
                         <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex items-center gap-2">
-                            <ServiceTag serviceType={job.serviceType} />
-                            <span className="text-[11px] font-mono text-[var(--text-muted)] tabular-nums">
-                              {(job.scheduledStartTime || '09.00').replace(':', '.')}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[11px] font-mono font-bold text-[var(--tl-text-variant)] tabular-nums">
+                              {formatTimeWib(job.scheduledStartTime)}
                             </span>
+                            <ServicePill serviceType={job.serviceType} />
                           </div>
-                          <strong className="block text-[13px] font-bold text-[var(--text-primary)] truncate">
+                          <strong className="block text-[13.5px] font-bold text-[var(--tl-text)] truncate">
                             {job.projectName}
                           </strong>
+                          <p className="text-[11px] text-[var(--tl-text-variant)] truncate">
+                            {job.clientName || job.projectAddress}
+                          </p>
                         </div>
-                        <ChevronRight size={16} className="text-[var(--text-muted)] shrink-0" />
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <StatusPill status={job.status} />
+                          <ChevronRight size={16} className="text-[var(--tl-outline)]" />
+                        </div>
                       </button>
                     ))}
-
-                    {activeQueueJobs.length === 0 && (
-                      <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-center text-xs text-[var(--text-secondary)]">
-                        Semua jadwal hari ini telah selesai.
-                      </div>
-                    )}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-4 text-center text-xs text-[var(--tl-text-variant)]">
+                    Tidak ada jadwal antrean tambahan hari ini.
                   </div>
                 )}
               </section>
@@ -919,79 +1311,217 @@ export const ExecutorHome: React.FC = () => {
         )}
 
         {/* ================================================================= */}
-        {/* TAB TUGAS: DAFTAR LOKASI MINIMALIS                                */}
+        {/* MENU TUGAS — 3-DAY TEMPORAL SWITCHER + COLLAPSIBLE ACCORDIONS     */}
         {/* ================================================================= */}
         {page === 'jobs' && (
           <>
-            {renderCompactHeader('Daftar Tugas')}
+            {renderLiteHeader()}
 
-            <main className="tech-content space-y-3.5">
+            <main className="flex-1 px-4 pt-4 pb-24 space-y-4">
+              {/* Page Title & Month Badge */}
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h1 className="text-[20px] font-extrabold tracking-tight text-[var(--tl-text)]">
+                    Daftar Tugas
+                  </h1>
+                  <p className="text-xs text-[var(--tl-text-variant)] mt-0.5">
+                    {filteredDayTasks.length} jadwal ditampilkan · {activeQueueJobs.length} aktif
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[var(--tl-low)] text-[11px] font-bold text-[var(--tl-primary)] shrink-0">
+                  {currentMonthLabel}
+                </span>
+              </div>
+
+              {/* 3-Day Temporal Segmented Switcher (+ Semua when tasks exist outside 3-day window) */}
+              <div
+                role="tablist"
+                aria-label="Filter Hari Tugas"
+                className={`grid ${hasOutsideThreeDayTasks ? 'grid-cols-4' : 'grid-cols-3'} p-1 rounded-2xl bg-[var(--tl-low)] gap-1`}
+              >
+                {(
+                  [
+                    { id: 'yesterday', label: 'Kemarin', count: categorizedProjects.yesterday.length },
+                    { id: 'today', label: 'Hari Ini', count: categorizedProjects.today.length },
+                    { id: 'tomorrow', label: 'Besok', count: categorizedProjects.tomorrow.length },
+                    ...(hasOutsideThreeDayTasks
+                      ? [{ id: 'all' as const, label: 'Semua', count: categorizedProjects.all.length }]
+                      : []),
+                  ] as const
+                ).map(tab => {
+                  const active = taskDayTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setTaskDayTab(tab.id)}
+                      className={`min-h-[42px] px-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                        active
+                          ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)] shadow-xs'
+                          : 'text-[var(--tl-text-variant)] hover:text-[var(--tl-text)]'
+                      }`}
+                    >
+                      <span>{tab.label}</span>
+                      {tab.count > 0 && (
+                        <span
+                          className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
+                            active
+                              ? 'bg-white/20 text-white'
+                              : 'bg-[var(--tl-card)] text-[var(--tl-text-variant)]'
+                          }`}
+                        >
+                          {tab.count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Search Input */}
               <div className="relative flex items-center">
-                <Search size={16} className="absolute left-3.5 text-[var(--text-muted)]" />
+                <Search size={16} className="absolute left-3.5 text-[var(--tl-outline)]" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Cari lokasi atau nama klien..."
-                  className="w-full h-11 pl-10 pr-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                  placeholder="Cari WO, lokasi, atau klien..."
+                  className="w-full h-11 pl-10 pr-9 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] text-xs text-[var(--tl-text)] focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
                 />
-              </div>
-
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
-                {([
-                  { id: 'ALL', label: `Semua (${projects.length})` },
-                  { id: 'AR', label: 'Anti Rayap' },
-                  { id: 'PCO', label: 'Pest Control' },
-                  { id: 'WORKING', label: 'Berlangsung' },
-                ] as const).map(chip => (
+                {searchQuery && (
                   <button
-                    key={chip.id}
                     type="button"
-                    onClick={() => setJobCategoryFilter(chip.id)}
-                    className={`min-h-[36px] px-3 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
-                      jobCategoryFilter === chip.id
-                        ? 'bg-[var(--accent)] text-white'
-                        : 'bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)]'
-                    }`}
+                    aria-label="Hapus pencarian tugas"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-2.5 p-1 text-[var(--tl-outline)] hover:text-[var(--tl-text)] cursor-pointer"
                   >
-                    {chip.label}
+                    <X size={15} />
                   </button>
-                ))}
+                )}
               </div>
 
-              <div className="space-y-2.5">
-                {filteredProjects.map(proj => {
-                  const rep = reports.find(r => r.projectId === proj.id);
-                  const statusStr = formatStatusText(rep?.status || (proj.lockedAt ? 'COMPLETED' : 'READY'));
+              {/* Task Cards Stream */}
+              <div className="space-y-3">
+                {filteredDayTasks.map(({ project, report }) => {
+                  const status = report?.status || (project.lockedAt ? 'COMPLETED' : 'READY');
+                  const isDone = ['COMPLETED', 'REVIEWED', 'FLAGGED'].includes(status);
+                  const isWorking = status === 'WORKING';
+                  const woCode = formatWoCode(report?.id || project.id);
+
                   return (
-                    <button
-                      key={proj.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedProjectDetailId(proj.id);
-                        if (rep) setSelectedReportId(rep.id);
-                        setIsViewingHistoryDetail(false);
-                        setPage(rep?.status === 'WORKING' ? 'worksheet' : 'task-detail');
-                      }}
-                      className="w-full p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-left space-y-1.5 active:scale-[0.99] transition-transform cursor-pointer"
+                    <article
+                      key={project.id}
+                      className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-4 space-y-3"
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <ServiceTag serviceType={proj.serviceType} />
-                        <span className="text-[11px] font-medium text-[var(--text-secondary)]">{statusStr}</span>
+                      {/* Top Meta Row */}
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="px-2 py-0.5 rounded-md bg-[var(--tl-container)] text-[var(--tl-text)] text-[10.5px] font-mono font-bold">
+                            {woCode}
+                          </span>
+                          <span className="text-[11px] font-mono font-semibold text-[var(--tl-text-variant)]">
+                            {formatTimeWib(report?.scheduledStartTime || project.scheduledStartTime)}
+                          </span>
+                          <ServicePill serviceType={project.serviceType} />
+                        </div>
+                        <StatusPill status={status} />
                       </div>
-                      <strong className="block text-sm font-bold text-[var(--text-primary)] truncate">
-                        {proj.projectName}
-                      </strong>
-                      <p className="text-xs text-[var(--text-secondary)] truncate">
-                        {proj.clientName || proj.address}
-                      </p>
-                    </button>
+
+                      {/* Title & Location */}
+                      <div>
+                        <h2 className="text-[15px] font-bold text-[var(--tl-text)] leading-snug">
+                          {project.projectName}
+                        </h2>
+                        <p className="text-xs text-[var(--tl-text-variant)] mt-0.5 flex items-start gap-1">
+                          <MapPin size={13} className="text-[var(--tl-secondary)] shrink-0 mt-0.5" />
+                          <span className="line-clamp-2">{project.clientName ? `${project.clientName} · ` : ''}{project.address}</span>
+                        </p>
+                      </div>
+
+                      {/* Collapsible Accordion: Rincian Tugas & Lokasi (Collapsed by default) */}
+                      <details className="group rounded-xl bg-[var(--tl-low)] overflow-hidden">
+                        <summary className="min-h-[40px] px-3 py-2 flex items-center justify-between text-[11.5px] font-bold text-[var(--tl-primary)] cursor-pointer select-none list-none">
+                          <span>Rincian Tugas &amp; Lokasi</span>
+                          <ChevronDown
+                            size={15}
+                            className="transition-transform duration-200 group-open:rotate-180 text-[var(--tl-secondary)]"
+                          />
+                        </summary>
+                        <div className="px-3 pb-3 pt-1 space-y-2 border-t border-[var(--tl-container)] text-[11.5px]">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[var(--tl-text-variant)]">Tanggal Kerja</span>
+                            <strong className="text-[var(--tl-text)]">{formatShortDateId(project.workDate)}</strong>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[var(--tl-text-variant)]">Radius GPS</span>
+                            <strong className="text-[var(--tl-text)] font-mono">{project.radius || 100} meter</strong>
+                          </div>
+                          {project.focusTarget && (
+                            <div>
+                              <span className="block text-[var(--tl-text-variant)]">Fokus Target</span>
+                              <strong className="text-[var(--tl-text)]">{project.focusTarget}</strong>
+                            </div>
+                          )}
+                          {project.notes && (
+                            <p className="text-[var(--tl-text-variant)] bg-[var(--tl-card)] rounded-lg p-2">
+                              {project.notes}
+                            </p>
+                          )}
+                        </div>
+                      </details>
+
+                      {/* Action CTA */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedProjectDetailId(project.id);
+                          if (report) setSelectedReportId(report.id);
+                          if (isDone && report) {
+                            setIsViewingHistoryDetail(true);
+                            setPage('completion');
+                          } else if (isWorking && report) {
+                            setIsViewingHistoryDetail(false);
+                            setPage('worksheet');
+                          } else {
+                            setIsViewingHistoryDetail(false);
+                            setPage('task-detail');
+                          }
+                        }}
+                        className={`w-full min-h-[44px] px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer ${
+                          isDone
+                            ? 'bg-[var(--tl-low)] hover:bg-[var(--tl-container)] text-[var(--tl-text)]'
+                            : 'bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)]'
+                        }`}
+                      >
+                        <span>
+                          {isDone
+                            ? 'Lihat Bukti Selesai'
+                            : isWorking
+                            ? 'Lanjutkan Kerja'
+                            : 'Mulai Kerjakan'}
+                        </span>
+                        <ArrowRight size={15} />
+                      </button>
+                    </article>
                   );
                 })}
 
-                {filteredProjects.length === 0 && (
-                  <div className="p-8 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-center text-xs text-[var(--text-secondary)]">
-                    Tidak ada tugas yang sesuai pencarian.
+                {filteredDayTasks.length === 0 && (
+                  <div className="p-8 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] text-center space-y-2.5">
+                    <p className="text-xs font-medium text-[var(--tl-text-variant)]">
+                      Tidak ada jadwal tugas pada pilihan hari ini.
+                    </p>
+                    {taskDayTab !== 'all' && projects.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setTaskDayTab('all')}
+                        className="min-h-[38px] px-4 rounded-xl bg-[var(--tl-low)] text-[var(--tl-primary)] text-xs font-bold cursor-pointer"
+                      >
+                        Tampilkan Semua ({projects.length})
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1015,59 +1545,90 @@ export const ExecutorHome: React.FC = () => {
             const addressText = repObj?.projectAddress || projObj?.address || '-';
             const radiusMeters = repObj?.projectRadius || projObj?.radius || 100;
             const serviceType = repObj?.serviceType || projObj?.serviceType || 'GENERAL_PEST_CONTROL';
-            const schedStr = `${formatShortDateId(repObj?.createdAt || projObj?.createdAt)} · ${(
-              repObj?.scheduledStartTime || '09.00'
-            ).replace(':', '.')}`;
+            const lat = repObj?.projectLatitude ?? projObj?.latitude;
+            const lng = repObj?.projectLongitude ?? projObj?.longitude;
+            const schedStr = `${formatShortDateId(repObj?.createdAt || projObj?.workDate || projObj?.createdAt)} · ${formatTimeWib(
+              repObj?.scheduledStartTime || projObj?.scheduledStartTime
+            )}`;
 
             return (
-              <>
-                <header className="tech-header">
+              <div className="flex flex-col min-h-full bg-[var(--tl-surface)]">
+                <header
+                  className="sticky top-0 z-30 px-4 h-16 flex items-center justify-between gap-2 backdrop-blur-md shrink-0"
+                  style={{
+                    background: 'color-mix(in srgb, var(--tl-surface) 90%, transparent)',
+                    boxShadow: 'var(--tl-shadow-head)',
+                  }}
+                >
                   <button
                     type="button"
                     onClick={() => setPage(selectedProjectDetailId ? 'jobs' : 'home')}
                     aria-label="Kembali"
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-[var(--tl-text)] hover:bg-[var(--tl-low)] cursor-pointer"
                   >
                     <ArrowLeft size={20} />
                   </button>
-                  <strong>Detail Tugas</strong>
-                  <span />
+                  <strong className="text-[15px] font-bold text-[var(--tl-text)]">Detail Tugas</strong>
+                  <span className="w-10" />
                 </header>
 
-                <main className="tech-content with-action space-y-4">
-                  <div className="space-y-1.5">
-                    <ServiceTag serviceType={serviceType} />
-                    <h1 className="text-lg font-bold text-[var(--text-primary)] leading-snug">{titleText}</h1>
-                    <p className="text-xs text-[var(--text-secondary)]">{clientText}</p>
-                  </div>
+                <main className="flex-1 px-4 pt-4 pb-28 space-y-4">
+                  <div className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="px-2 py-0.5 rounded-md bg-[var(--tl-container)] text-[var(--tl-text)] text-[10.5px] font-mono font-bold">
+                        {formatWoCode(repObj?.id || projObj?.id)}
+                      </span>
+                      <ServicePill serviceType={serviceType} />
+                    </div>
+                    <div>
+                      <h1 className="text-lg font-extrabold text-[var(--tl-text)] leading-snug">{titleText}</h1>
+                      <p className="text-xs text-[var(--tl-text-variant)] mt-0.5">{clientText}</p>
+                    </div>
 
-                  {/* 3 Info Utama dalam 1 Kartu Tenang */}
-                  <section className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] divide-y divide-[var(--border)] text-xs">
-                    <div className="p-3.5 flex items-center justify-between gap-2">
-                      <span className="text-[var(--text-secondary)]">Jadwal</span>
-                      <strong className="text-[var(--text-primary)] font-semibold tabular-nums">{schedStr}</strong>
+                    <div className="rounded-xl bg-[var(--tl-low)] p-3.5 space-y-2.5 text-xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[var(--tl-text-variant)]">Jadwal</span>
+                        <strong className="text-[var(--tl-text)] font-bold tabular-nums">{schedStr}</strong>
+                      </div>
+                      <div className="pt-2 border-t border-[var(--tl-container)] space-y-1">
+                        <span className="text-[var(--tl-text-variant)] block">Alamat Lokasi</span>
+                        <strong className="text-[var(--tl-text)] font-semibold block leading-relaxed">
+                          {addressText}
+                        </strong>
+                        <div className="flex items-center justify-between pt-1">
+                          <small className="text-[11px] text-[var(--tl-text-variant)]">
+                            Radius validasi GPS: {radiusMeters} meter
+                          </small>
+                          {typeof lat === 'number' && typeof lng === 'number' && (
+                            <a
+                              href={`https://maps.google.com/?q=${lat},${lng}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-[var(--tl-secondary)]"
+                            >
+                              <span>Buka Peta</span>
+                              <ExternalLink size={12} />
+                            </a>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="p-3.5 space-y-1">
-                      <span className="text-[var(--text-secondary)] block">Alamat Lokasi</span>
-                      <strong className="text-[var(--text-primary)] font-semibold block leading-relaxed">
-                        {addressText}
-                      </strong>
-                      <small className="text-[11px] text-[var(--text-muted)]">
-                        Radius validasi GPS: {radiusMeters} meter
-                      </small>
-                    </div>
+
                     {repObj && (
-                      <div className="p-3.5">
+                      <div className="rounded-xl bg-[var(--tl-low)] p-3.5">
                         <button
                           type="button"
                           onClick={() => setShowTeamPicker(v => !v)}
-                          className="w-full flex items-center justify-between text-xs font-semibold text-[var(--text-primary)] cursor-pointer"
+                          className="w-full flex items-center justify-between text-xs font-bold text-[var(--tl-text)] cursor-pointer"
                         >
-                          <span className="flex items-center gap-1.5">
-                            <Users size={14} className="text-[var(--accent)]" />
-                            Tim Bertugas ({(repObj.teamMembers?.length ? repObj.teamMembers : [{ name: user.name }]).length}{' '}
-                            Orang)
+                          <span className="flex items-center gap-2">
+                            <Users size={15} className="text-[var(--tl-secondary)]" />
+                            <span>
+                              Tim Bertugas (
+                              {(repObj.teamMembers?.length ? repObj.teamMembers : [{ name: user.name }]).length} Orang)
+                            </span>
                           </span>
-                          {showTeamPicker ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                          {showTeamPicker ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                         </button>
 
                         {showTeamPicker && (
@@ -1085,12 +1646,16 @@ export const ExecutorHome: React.FC = () => {
                                     key={t.id}
                                     type="button"
                                     onClick={() =>
-                                      handleToggleQuickTeamMember(repObj, { id: t.id, name: t.name, isManual: false })
+                                      handleToggleQuickTeamMember(repObj, {
+                                        id: t.id,
+                                        name: t.name,
+                                        isManual: false,
+                                      })
                                     }
-                                    className={`min-h-[34px] px-2.5 rounded-lg text-[11px] font-semibold border cursor-pointer ${
+                                    className={`min-h-[34px] px-3 rounded-full text-[11px] font-semibold cursor-pointer ${
                                       isSel
-                                        ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
-                                        : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border-[var(--border)]'
+                                        ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)]'
+                                        : 'bg-[var(--tl-card)] text-[var(--tl-text)]'
                                     }`}
                                   >
                                     {isSel ? '✓ ' : '+ '}
@@ -1105,7 +1670,7 @@ export const ExecutorHome: React.FC = () => {
                                 value={quickManualName}
                                 onChange={e => setQuickManualName(e.target.value)}
                                 placeholder="Tambah anggota manual..."
-                                className="flex-1 h-9 px-3 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border)] text-xs"
+                                className="flex-1 h-10 px-3 rounded-xl bg-[var(--tl-card)] text-xs text-[var(--tl-text)]"
                               />
                               <button
                                 type="button"
@@ -1117,7 +1682,7 @@ export const ExecutorHome: React.FC = () => {
                                   });
                                   setQuickManualName('');
                                 }}
-                                className="h-9 px-3 rounded-lg bg-[var(--accent)] text-white text-xs font-semibold cursor-pointer"
+                                className="h-10 px-3.5 rounded-xl bg-[var(--tl-primary)] text-[var(--tl-on-primary)] text-xs font-bold cursor-pointer"
                               >
                                 Tambah
                               </button>
@@ -1126,10 +1691,10 @@ export const ExecutorHome: React.FC = () => {
                         )}
                       </div>
                     )}
-                  </section>
+                  </div>
                 </main>
 
-                <div className="sticky-action">
+                <div className="tech-sticky-tray">
                   {repObj && (repObj.status === 'READY' || repObj.status === 'DRAFT') ? (
                     <button
                       type="button"
@@ -1137,10 +1702,10 @@ export const ExecutorHome: React.FC = () => {
                         setSelectedReportId(repObj.id);
                         setPage('gps');
                       }}
-                      className="w-full min-h-[50px] rounded-2xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
+                      className="w-full min-h-[48px] rounded-xl bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
                     >
                       <LocateFixed size={17} />
-                      <span>Mulai Pekerjaan / Check-in GPS</span>
+                      <span>Mulai Pekerjaan &amp; Check-in GPS</span>
                     </button>
                   ) : repObj && repObj.status === 'WORKING' ? (
                     <button
@@ -1149,9 +1714,9 @@ export const ExecutorHome: React.FC = () => {
                         setSelectedReportId(repObj.id);
                         setPage('worksheet');
                       }}
-                      className="w-full min-h-[50px] rounded-2xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
+                      className="w-full min-h-[48px] rounded-xl bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
                     >
-                      <span>Buka Lembar Kerja 5-Tahap</span>
+                      <span>Buka Form Laporan Pekerjaan</span>
                       <ArrowRight size={17} />
                     </button>
                   ) : repObj ? (
@@ -1162,14 +1727,14 @@ export const ExecutorHome: React.FC = () => {
                         setIsViewingHistoryDetail(true);
                         setPage('completion');
                       }}
-                      className="w-full min-h-[50px] rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-primary)] text-xs font-bold flex items-center justify-center gap-2 cursor-pointer"
+                      className="w-full min-h-[48px] rounded-xl bg-[var(--tl-low)] hover:bg-[var(--tl-container)] text-[var(--tl-text)] text-xs font-bold flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      <span>Lihat Berita Acara &amp; Foto</span>
+                      <span>Lihat Detail Pekerjaan &amp; PDF</span>
                       <ArrowRight size={16} />
                     </button>
                   ) : null}
                 </div>
-              </>
+              </div>
             );
           })()}
 
@@ -1177,48 +1742,67 @@ export const ExecutorHome: React.FC = () => {
         {/* CHECK-IN GPS (SATU LAYAR TENANG)                                  */}
         {/* ================================================================= */}
         {page === 'gps' && activeTaskReport && (
-          <>
-            <header className="tech-header">
-              <button type="button" onClick={() => setPage('task-detail')} aria-label="Kembali">
+          <div className="flex flex-col min-h-full bg-[var(--tl-surface)]">
+            <header
+              className="sticky top-0 z-30 px-4 h-16 flex items-center justify-between gap-2 backdrop-blur-md shrink-0"
+              style={{
+                background: 'color-mix(in srgb, var(--tl-surface) 90%, transparent)',
+                boxShadow: 'var(--tl-shadow-head)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setPage('task-detail')}
+                aria-label="Kembali"
+                className="w-10 h-10 rounded-full flex items-center justify-center text-[var(--tl-text)] hover:bg-[var(--tl-low)] cursor-pointer"
+              >
                 <ArrowLeft size={20} />
               </button>
-              <strong>Check-in Lokasi</strong>
-              <span />
+              <strong className="text-[15px] font-bold text-[var(--tl-text)]">Check-in Lokasi</strong>
+              <span className="w-10" />
             </header>
 
-            <main className="tech-content with-action flex flex-col justify-center">
-              <div className="rounded-3xl bg-[var(--bg-card)] border border-[var(--border)] p-6 text-center space-y-3">
-                <div className="w-14 h-14 rounded-2xl bg-[var(--green-soft)] text-[var(--accent)] flex items-center justify-center mx-auto">
+            <main className="flex-1 px-4 py-6 flex flex-col justify-center">
+              <div className="rounded-3xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-6 text-center space-y-3.5">
+                <div className="w-14 h-14 rounded-2xl bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] flex items-center justify-center mx-auto">
                   <Navigation size={26} />
                 </div>
-                <h1 className="text-base font-bold text-[var(--text-primary)]">{activeTaskReport.projectName}</h1>
-                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                  Ambil 1 foto kehadiran untuk memvalidasi posisi GPS di area kerja (radius {activeTaskReport.projectRadius}m).
+                <span className="inline-block px-2.5 py-0.5 rounded-full bg-[var(--tl-low)] text-[11px] font-mono font-bold text-[var(--tl-text-variant)]">
+                  {formatWoCode(activeTaskReport.id)}
+                </span>
+                <h1 className="text-base font-extrabold text-[var(--tl-text)] leading-snug">
+                  {activeTaskReport.projectName}
+                </h1>
+                <p className="text-xs text-[var(--tl-text-variant)] leading-relaxed">
+                  Ambil 1 foto kehadiran untuk memvalidasi posisi GPS di area kerja (radius{' '}
+                  <strong className="text-[var(--tl-text)]">{activeTaskReport.projectRadius}m</strong>).
                 </p>
               </div>
             </main>
 
-            <div className="sticky-action">
+            <div className="tech-sticky-tray">
               <button
                 type="button"
                 onClick={() => setActiveCameraAction({ type: 'CHECK_IN', report: activeTaskReport })}
-                className="w-full min-h-[50px] rounded-2xl bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
+                className="w-full min-h-[48px] rounded-xl bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] text-xs font-bold flex items-center justify-center gap-2 active:scale-[0.98] cursor-pointer"
               >
                 <Camera size={17} />
                 <span>Ambil Foto &amp; Check-in</span>
               </button>
             </div>
-          </>
+          </div>
         )}
 
         {/* ================================================================= */}
-        {/* MODUL 2: LEMBAR KERJA 5-TAHAP TERPADU                             */}
+        {/* FORM INPUT LAPORAN PEKERJAAN (ANTI RAYAP & PEST CONTROL)          */}
         {/* ================================================================= */}
         {page === 'worksheet' && activeTaskReport && (
           <TechnicianWorksheet
             report={activeTaskReport}
             elapsedTime={elapsedTime}
             technicianName={user.name}
+            technicianNip={user.nip}
+            isOnline={isOnline}
             onBack={() => setPage('home')}
             onCapturePhoto={tag =>
               setActiveCameraAction({ type: 'PROGRESS', report: activeTaskReport, photoTag: tag })
@@ -1230,12 +1814,14 @@ export const ExecutorHome: React.FC = () => {
         )}
 
         {/* ================================================================= */}
-        {/* MODUL 4: PRATINJAU BERITA ACARA PDF & WHATSAPP + OUTBOX           */}
+        {/* DETAIL PEKERJAAN TERPADU & PDF / WHATSAPP                         */}
         {/* ================================================================= */}
         {page === 'completion' && activeTaskReport && (
           <CompletionPdfWaSheet
             report={activeTaskReport}
             companyId={user.companyId}
+            technicianName={user.name}
+            technicianNip={user.nip}
             pendingQueueCount={pendingCount}
             isSyncing={isSyncing}
             isHistoryDetail={isViewingHistoryDetail}
@@ -1246,33 +1832,59 @@ export const ExecutorHome: React.FC = () => {
         )}
 
         {/* ================================================================= */}
-        {/* MODUL 5: RIWAYAT PEKERJAAN (SEARCH + COLLAPSIBLE DATE RANGE)      */}
+        {/* RIWAYAT PEKERJAAN — SEARCH + DATE RANGE + CATEGORY PILLS          */}
         {/* ================================================================= */}
         {page === 'history' && (
           <>
-            {renderCompactHeader('Riwayat')}
+            {renderLiteHeader()}
 
-            <main className="tech-content space-y-3.5">
-              {/* Search + Collapsible Date Filter Toggle */}
+            <main className="flex-1 px-4 pt-4 pb-24 space-y-4">
+              {/* Header + Arsip Resmi Badge */}
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h1 className="text-[20px] font-extrabold tracking-tight text-[var(--tl-text)]">
+                    Riwayat Pekerjaan
+                  </h1>
+                  <p className="text-xs text-[var(--tl-text-variant)] mt-0.5">
+                    {filteredHistoryJobs.length} laporan selesai tersimpan
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-[11px] font-bold shrink-0">
+                  Arsip Resmi
+                </span>
+              </div>
+
+              {/* Search + Date Range Toggle */}
               <div className="flex items-center gap-2">
                 <div className="relative flex-1 flex items-center">
-                  <Search size={16} className="absolute left-3.5 text-[var(--text-muted)]" />
+                  <Search size={16} className="absolute left-3.5 text-[var(--tl-outline)]" />
                   <input
                     type="text"
                     value={historySearch}
                     onChange={e => setHistorySearch(e.target.value)}
-                    placeholder="Cari nama gedung / klien..."
-                    className="w-full h-11 pl-10 pr-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+                    placeholder="Cari WO atau lokasi..."
+                    className="w-full h-11 pl-10 pr-8 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] text-xs text-[var(--tl-text)] focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
                   />
+                  {historySearch && (
+                    <button
+                      type="button"
+                      aria-label="Hapus pencarian riwayat"
+                      onClick={() => setHistorySearch('')}
+                      className="absolute right-2.5 p-1 text-[var(--tl-outline)] hover:text-[var(--tl-text)] cursor-pointer"
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
                 </div>
+
                 <button
                   type="button"
                   onClick={() => setShowDateFilter(v => !v)}
                   aria-label="Filter Rentang Tanggal"
-                  className={`h-11 px-3.5 rounded-2xl border text-xs font-semibold flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                  className={`h-11 px-3.5 rounded-2xl text-xs font-bold flex items-center gap-1.5 shrink-0 cursor-pointer shadow-[var(--tl-shadow-card)] ${
                     showDateFilter || dateFrom || dateTo
-                      ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
-                      : 'bg-[var(--bg-card)] text-[var(--text-primary)] border-[var(--border)]'
+                      ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)]'
+                      : 'bg-[var(--tl-card)] text-[var(--tl-text)]'
                   }`}
                 >
                   <Calendar size={15} />
@@ -1280,89 +1892,162 @@ export const ExecutorHome: React.FC = () => {
                 </button>
               </div>
 
-              {/* Collapsible Date Range Inputs */}
+              {/* Collapsible Filter Rentang Tanggal Card */}
               {showDateFilter && (
-                <div className="p-3.5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] space-y-2.5">
+                <div className="p-4 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] space-y-3">
+                  <div className="flex items-center justify-between">
+                    <strong className="text-xs font-bold text-[var(--tl-text)]">Filter Rentang Tanggal</strong>
+                    {(dateFrom || dateTo) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDateFrom('');
+                          setDateTo('');
+                        }}
+                        className="text-[11px] font-bold text-[var(--tl-error)] cursor-pointer"
+                      >
+                        Reset Rentang
+                      </button>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 gap-2.5">
                     <div>
-                      <label className="block text-[10.5px] font-semibold text-[var(--text-secondary)] mb-1">
+                      <label className="block text-[10.5px] font-semibold text-[var(--tl-text-variant)] mb-1">
                         Dari Tanggal
                       </label>
                       <input
                         type="date"
                         value={dateFrom}
                         onChange={e => setDateFrom(e.target.value)}
-                        className="w-full h-10 px-2.5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] text-xs text-[var(--text-primary)]"
+                        className="w-full h-10 px-2.5 rounded-xl bg-[var(--tl-low)] text-xs text-[var(--tl-text)]"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10.5px] font-semibold text-[var(--text-secondary)] mb-1">
+                      <label className="block text-[10.5px] font-semibold text-[var(--tl-text-variant)] mb-1">
                         Sampai Tanggal
                       </label>
                       <input
                         type="date"
                         value={dateTo}
                         onChange={e => setDateTo(e.target.value)}
-                        className="w-full h-10 px-2.5 rounded-xl bg-[var(--bg-secondary)] border border-[var(--border)] text-xs text-[var(--text-primary)]"
+                        className="w-full h-10 px-2.5 rounded-xl bg-[var(--tl-low)] text-xs text-[var(--tl-text)]"
                       />
                     </div>
                   </div>
-                  {(dateFrom || dateTo) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDateFrom('');
-                        setDateTo('');
-                      }}
-                      className="text-[11px] font-semibold text-rose-600 cursor-pointer"
-                    >
-                      Reset Filter Tanggal
-                    </button>
-                  )}
                 </div>
               )}
 
-              {/* Unified History Cards — Single Consistent Action "Lihat Detail" */}
-              <div className="space-y-2.5">
-                {filteredHistoryJobs.map(rep => (
-                  <div
-                    key={rep.id}
-                    className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] space-y-3"
+              {/* Active Range Indicator Pill */}
+              {(dateFrom || dateTo) && !showDateFilter && (
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--tl-low)] text-[11px] font-semibold text-[var(--tl-primary)]">
+                  <Calendar size={12} />
+                  <span>
+                    {dateFrom ? formatShortDateId(dateFrom) : 'Awal'} – {dateTo ? formatShortDateId(dateTo) : 'Sekarang'}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Hapus filter tanggal"
+                    onClick={() => {
+                      setDateFrom('');
+                      setDateTo('');
+                    }}
+                    className="p-0.5 cursor-pointer"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <ServiceTag serviceType={rep.serviceType} />
-                      <span className="text-[11px] font-mono text-[var(--text-muted)] tabular-nums">
-                        {formatShortDateId(rep.checkOutAt || rep.createdAt)}
-                      </span>
-                    </div>
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
 
-                    <div>
-                      <strong className="block text-sm font-bold text-[var(--text-primary)] truncate">
-                        {rep.projectName}
-                      </strong>
-                      <p className="text-xs text-[var(--text-secondary)] mt-0.5 truncate">
-                        {rep.clientName || rep.projectAddress} · {rep.photos.length} foto bukti
-                      </p>
-                    </div>
-
+              {/* Category Filter Pills (Semua | Anti Rayap | Pest Control) */}
+              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+                {(
+                  [
+                    { id: 'ALL', label: `Semua (${completedJobs.length})` },
+                    { id: 'AR', label: 'Anti Rayap' },
+                    { id: 'PCO', label: 'Pest Control' },
+                  ] as const
+                ).map(cat => {
+                  const active = historyCategory === cat.id;
+                  return (
                     <button
+                      key={cat.id}
                       type="button"
-                      onClick={() => {
-                        setSelectedReportId(rep.id);
-                        setIsViewingHistoryDetail(true);
-                        setPage('completion');
-                      }}
-                      className="w-full min-h-[42px] rounded-xl bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)] border border-[var(--border)] text-xs font-semibold text-[var(--text-primary)] flex items-center justify-center gap-1.5 cursor-pointer"
+                      onClick={() => setHistoryCategory(cat.id)}
+                      className={`min-h-[36px] px-3.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                        active
+                          ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)]'
+                          : 'bg-[var(--tl-card)] text-[var(--tl-text-variant)] shadow-[var(--tl-shadow-card)]'
+                      }`}
                     >
-                      <span>Lihat Detail</span>
-                      <ChevronRight size={15} />
+                      {cat.label}
                     </button>
-                  </div>
-                ))}
+                  );
+                })}
+              </div>
+
+              {/* History Work Order Cards (Strictly NO confidential client ratings!) */}
+              <div className="space-y-3">
+                {filteredHistoryJobs.map(rep => {
+                  const durationText = formatDurationId(rep.durationSeconds, rep.checkInAt, rep.checkOutAt);
+                  return (
+                    <article
+                      key={rep.id}
+                      className="p-4 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] space-y-3"
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className="px-2 py-0.5 rounded-md bg-[var(--tl-container)] text-[var(--tl-text)] text-[10.5px] font-mono font-bold">
+                            {formatWoCode(rep.id)}
+                          </span>
+                          <ServicePill serviceType={rep.serviceType} />
+                        </div>
+                        <span className="text-[11px] font-mono font-semibold text-[var(--tl-text-variant)] tabular-nums">
+                          {formatShortDateId(rep.checkOutAt || rep.createdAt)}
+                        </span>
+                      </div>
+
+                      <div>
+                        <strong className="block text-[15px] font-bold text-[var(--tl-text)] leading-snug truncate">
+                          {rep.projectName}
+                        </strong>
+                        <p className="text-xs text-[var(--tl-text-variant)] mt-0.5 truncate">
+                          {rep.clientName || rep.projectAddress}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-3 text-[11px] text-[var(--tl-text-variant)] bg-[var(--tl-low)] rounded-xl px-3 py-2">
+                        <span className="inline-flex items-center gap-1 font-semibold">
+                          <Camera size={13} className="text-[var(--tl-secondary)]" />
+                          <span>{rep.photos.length} Foto</span>
+                        </span>
+                        {durationText !== '-' && (
+                          <span className="inline-flex items-center gap-1 font-semibold">
+                            <Clock size={13} className="text-[var(--tl-secondary)]" />
+                            <span>{durationText}</span>
+                          </span>
+                        )}
+                        <span className="ml-auto font-bold text-[var(--tl-secondary)]">Selesai</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedReportId(rep.id);
+                          setIsViewingHistoryDetail(true);
+                          setPage('completion');
+                        }}
+                        className="w-full min-h-[42px] rounded-xl bg-[var(--tl-low)] hover:bg-[var(--tl-container)] text-[var(--tl-primary)] text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <span>Lihat Detail</span>
+                        <ChevronRight size={15} />
+                      </button>
+                    </article>
+                  );
+                })}
 
                 {filteredHistoryJobs.length === 0 && (
-                  <div className="p-8 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-center text-xs text-[var(--text-secondary)]">
-                    Belum ada riwayat pekerjaan pada rentang ini.
+                  <div className="p-8 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] text-center text-xs text-[var(--tl-text-variant)]">
+                    Belum ada riwayat pekerjaan pada rentang atau filter ini.
                   </div>
                 )}
               </div>
@@ -1371,63 +2056,65 @@ export const ExecutorHome: React.FC = () => {
         )}
 
         {/* ================================================================= */}
-        {/* MODUL 6: PROFIL TEKNISI, METRIK RINGKAS & THEME SWITCHER          */}
+        {/* PROFIL TEKNISI, METRIK RINGKAS & THEME SWITCHER                   */}
         {/* ================================================================= */}
         {page === 'profile' && (
           <>
-            {renderCompactHeader('Profil')}
+            {renderLiteHeader()}
 
-            <main className="tech-content space-y-4">
-              {/* Simple Clean Profile Identity */}
-              <div className="p-5 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-center space-y-1.5">
-                <div className="w-16 h-16 rounded-full bg-[var(--green-soft)] text-[var(--accent)] font-bold text-lg flex items-center justify-center mx-auto">
+            <main className="flex-1 px-4 pt-4 pb-24 space-y-4">
+              {/* Profile Identity Card */}
+              <div className="p-5 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] text-center space-y-1.5">
+                <div className="w-16 h-16 rounded-full bg-[var(--tl-primary)] text-[var(--tl-on-primary)] font-extrabold text-lg flex items-center justify-center mx-auto shadow-sm">
                   {initials}
                 </div>
-                <h1 className="text-base font-bold text-[var(--text-primary)] pt-1">{user.name}</h1>
-                <p className="text-xs font-medium text-[var(--accent-text)]">Teknisi</p>
-                <p className="text-[11px] font-mono text-[var(--text-muted)]">
+                <h1 className="text-base font-extrabold text-[var(--tl-text)] pt-1">{user.name}</h1>
+                <span className="inline-block px-2.5 py-0.5 rounded-full bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-[11px] font-bold">
+                  Teknisi Lapangan
+                </span>
+                <p className="text-[11px] font-mono text-[var(--tl-text-variant)] pt-0.5">
                   NIP: {user.nip || '-'} · {user.email}
                 </p>
               </div>
 
-              {/* 1 Slim Row — 3 Core Monthly Metrics */}
-              <div className="grid grid-cols-3 gap-2">
-                <div className="p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-center">
-                  <strong className="block text-lg font-mono font-bold tabular-nums text-[var(--text-primary)]">
+              {/* 3 Core Monthly Metrics */}
+              <div className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] grid grid-cols-3 divide-x divide-[var(--tl-container)] py-3.5">
+                <div className="px-2 text-center">
+                  <strong className="block text-lg font-mono font-extrabold tabular-nums text-[var(--tl-text)]">
                     {monthlyStats.monthlyTasks}
                   </strong>
-                  <span className="text-[10.5px] text-[var(--text-secondary)]">Tugas Bulan Ini</span>
+                  <span className="text-[10.5px] font-semibold text-[var(--tl-text-variant)]">Bulan Ini</span>
                 </div>
-                <div className="p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-center">
-                  <strong className="block text-lg font-mono font-bold tabular-nums text-[var(--accent-text)]">
+                <div className="px-2 text-center">
+                  <strong className="block text-lg font-mono font-extrabold tabular-nums text-[var(--tl-secondary)]">
                     {monthlyStats.syncRate}%
                   </strong>
-                  <span className="text-[10.5px] text-[var(--text-secondary)]">Terkirim</span>
+                  <span className="text-[10.5px] font-semibold text-[var(--tl-text-variant)]">Terkirim</span>
                 </div>
-                <div className="p-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] text-center">
-                  <strong className="block text-lg font-mono font-bold tabular-nums text-[var(--text-primary)]">
+                <div className="px-2 text-center">
+                  <strong className="block text-lg font-mono font-extrabold tabular-nums text-[var(--tl-text)]">
                     {pendingCount}
                   </strong>
-                  <span className="text-[10.5px] text-[var(--text-secondary)]">Antrean</span>
+                  <span className="text-[10.5px] font-semibold text-[var(--tl-text-variant)]">Antrean</span>
                 </div>
               </div>
 
-              {/* Instant Theme Switcher (Light Mode vs Dark Mode untuk Basement/Plafon) */}
-              <div className="p-4 rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] space-y-2.5">
+              {/* Light / Dark Mode Switcher */}
+              <div className="p-4 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] space-y-2.5">
                 <div>
-                  <strong className="block text-xs font-bold text-[var(--text-primary)]">Tampilan Layar</strong>
-                  <small className="text-[11px] text-[var(--text-secondary)]">
-                    Gunakan Mode Gelap saat bekerja di basement atau plafon.
+                  <strong className="block text-xs font-bold text-[var(--tl-text)]">Tampilan Layar</strong>
+                  <small className="text-[11px] text-[var(--tl-text-variant)]">
+                    Gunakan Mode Gelap saat bekerja di basement atau area minim cahaya.
                   </small>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
                     onClick={() => setTheme('light')}
-                    className={`min-h-[44px] rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer ${
+                    className={`min-h-[44px] rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors ${
                       resolvedTheme === 'light'
-                        ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
-                        : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border-[var(--border)]'
+                        ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)]'
+                        : 'bg-[var(--tl-low)] text-[var(--tl-text)]'
                     }`}
                   >
                     <Sun size={15} /> Mode Terang
@@ -1435,10 +2122,10 @@ export const ExecutorHome: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setTheme('dark')}
-                    className={`min-h-[44px] rounded-xl border text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer ${
+                    className={`min-h-[44px] rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors ${
                       resolvedTheme === 'dark'
-                        ? 'bg-[var(--accent)] text-white border-[var(--accent)]'
-                        : 'bg-[var(--bg-secondary)] text-[var(--text-primary)] border-[var(--border)]'
+                        ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)]'
+                        : 'bg-[var(--tl-low)] text-[var(--tl-text)]'
                     }`}
                   >
                     <Moon size={15} /> Mode Gelap
@@ -1446,82 +2133,82 @@ export const ExecutorHome: React.FC = () => {
                 </div>
               </div>
 
-              {/* Storage & Queue + Account Menu */}
               {cacheNotice && (
-                <div className="px-3.5 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium">
+                <div className="px-3.5 py-2.5 rounded-xl bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-xs font-semibold">
                   {cacheNotice}
                 </div>
               )}
 
-              <div className="rounded-2xl bg-[var(--bg-card)] border border-[var(--border)] divide-y divide-[var(--border)] overflow-hidden">
+              {/* Account & Maintenance Actions */}
+              <div className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] divide-y divide-[var(--tl-container)] overflow-hidden">
                 {pendingCount > 0 && (
                   <button
                     type="button"
                     disabled={isSyncing}
                     onClick={attemptSync}
-                    className="w-full min-h-[54px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-[var(--bg-secondary)]"
+                    className="w-full min-h-[54px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-[var(--tl-low)]/60"
                   >
                     <span className="flex items-center gap-3">
                       <CloudOff size={18} className="text-amber-600" />
                       <span>
-                        <strong className="block text-xs font-semibold text-[var(--text-primary)]">
+                        <strong className="block text-xs font-bold text-[var(--tl-text)]">
                           Sinkronkan Antrean Offline ({pendingItems.length})
                         </strong>
-                        <small className="text-[11px] text-[var(--text-secondary)]">
+                        <small className="text-[11px] text-[var(--tl-text-variant)]">
                           {isSyncing ? 'Sedang mengirim...' : 'Ketuk untuk kirim ulang'}
                         </small>
                       </span>
                     </span>
-                    <RefreshCw size={15} className={`text-[var(--text-muted)] ${isSyncing ? 'animate-spin' : ''}`} />
+                    <RefreshCw size={15} className={`text-[var(--tl-outline)] ${isSyncing ? 'animate-spin' : ''}`} />
                   </button>
                 )}
 
                 <button
                   type="button"
                   onClick={handleClearCache}
-                  className="w-full min-h-[54px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-[var(--bg-secondary)]"
+                  className="w-full min-h-[54px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-[var(--tl-low)]/60"
                 >
                   <span className="flex items-center gap-3">
-                    <Trash2 size={18} className="text-[var(--text-secondary)]" />
+                    <Trash2 size={18} className="text-[var(--tl-text-variant)]" />
                     <span>
-                      <strong className="block text-xs font-semibold text-[var(--text-primary)]">
+                      <strong className="block text-xs font-bold text-[var(--tl-text)]">
                         Bersihkan Cache Foto
                       </strong>
-                      <small className="text-[11px] text-[var(--text-secondary)]">
+                      <small className="text-[11px] text-[var(--tl-text-variant)]">
                         Aman, tidak menghapus antrean offline
                       </small>
                     </span>
                   </span>
-                  <ChevronRight size={16} className="text-[var(--text-muted)]" />
+                  <ChevronRight size={16} className="text-[var(--tl-outline)]" />
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setShowChangePassword(true)}
-                  className="w-full min-h-[54px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-[var(--bg-secondary)]"
+                  className="w-full min-h-[54px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-[var(--tl-low)]/60"
                 >
                   <span className="flex items-center gap-3">
-                    <Lock size={18} className="text-[var(--text-secondary)]" />
+                    <Lock size={18} className="text-[var(--tl-text-variant)]" />
                     <span>
-                      <strong className="block text-xs font-semibold text-[var(--text-primary)]">
+                      <strong className="block text-xs font-bold text-[var(--tl-text)]">
                         Ubah Kata Sandi
                       </strong>
-                      <small className="text-[11px] text-[var(--text-secondary)]">Keamanan akun teknisi</small>
+                      <small className="text-[11px] text-[var(--tl-text-variant)]">Keamanan akun teknisi</small>
                     </span>
                   </span>
-                  <ChevronRight size={16} className="text-[var(--text-muted)]" />
+                  <ChevronRight size={16} className="text-[var(--tl-outline)]" />
                 </button>
 
                 <button
                   type="button"
                   onClick={logout}
-                  className="w-full min-h-[54px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-rose-50/50 dark:hover:bg-rose-950/20"
+                  className="w-full min-h-[54px] px-4 py-3 flex items-center justify-between text-left cursor-pointer hover:bg-rose-50/60 dark:hover:bg-rose-950/20"
                 >
-                  <span className="flex items-center gap-3 text-rose-600">
+                  <span className="flex items-center gap-3 text-[var(--tl-error)]">
                     <LogOut size={18} />
                     <span>
-                      <strong className="block text-xs font-semibold">Keluar Akun</strong>
-                      <small className="text-[11px] text-[var(--text-secondary)]">Kembali ke halaman masuk</small>
+                      <strong className="block text-xs font-bold">Keluar Akun</strong>
+                      <small className="text-[11px] text-[var(--tl-text-variant)]">Kembali ke halaman masuk</small>
                     </span>
                   </span>
                 </button>
@@ -1530,19 +2217,52 @@ export const ExecutorHome: React.FC = () => {
           </>
         )}
 
-        {/* 4-Tab Thumb-Zone Bottom Navigation */}
-        <TabContainer
-          tabs={executorTabs}
-          activeTab={activeBottomTabId}
-          onChange={id => {
-            setSelectedProjectDetailId(null);
-            setIsViewingHistoryDetail(false);
-            setPage(id as TechPage);
-          }}
-          hideTopBar={true}
-          floatingOnAllScreens={true}
-          showFloatingBottom={!isAnyModalOpen}
-        />
+        {/* Dedicated 4-Column Frosted Bottom Navigation (GuciMas Field Lite) */}
+        {!isAnyModalOpen && (
+          <nav
+            aria-label="Navigasi Teknisi"
+            className="tech-bottom-nav px-2 py-1.5 grid grid-cols-4 gap-1"
+          >
+            {(
+              [
+                { id: 'home', label: 'Beranda', icon: Home },
+                { id: 'jobs', label: 'Tugas', icon: ClipboardList, badge: activeQueueJobs.length },
+                { id: 'history', label: 'Riwayat', icon: History },
+                { id: 'profile', label: 'Profil', icon: UserIcon },
+              ] as const
+            ).map(item => {
+              const active = activeBottomTabId === item.id;
+              const IconComp = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  aria-current={active ? 'page' : undefined}
+                  onClick={() => {
+                    setSelectedProjectDetailId(null);
+                    setIsViewingHistoryDetail(false);
+                    setPage(item.id);
+                  }}
+                  className={`relative min-h-[50px] rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer ${
+                    active
+                      ? 'bg-[var(--tl-low)] text-[var(--tl-primary)] font-bold'
+                      : 'text-[var(--tl-text-variant)] hover:text-[var(--tl-text)] font-medium'
+                  }`}
+                >
+                  <span className="relative">
+                    <IconComp size={19} strokeWidth={active ? 2.4 : 2} />
+                    {'badge' in item && item.badge > 0 && (
+                      <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full bg-[var(--tl-secondary)] text-white text-[9.5px] font-bold flex items-center justify-center">
+                        {item.badge}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-[10.5px] leading-none mt-0.5">{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        )}
 
         {/* Hidden compatibility markers for automated QA suite */}
         <span className="sr-only">
@@ -1576,6 +2296,7 @@ export const ExecutorHome: React.FC = () => {
           initialName={clientPrefill?.customerName || checkoutEvidence.report.customerName || ''}
           initialRole={clientPrefill?.customerRole || 'PIC Utama'}
           initialPhone={clientPrefill?.customerPhone || checkoutEvidence.report.customerPhone || ''}
+          projectName={checkoutEvidence.report.projectName}
           onClose={() => {
             setCheckoutEvidence(null);
             setPage('worksheet');
@@ -1591,13 +2312,13 @@ export const ExecutorHome: React.FC = () => {
       {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
 
       {showGpsPrompt && gpsPermissionStatus !== 'granted' && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-[var(--bg-card)] rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-[var(--border)]">
-            <div className="w-12 h-12 bg-[var(--green-soft)] text-[var(--accent)] rounded-2xl flex items-center justify-center mb-4 mx-auto">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#233144]/60 backdrop-blur-xs p-4">
+          <div className="bg-[var(--tl-card)] rounded-3xl p-6 max-w-sm w-full shadow-2xl">
+            <div className="w-12 h-12 bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] rounded-2xl flex items-center justify-center mb-4 mx-auto">
               <MapPin size={24} />
             </div>
-            <h3 className="text-base font-bold text-center text-[var(--text-primary)] mb-1.5">Izinkan Akses GPS</h3>
-            <p className="text-xs text-[var(--text-secondary)] text-center mb-5 leading-relaxed">
+            <h3 className="text-base font-bold text-center text-[var(--tl-text)] mb-1.5">Izinkan Akses GPS</h3>
+            <p className="text-xs text-[var(--tl-text-variant)] text-center mb-5 leading-relaxed">
               Digunakan untuk memvalidasi lokasi saat Check-in pekerjaan di lapangan.
             </p>
             <div className="space-y-2.5">
@@ -1613,14 +2334,14 @@ export const ExecutorHome: React.FC = () => {
                     { enableHighAccuracy: true, timeout: 10000 }
                   );
                 }}
-                className="w-full min-h-[46px] bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-white font-bold rounded-xl text-xs cursor-pointer"
+                className="w-full min-h-[46px] bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] font-bold rounded-xl text-xs cursor-pointer"
               >
                 Izinkan GPS
               </button>
               <button
                 type="button"
                 onClick={() => setShowGpsPrompt(false)}
-                className="w-full min-h-[44px] bg-[var(--bg-secondary)] text-[var(--text-primary)] font-semibold rounded-xl text-xs cursor-pointer"
+                className="w-full min-h-[44px] bg-[var(--tl-low)] text-[var(--tl-text)] font-semibold rounded-xl text-xs cursor-pointer"
               >
                 Nanti Saja
               </button>
