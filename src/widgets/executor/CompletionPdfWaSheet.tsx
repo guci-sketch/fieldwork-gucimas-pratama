@@ -37,6 +37,7 @@ import {
   getTechnicianTeamList,
   getTechSigStorageKey,
   getTechSigTimeStorageKey,
+  isSampleCompleteReport,
   isTermiteService,
 } from './techLiteUtils';
 import { ConfirmActionModal, useConfirmAction } from './ConfirmActionModal';
@@ -153,6 +154,9 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
       return '';
     }
   }, [report.id]);
+
+  const resolvedTechSig = localTechSig || report.technicianSignature || '';
+  const isSampleReport = isSampleCompleteReport(report.id);
 
   const localTechSigAt = useMemo(() => {
     try {
@@ -306,6 +310,7 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
           <div className="flex items-center justify-between gap-2 text-[11px]">
             <span className="font-mono font-semibold text-[var(--tl-text-variant)]">
               {woCode} · {getServiceLabel(report.serviceType)}
+              {isSampleReport ? ' · Contoh Lengkap' : ''}
             </span>
             <span className="inline-flex items-center gap-1 font-semibold text-[var(--tl-secondary)] shrink-0">
               <CheckCircle2 size={12} />
@@ -496,9 +501,9 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
                   Teknisi Pelaksana
                 </span>
                 <div className="h-16 rounded-lg bg-white border border-[var(--tl-container)] flex items-center justify-center p-1.5 overflow-hidden">
-                  {localTechSig ? (
+                  {resolvedTechSig ? (
                     <img
-                      src={localTechSig}
+                      src={resolvedTechSig}
                       alt="Tanda tangan teknisi"
                       className="max-h-full max-w-full object-contain"
                     />

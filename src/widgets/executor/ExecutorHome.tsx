@@ -84,6 +84,7 @@ import {
   getDayBucket,
   getInitials,
   getServiceLabel,
+  isSampleCompleteReport,
   isTermiteService,
 } from './techLiteUtils';
 
@@ -2258,6 +2259,7 @@ export const ExecutorHome: React.FC = () => {
               <div className="space-y-3">
                 {filteredHistoryJobs.map(rep => {
                   const durationText = formatDurationId(rep.durationSeconds, rep.checkInAt, rep.checkOutAt);
+                  const isSample = isSampleCompleteReport(rep.id);
                   return (
                     <article
                       key={rep.id}
@@ -2270,6 +2272,12 @@ export const ExecutorHome: React.FC = () => {
                           </span>
                           <span className="text-[var(--tl-outline)]">·</span>
                           <ServiceLabel serviceType={rep.serviceType} />
+                          {isSample && (
+                            <>
+                              <span className="text-[var(--tl-outline)]">·</span>
+                              <span className="font-semibold text-[var(--tl-primary)]">Contoh Lengkap</span>
+                            </>
+                          )}
                         </div>
                         <span className="text-[10.5px] font-mono font-medium text-[var(--tl-text-variant)] tabular-nums">
                           {formatShortDateId(rep.checkOutAt || rep.createdAt)}

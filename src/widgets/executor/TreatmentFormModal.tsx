@@ -12,6 +12,7 @@ import {
   parsePestFindingsFromNotes,
   serializePestFindingsToNotes,
 } from '@/shared/lib/permenkesRecapEngine';
+import { VoiceDictationButton } from './VoiceDictationButton';
 
 interface TreatmentFormModalProps {
   serviceType: ServiceType;
@@ -523,13 +524,22 @@ export const TreatmentFormModal: React.FC<TreatmentFormModalProps> = ({
               })}
             </div>
 
-            <textarea
-              rows={2}
-              placeholder="Saran singkat untuk klien (opsional)..."
-              value={technicianNotes}
-              onChange={e => setTechnicianNotes(e.target.value)}
-              className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs resize-none"
-            />
+            <div className="space-y-1.5">
+              <VoiceDictationButton
+                value={technicianNotes}
+                onChange={setTechnicianNotes}
+                fieldLabel="catatan observasi dan saran klien"
+                variant="compact"
+              />
+              <textarea
+                aria-label="Catatan observasi lapangan dan saran klien"
+                rows={2}
+                placeholder="Ketik atau gunakan Dikte Suara untuk mencatat observasi lapangan & saran klien..."
+                value={technicianNotes}
+                onChange={e => setTechnicianNotes(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs resize-none"
+              />
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {(isTermite ? QUICK_SUGGESTIONS_AR : QUICK_SUGGESTIONS_PCO).map(chip => (
                 <button

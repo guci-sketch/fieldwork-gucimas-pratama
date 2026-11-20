@@ -69,6 +69,20 @@ export function getServiceLabel(serviceType?: string | null): string {
   return isTermiteService(serviceType) ? 'Anti Rayap' : 'Pest Control';
 }
 
+/**
+ * Strictly locks the Technician Worksheet mode to the assigned Work Order service type.
+ * Anti Rayap tasks can only use the AR form; Pest Control tasks can only use the PCO form.
+ */
+export function resolveLockedWorksheetMode(serviceType?: string | null): 'AR' | 'PCO' {
+  return isTermiteService(serviceType) ? 'AR' : 'PCO';
+}
+
+export const SAMPLE_COMPLETE_REPORT_ID = 'wr-contoh-lengkap-00';
+
+export function isSampleCompleteReport(reportId?: string | null): boolean {
+  return reportId === SAMPLE_COMPLETE_REPORT_ID;
+}
+
 export function getInitials(name?: string | null): string {
   const clean = String(name || '').trim();
   if (!clean) return 'TK';

@@ -8,6 +8,9 @@ import {
   extractSeverityFromFindings,
   extractColonyFromFindings,
   getTechnicianTeamList,
+  resolveLockedWorksheetMode,
+  isSampleCompleteReport,
+  SAMPLE_COMPLETE_REPORT_ID,
 } from './techLiteUtils';
 
 test('formatWoCode produces stable WO-xxxx codes', () => {
@@ -66,4 +69,17 @@ test('getTechnicianTeamList falls back to solo executor cleanly', () => {
   });
   assert.equal(team.length, 2);
   assert.equal(team[1].role, 'Anggota Tim');
+});
+
+test('resolveLockedWorksheetMode strictly locks AR to TERMITE_CONTROL and PCO to others', () => {
+  assert.equal(resolveLockedWorksheetMode('TERMITE_CONTROL'), 'AR');
+  assert.equal(resolveLockedWorksheetMode('GENERAL_PEST_CONTROL'), 'PCO');
+  assert.equal(resolveLockedWorksheetMode('FUMIGATION'), 'PCO');
+  assert.equal(resolveLockedWorksheetMode(undefined), 'PCO');
+});
+
+test('isSampleCompleteReport identifies the complete sample report id', () => {
+  assert.equal(isSampleCompleteReport(SAMPLE_COMPLETE_REPORT_ID), true);
+  assert.equal(isSampleCompleteReport('wr-pln-bulungan-01'), false);
+  assert.equal(isSampleCompleteReport(null), false);
 });

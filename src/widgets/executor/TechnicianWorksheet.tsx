@@ -37,8 +37,10 @@ import {
   getTechSigStorageKey,
   getTechSigTimeStorageKey,
   isTermiteService,
+  resolveLockedWorksheetMode,
 } from './techLiteUtils';
 import { ConfirmActionModal, useConfirmAction } from './ConfirmActionModal';
+import { VoiceDictationButton } from './VoiceDictationButton';
 
 export interface WorksheetClientPrefill {
   customerName: string;
@@ -301,15 +303,20 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
   onProceedToClientSign,
 }) => {
   const draftKey = `fw_tech_draft_${report.id}`;
+  const lockedServiceMode = resolveLockedWorksheetMode(report.serviceType);
 
   const [draft, setDraft] = useState<WorksheetDraft>(() => {
     try {
       const saved = localStorage.getItem(draftKey);
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Guard against legacy draft schema from previous stepper version
+        // Guard against legacy draft schema and always enforce the task's locked service mode
         if (Array.isArray(parsed.termiteEntries) && Array.isArray(parsed.pestEntries)) {
-          return { ...buildDefaultDraft(report), ...parsed };
+          return {
+            ...buildDefaultDraft(report),
+            ...parsed,
+            serviceMode: lockedServiceMode,
+          };
         }
       }
     } catch {
@@ -366,13 +373,14 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
     }
   }, []);
 
-  const isTermite = draft.serviceMode === 'AR';
+  const isTermite = lockedServiceMode === 'AR';
   const woCode = formatWoCode(report.id);
   const progressPhotos = report.photos.filter(p => p.photoType === 'PROGRESS');
   const totalPhotos = report.photos.length;
   const canTakeMoreProgress = totalPhotos < MAX_PHOTOS_PER_REPORT && progressPhotos.length < 4;
 
   const updateDraft = <K extends keyof WorksheetDraft>(key: K, value: WorksheetDraft[K]) => {
+    if (key === 'serviceMode') return;
     setValidationMsg(null);
     setDraft(prev => ({ ...prev, [key]: value }));
   };
@@ -467,23 +475,6 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
       confirmLabel: 'Ya, Keluar',
       cancelLabel: 'Tetap di Form',
       onConfirm: onBack,
-    });
-  };
-
-  const handleRequestSwitchServiceMode = (targetMode: 'AR' | 'PCO') => {
-    if (targetMode === draft.serviceMode) return;
-    confirmAction({
-      tone: 'warning',
-      title: 'Ganti Jenis Layanan Laporan?',
-      description:
-        'Daftar temuan hama, metode treatment, dan saran akan menyesuaikan jenis layanan yang dipilih.',
-      details: [
-        { label: 'Mode Saat Ini', value: draft.serviceMode === 'AR' ? 'Anti Rayap' : 'Pest Control' },
-        { label: 'Mode Baru', value: targetMode === 'AR' ? 'Anti Rayap' : 'Pest Control' },
-      ],
-      confirmLabel: 'Ya, Ganti Mode',
-      cancelLabel: 'Batal',
-      onConfirm: () => updateDraft('serviceMode', targetMode),
     });
   };
 
@@ -639,7 +630,7 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
   };
 
   const availableMethods = TREATMENT_METHODS.filter(
-    m => m.mode === 'BOTH' || m.mode === draft.serviceMode
+    m => m.mode === 'BOTH' || m.mode === lockedServiceMode
   );
   const suggestionChips = isTermite ? RECOMMENDATION_CHIPS_AR : RECOMMENDATION_CHIPS_PCO;
 
@@ -719,38 +710,27 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
             </span>
           </div>
 
-          {/* 2-Tab Service Mode Switcher */}
+          {/* Locked Service Scope Indicator — strictly follows assigned task type */}
           <div
-            role="tablist"
-            aria-label="Jenis Layanan Laporan"
-            className="grid grid-cols-2 p-1 rounded-xl bg-[var(--tl-low)] gap-1"
+            data-testid="locked-service-banner"
+            className="rounded-xl bg-[var(--tl-low)] px-3 py-2.5 flex items-center justify-between gap-2.5"
           >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={isTermite}
-              onClick={() => handleRequestSwitchServiceMode('AR')}
-              className={`min-h-[38px] rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
-                isTermite
-                  ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)] shadow-xs'
-                  : 'text-[var(--tl-text-variant)] hover:text-[var(--tl-text)]'
-              }`}
-            >
-              Anti Rayap
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={!isTermite}
-              onClick={() => handleRequestSwitchServiceMode('PCO')}
-              className={`min-h-[38px] rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
-                !isTermite
-                  ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)] shadow-xs'
-                  : 'text-[var(--tl-text-variant)] hover:text-[var(--tl-text)]'
-              }`}
-            >
-              Pest Control
-            </button>
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-[var(--tl-primary)] text-[var(--tl-on-primary)] flex items-center justify-center shrink-0">
+                <Lock size={13} />
+              </div>
+              <div className="min-w-0">
+                <strong className="block text-[12px] font-semibold text-[var(--tl-text)] truncate">
+                  {isTermite ? 'Form Khusus Anti Rayap' : 'Form Khusus Pest Control'}
+                </strong>
+                <span className="block text-[10.5px] text-[var(--tl-text-variant)] truncate">
+                  Terkunci otomatis sesuai jenis tugas
+                </span>
+              </div>
+            </div>
+            <span className="text-[10.5px] font-semibold text-[var(--tl-secondary)] shrink-0">
+              {isTermite ? 'AR' : 'PCO'}
+            </span>
           </div>
 
           {/* Inset Client & Address Summary */}
@@ -1512,13 +1492,24 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
             ))}
           </div>
 
-          <textarea
-            rows={3}
-            value={draft.recommendations}
-            onChange={e => updateDraft('recommendations', e.target.value)}
-            placeholder="Tulis saran perbaikan sanitasi, kelembaban, atau jadwal kontrol lanjutan untuk klien..."
-            className="w-full p-3 rounded-xl bg-[var(--tl-low)] text-xs text-[var(--tl-text)] resize-none focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
-          />
+          <div className="space-y-2">
+            <VoiceDictationButton
+              value={draft.recommendations}
+              onChange={next => updateDraft('recommendations', next)}
+              fieldLabel="catatan observasi dan saran lapangan"
+              variant="lite"
+            />
+            <textarea
+              id="worksheet-observations-textarea"
+              aria-label="Catatan observasi lapangan dan saran untuk klien"
+              data-testid="worksheet-observations-textarea"
+              rows={4}
+              value={draft.recommendations}
+              onChange={e => updateDraft('recommendations', e.target.value)}
+              placeholder="Tulis atau ketuk Dikte Suara untuk mencatat temuan lapangan & saran untuk klien..."
+              className="w-full p-3 rounded-xl bg-[var(--tl-low)] text-xs leading-relaxed text-[var(--tl-text)] resize-none focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
+            />
+          </div>
 
           {/* 2-Column Photo Capture Grid (Max 6 compressed photos) */}
           <div className="space-y-2 pt-1">
