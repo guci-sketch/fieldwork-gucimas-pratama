@@ -4,7 +4,6 @@
  *   1. Pembuatan Draft Survey oleh Marketing/Surveyor dengan kode GP-DRF/AR/... atau GP-DRF/PCO/...
  *   2. Adjustment & Negosiasi oleh Admin (ubah garansi bulan/tahun, harga satuan, diskon upah) + Re-Save Draft
  *   3. Approval oleh Admin yang menerbitkan nomor resmi GP/AR/... atau GP/PCO/... (tanpa kode APR) + Auto-Generate PDF
- *   4. Sinkronisasi profil pelanggan dari lapangan (projects) maupun penawaran (quotations) ketika dilengkapi Admin.
  */
 import { supabase } from '@/shared/lib/supabase';
 import { commitNomorSurat } from './nomorSuratService';
@@ -158,6 +157,13 @@ export async function updateQuotationStatus(
     await supabase.from("nomor_surat_logs").update({ status }).eq("quoId", id);
 }
 
+/**
+ * Meng-approve Quotation dari fase Draft (GP-DRF) ke nomor surat resmi (GP/AR/... atau GP/PCO/...):
+ *   1. Menerbitkan/membersihkan nomor surat menjadi kode resmi (tanpa kode APR)
+ *   2. Menyimpan nomor GP-DRF lama ke `draftNoSurat` sebagai jejak audit
+ *   3. Meng-update `noSurat` utama menjadi nomor resmi
+ *   4. Mengembalikan nomor resmi yang siap dicetak pada PDF resmi.
+ */
 export async function approveAndIssueOfficialNumber(params: {
     quotation: Quotation;
     approvedByUid: string;
@@ -169,6 +175,7 @@ export async function approveAndIssueOfficialNumber(params: {
     const currentNo = quotation.noSurat;
     const draftNoSurat = quotation.draftNoSurat ?? currentNo;
 
+    // Hilangkan kode -DRF maupun -APR sehingga nomor surat resmi bersih (contoh: GP/AR/PH/2026/10/0001)
     let approvedNoSurat = (quotation.approvedNoSurat || currentNo)
         .replace(/-DRF\//g, "/")
         .replace(/-APR\//g, "/");
@@ -190,6 +197,7 @@ export async function approveAndIssueOfficialNumber(params: {
             .update({ status: "approved", quoId: quotation.id, noSurat: approvedNoSurat, stage: "OFFICIAL", draftNoSurat })
             .eq("id", aprLog.id);
     } else {
+        // Update log nomor surat yang sudah terkait dengan quotation ini agar bersih tanpa -DRF
         await supabase
             .from("nomor_surat_logs")
             .update({ status: "approved", noSurat: approvedNoSurat, stage: "OFFICIAL", draftNoSurat })
@@ -222,6 +230,7 @@ export async function approveAndIssueOfficialNumber(params: {
     return { approvedNoSurat, draftNoSurat };
 }
 
+/** Alias kompatibilitas */
 export const approveAndIssueAprNumber = approveAndIssueOfficialNumber;
 
 export async function saveQuotationDraft(
@@ -295,9 +304,7 @@ export interface UpdateCustomerProfileInput {
 
 /**
  * Menyimpan pembaruan profil pelanggan (nama, WA, PIC, alamat, dan koordinat GPS)
- * ke seluruh penawaran (quotations) DAN proyek lapangan (projects) yang terhubung.
- * Jika pelanggan berasal dari input baru teknisi di lapangan (belum punya baris di quotations),
- * otomatis dibuatkan entri profil pelanggan di quotations agar tersimpan permanen.
+ * ke seluruh penawaran yang terhubung di database.
  */
 export async function updateCustomerProfileQuotations(input: UpdateCustomerProfileInput): Promise<number> {
     const { companyId, originalName, newName, wa, up, address, addressFull, latitude, longitude } = input;
@@ -308,9 +315,10 @@ export async function updateCustomerProfileQuotations(input: UpdateCustomerProfi
         .eq("company_id", companyId);
 
     if (error) throw error;
+    if (!data || data.length === 0) return 0;
 
     const origKey = originalName.trim().toLowerCase();
-    const matched = (data || []).filter(row => {
+    const matched = data.filter(row => {
         const p = row.payload || {};
         const qName = String(p.kepadaNama || '').trim().toLowerCase();
         return qName === origKey;
@@ -328,58 +336,12 @@ export async function updateCustomerProfileQuotations(input: UpdateCustomerProfi
             lokasiPekerjaan: address.trim(),
             latitude: latitude !== undefined ? latitude : p.latitude,
             longitude: longitude !== undefined ? longitude : p.longitude,
-            needsAdminDetails: false,
         };
 
         await supabase
             .from("quotations")
             .update({ payload: updatedPayload })
             .eq("id", item.id);
-    }
-
-    // Sinkronkan juga ke tabel projects (jika pelanggan berasal dari penugasan lapangan teknisi)
-    try {
-        const projUpdate: Record<string, unknown> = {
-            client_name: newName.trim(),
-            address: address.trim(),
-        };
-        if (latitude !== undefined) projUpdate.latitude = latitude;
-        if (longitude !== undefined) projUpdate.longitude = longitude;
-        await supabase
-            .from("projects")
-            .update(projUpdate)
-            .eq("company_id", companyId)
-            .ilike("client_name", originalName.trim());
-    } catch {
-        // ignore if projects update not permitted
-    }
-
-    // Jika pelanggan berasal murni dari tabel projects (belum punya record di quotations), buat record master pelanggan
-    if (matched.length === 0) {
-        await supabase.from("quotations").insert({
-            company_id: companyId,
-            status: "draft",
-            payload: {
-                noSurat: `CUST-ADMIN/${Date.now().toString().slice(-5)}`,
-                kepadaNama: newName.trim(),
-                kepadaWa: wa?.trim() || undefined,
-                kepadaUp: up?.trim() || undefined,
-                kepadaAlamat: address.trim(),
-                kepadaAlamatLines: addressFull && addressFull.length > 0 ? addressFull : [address.trim()],
-                lokasiPekerjaan: address.trim(),
-                latitude,
-                longitude,
-                perihal: "Profil Master Pelanggan (Dilengkapi Admin)",
-                kategori: "PCO",
-                jenisLayanan: "pest_umum",
-                tipeKontrak: "U",
-                tanggal: new Date().toISOString(),
-                companyId,
-                status: "draft",
-                needsAdminDetails: false,
-            },
-        });
-        return 1;
     }
 
     return matched.length;

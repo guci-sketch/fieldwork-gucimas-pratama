@@ -1,8 +1,7 @@
-import { create } from "zustand";
+import { create } from 'zustand';
 import type { AppUser } from '@/entities/types';
 
 const ACTIVE_COMPANY_KEY = 'fw_active_company_v1';
-const REMEMBERED_SESSION_KEY = 'fw_remembered_session_v1';
 const REMEMBERED_EMAIL_KEY = 'fw_remembered_email_v1';
 const REMEMBER_ME_FLAG_KEY = 'fw_remember_me_v1';
 const DEFAULT_GUCI_COMPANY_ID = '00000000-0000-4000-a000-000000000001';
@@ -33,66 +32,13 @@ export function readRememberedEmail(): string {
     }
 }
 
-export function readPersistedUser(): AppUser | null {
+export function saveRememberedEmail(email: string, rememberMe: boolean): void {
     try {
-        const localRaw = localStorage.getItem(REMEMBERED_SESSION_KEY);
-        if (localRaw) {
-            const parsed = JSON.parse(localRaw) as AppUser;
-            if (parsed && parsed.uid && parsed.email && parsed.role) {
-                return parsed;
-            }
-        }
-        const sessionRaw = sessionStorage.getItem(REMEMBERED_SESSION_KEY);
-        if (sessionRaw) {
-            const parsed = JSON.parse(sessionRaw) as AppUser;
-            if (parsed && parsed.uid && parsed.email && parsed.role) {
-                return parsed;
-            }
-        }
-    } catch {
-        /* abaikan */
-    }
-    return null;
-}
-
-export function persistUserSession(user: AppUser | null, rememberMe?: boolean): void {
-    try {
-        if (!user) {
-            localStorage.removeItem(REMEMBERED_SESSION_KEY);
-            sessionStorage.removeItem(REMEMBERED_SESSION_KEY);
-            return;
-        }
-        const shouldRemember = rememberMe ?? readRememberMeFlag();
-        localStorage.setItem(REMEMBER_ME_FLAG_KEY, String(shouldRemember));
-        const serialized = JSON.stringify(user);
-        if (shouldRemember) {
-            localStorage.setItem(REMEMBERED_SESSION_KEY, serialized);
-            localStorage.setItem(REMEMBERED_EMAIL_KEY, user.email);
-            sessionStorage.removeItem(REMEMBERED_SESSION_KEY);
+        localStorage.setItem(REMEMBER_ME_FLAG_KEY, String(rememberMe));
+        if (rememberMe && email.trim()) {
+            localStorage.setItem(REMEMBERED_EMAIL_KEY, email.trim().toLowerCase());
         } else {
-            sessionStorage.setItem(REMEMBERED_SESSION_KEY, serialized);
-            localStorage.removeItem(REMEMBERED_SESSION_KEY);
             localStorage.removeItem(REMEMBERED_EMAIL_KEY);
-        }
-    } catch {
-        /* abaikan */
-    }
-}
-
-export function clearAuthSession(): void {
-    try {
-        localStorage.removeItem(REMEMBERED_SESSION_KEY);
-        sessionStorage.removeItem(REMEMBERED_SESSION_KEY);
-        // Bersihkan juga token sesi Supabase yang tersimpan di storage browser
-        for (const key of Object.keys(localStorage)) {
-            if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
-                localStorage.removeItem(key);
-            }
-        }
-        for (const key of Object.keys(sessionStorage)) {
-            if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
-                sessionStorage.removeItem(key);
-            }
         }
     } catch {
         /* abaikan */
@@ -102,45 +48,31 @@ export function clearAuthSession(): void {
 interface AuthState {
     user: AppUser | null;
     loading: boolean;
+    /** Hanya untuk SUPERADMIN/MASTER_SUPER_ADMIN: perusahaan yang sedang dipilih untuk dipantau. */
     activeCompanyId: string | null;
     setUser: (user: AppUser | null, rememberMe?: boolean) => void;
     setLoading: (loading: boolean) => void;
-    setActiveCompanyId: (id: string | null) => void;
-    clearSession: () => void;
+    setActiveCompanyId: (companyId: string | null) => void;
+    logout: () => void;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
-    user: readPersistedUser(),
+export const useAuthStore = create<AuthState>((set) => ({
+    user: null,
     loading: true,
     activeCompanyId: readActiveCompany(),
     setUser: (user, rememberMe) => {
-        const currentActive = get().activeCompanyId;
-        const resolvedCompanyId =
-            user?.companyId || currentActive || DEFAULT_GUCI_COMPANY_ID;
-        try {
-            if (resolvedCompanyId) {
-                localStorage.setItem(ACTIVE_COMPANY_KEY, resolvedCompanyId);
-            }
-        } catch {
-            /* abaikan */
+        if (user && typeof rememberMe === 'boolean') {
+            saveRememberedEmail(user.email, rememberMe);
         }
-        persistUserSession(user, rememberMe);
-        set({ user, activeCompanyId: resolvedCompanyId });
+        set({ user, loading: false });
     },
     setLoading: (loading) => set({ loading }),
-    setActiveCompanyId: (id) => {
+    setActiveCompanyId: (companyId) => {
         try {
-            id
-                ? localStorage.setItem(ACTIVE_COMPANY_KEY, id)
-                : localStorage.removeItem(ACTIVE_COMPANY_KEY);
-        } catch {
-            /* abaikan */
-        }
-        set({ activeCompanyId: id });
+            if (companyId) localStorage.setItem(ACTIVE_COMPANY_KEY, companyId);
+            else localStorage.removeItem(ACTIVE_COMPANY_KEY);
+        } catch { /* abaikan */ }
+        set({ activeCompanyId: companyId });
     },
-    clearSession: () => {
-        clearAuthSession();
-        set({ user: null, loading: false });
-    },
+    logout: () => set({ user: null, loading: false }),
 }));
-

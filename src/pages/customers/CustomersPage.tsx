@@ -24,7 +24,6 @@ import { MapPicker } from '@/widgets/common/MapPicker';
 import { KontrolRayapPage } from './KontrolRayapPage';
 import { searchAddressSuggestions, type AddressSuggestion } from '@/shared/utils/geocoding';
 import { fetchMyProjects } from '@/shared/api/projects';
-import { getLocalRealisticReports } from '@/shared/data/realisticFieldworkSeed';
 
 interface ControlChecklist {
     id: string; tanggal: Date; teknisi: string; catatan: string;
@@ -1543,7 +1542,7 @@ export function CustomersPage({ initialSubTab = "master" }: { initialSubTab?: Cu
             if (c.wilayah === "Tidak Diketahui" && c.address) c.wilayah = extractWilayah(c.address);
         });
 
-        const localReports = getLocalRealisticReports();
+        const localReports: any[] = [];
 
         fieldProjects.forEach((p: any) => {
             const cName = String(p.client_name || p.project_name || "").trim();

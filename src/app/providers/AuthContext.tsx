@@ -1,65 +1,34 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { AppUser } from '@/entities/types';
 import { supabase } from '@/shared/lib/supabase';
 import { fetchAppUser } from '@/shared/api/authProfile';
-import { useAuthStore, readPersistedUser, persistUserSession, clearAuthSession } from '@/app/store/authStore';
+import { useAuthStore } from '@/app/store/authStore';
 
 interface AuthContextValue {
   user: AppUser | null;
   status: 'checking' | 'authenticated' | 'unauthenticated';
-  login: (email: string, pass: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const navigate = useNavigate();
-  const initialPersisted = readPersistedUser();
-  const [user, setUserState] = useState<AppUser | null>(initialPersisted);
-  const [status, setStatus] = useState<'checking' | 'authenticated' | 'unauthenticated'>(
-    initialPersisted ? 'authenticated' : 'checking'
-  );
+  const [user, setUserState] = useState<AppUser | null>(null);
+  const [status, setStatus] = useState<'checking' | 'authenticated' | 'unauthenticated'>('checking');
 
-  const applyUser = useCallback((u: AppUser | null, rememberMe?: boolean) => {
+  const applyUser = useCallback((u: AppUser | null) => {
     setUserState(u);
     setStatus(u ? 'authenticated' : 'unauthenticated');
     const store = useAuthStore.getState();
-    store.setUser(u, rememberMe);
+    store.setUser(u);
     store.setLoading(false);
   }, []);
 
-  // Sinkronkan jika komponen LoginForm mengubah user pada useAuthStore
-  useEffect(() => {
-    const unsub = useAuthStore.subscribe((state) => {
-      setUserState(state.user);
-      setStatus(state.user ? 'authenticated' : 'unauthenticated');
-    });
-    return () => unsub();
-  }, []);
-
   const hydrate = useCallback(async (uid: string | null) => {
-    if (!uid) {
-      const remembered = readPersistedUser();
-      if (remembered) {
-        setUserState(remembered);
-        setStatus('authenticated');
-        useAuthStore.getState().setLoading(false);
-        return;
-      }
-      applyUser(null);
-      return;
-    }
+    if (!uid) { applyUser(null); return; }
     const res = await fetchAppUser(uid);
     if (!res.user) {
-      const remembered = readPersistedUser();
-      if (remembered) {
-        setUserState(remembered);
-        setStatus('authenticated');
-        useAuthStore.getState().setLoading(false);
-        return;
-      }
       console.warn('[auth]', (res.message ?? 'Akun tidak dapat digunakan.'));
       await supabase.auth.signOut();
       applyUser(null);
@@ -69,58 +38,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [applyUser]);
 
   useEffect(() => {
-    let cancelled = false;
+    let active = true;
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!cancelled) void hydrate(session?.user.id ?? null);
+      if (!active) return;
+      hydrate(session?.user?.id ?? null);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') return;
+      if (!active) return;
       if (event === 'SIGNED_OUT') {
-        setTimeout(() => {
-          if (!cancelled) {
-            clearAuthSession();
-            applyUser(null);
-          }
-        }, 0);
-        return;
+        applyUser(null);
+      } else if (session?.user?.id) {
+        hydrate(session.user.id);
       }
-      setTimeout(() => { if (!cancelled) void hydrate(session?.user.id ?? null); }, 0);
     });
 
     return () => {
-      cancelled = true;
+      active = false;
       subscription.unsubscribe();
     };
   }, [hydrate, applyUser]);
 
-  const login = useCallback(async (email: string, pass: string) => {
-    const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({ email, password: pass });
-    if (authErr) throw authErr;
-    const res = await fetchAppUser(authData.user.id);
-    if (!res.user) {
-      await supabase.auth.signOut();
-      throw new Error((res.message ?? 'Akun tidak dapat digunakan.'));
-    }
-    applyUser(res.user);
-  }, [applyUser]);
+  const refreshUser = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    await hydrate(session?.user?.id ?? null);
+  }, [hydrate]);
 
   const logout = useCallback(async () => {
-    clearAuthSession();
-    persistUserSession(null);
-    useAuthStore.getState().clearSession();
-    setUserState(null);
-    setStatus('unauthenticated');
-    await supabase.auth.signOut().catch(() => undefined);
-    navigate('/login', { replace: true });
-  }, [navigate]);
+    await supabase.auth.signOut();
+    applyUser(null);
+  }, [applyUser]);
 
-  return <AuthContext.Provider value={{ user, status, login, logout }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user, status, logout, refreshUser }}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
-export function useAuth() {
+export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 }
-

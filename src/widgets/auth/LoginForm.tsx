@@ -17,64 +17,14 @@ import {
 import type { AppUser } from '@/entities/types';
 import { fetchAppUser } from '@/shared/api/authProfile';
 import { readPendingInvite, repairPendingInviteUser } from '@/shared/api/inviteService';
-import {
-    DEFAULT_ACCOUNT_PASSWORD,
-    getActiveAccountPassword,
-    getStoredAccountPassword,
-    verifyAccountPasswordLocal,
-    resetAccountPasswordToDefault,
-} from '@/shared/api/auth';
-
-const QUICK_DEMO_ACCOUNTS = [
-    {
-        label: "Admin Operasional",
-        roleBadge: "ADMIN",
-        email: "admin@gucimaspratama.co.id",
-    },
-    {
-        label: "Teknisi Lapangan",
-        roleBadge: "TEKNISI",
-        email: "teknisi@gucimaspratama.co.id",
-    },
-];
-
-const DEMO_FALLBACK_USERS: Record<string, AppUser> = {
-    "admin@gucimaspratama.co.id": {
-        uid: "00000000-0000-4000-a000-000000000012",
-        email: "admin@gucimaspratama.co.id",
-        name: "Siti Rahmawati",
-        role: "ADMIN",
-        companyId: "00000000-0000-4000-a000-000000000001",
-        isActive: true,
-        nip: "GEP-ADM-001",
-    },
-    "direktur@gucimaspratama.co.id": {
-        uid: "00000000-0000-4000-a000-000000000011",
-        email: "direktur@gucimaspratama.co.id",
-        name: "Budi Santoso",
-        role: "ADMIN",
-        companyId: "00000000-0000-4000-a000-000000000001",
-        isActive: true,
-        nip: "GEP-DIR-001",
-    },
-    "teknisi@gucimaspratama.co.id": {
-        uid: "00000000-0000-4000-a000-000000000014",
-        email: "teknisi@gucimaspratama.co.id",
-        name: "Rizky Pratama",
-        role: "TEKNISI_LAPANGAN",
-        companyId: "00000000-0000-4000-a000-000000000001",
-        isActive: true,
-        nip: "GEP-TEK-001",
-    },
-};
+import { sendPasswordResetEmail } from '@/shared/api/auth';
 
 export function LoginPage() {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { setUser } = useAuthStore();
-    const initialEmail = readRememberedEmail() || "admin@gucimaspratama.co.id";
-    const [email, setEmail] = useState(initialEmail);
-    const [password, setPassword] = useState(() => getActiveAccountPassword(initialEmail));
+    const [email, setEmail] = useState(() => readRememberedEmail());
+    const [password, setPassword] = useState("");
     const [rememberMe, setRememberMe] = useState<boolean>(() => readRememberMeFlag());
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState("");
@@ -84,6 +34,7 @@ export function LoginPage() {
     const [showForgotModal, setShowForgotModal] = useState(false);
     const [recoveryEmail, setRecoveryEmail] = useState("");
     const [recoverySuccess, setRecoverySuccess] = useState<string | null>(null);
+    const [recoveryError, setRecoveryError] = useState<string | null>(null);
     const [recoveryLoading, setRecoveryLoading] = useState(false);
 
     useEffect(() => {
@@ -113,15 +64,8 @@ export function LoginPage() {
         setError("");
         setLoading(true);
         const cleanEmail = loginEmail.trim().toLowerCase();
-        const storedCustomPw = getStoredAccountPassword(cleanEmail);
-        const isLocalPwMatch = verifyAccountPasswordLocal(cleanEmail, loginPassword);
 
         try {
-            // Jika akun memiliki kata sandi yang sudah diubah/direset secara spesifik dan input tidak cocok, tolak lebih awal
-            if (storedCustomPw !== null && !isLocalPwMatch) {
-                throw new Error("Email atau kata sandi salah. Pastikan kata sandi sesuai dengan akun Anda.");
-            }
-
             let { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
                 email: cleanEmail,
                 password: loginPassword,
@@ -166,12 +110,6 @@ export function LoginPage() {
             }
 
             if (authErr || !authData.user) {
-                const fallbackDemo = DEMO_FALLBACK_USERS[cleanEmail];
-                if (fallbackDemo && isLocalPwMatch) {
-                    setUser(fallbackDemo, rememberMe);
-                    navigate("/");
-                    return;
-                }
                 if (authErr) {
                     const errLower = authErr.message.toLowerCase();
                     if (errLower.includes("not confirmed") || errLower.includes("unconfirmed")) {
@@ -181,7 +119,7 @@ export function LoginPage() {
                     }
                     if (errLower.includes("invalid login credentials")) {
                         throw new Error(
-                            "Email atau kata sandi salah. Pastikan kredensial sesuai."
+                            "Email atau kata sandi salah. Pastikan kredensial akun Supabase Anda sesuai."
                         );
                     }
                     throw authErr;
@@ -191,26 +129,14 @@ export function LoginPage() {
 
             const res = await fetchAppUser(authData.user.id);
             if (!res.user) {
-                const fallbackDemo = DEMO_FALLBACK_USERS[cleanEmail];
-                if (fallbackDemo && isLocalPwMatch) {
-                    setUser(fallbackDemo, rememberMe);
-                    navigate("/");
-                    return;
-                }
                 await supabase.auth.signOut();
-                setError(res.message ?? "Akun tidak dapat digunakan.");
+                setError(res.message ?? "Akun tidak ditemukan pada tabel pengguna perusahaan.");
                 return;
             }
             const appUser: AppUser = res.user;
             setUser(appUser, rememberMe);
             navigate("/");
         } catch (err: any) {
-            const fallbackDemo = DEMO_FALLBACK_USERS[cleanEmail];
-            if (fallbackDemo && isLocalPwMatch) {
-                setUser(fallbackDemo, rememberMe);
-                navigate("/");
-                return;
-            }
             setError(err.message || "Email atau kata sandi salah. Silakan periksa kembali.");
         } finally {
             setLoading(false);
@@ -222,41 +148,33 @@ export function LoginPage() {
         await performSignIn(email, password);
     };
 
-    const handleQuickLogin = async (accEmail: string) => {
-        const activePw = getActiveAccountPassword(accEmail);
-        setEmail(accEmail);
-        setPassword(activePw);
-        await performSignIn(accEmail, activePw);
-    };
-
     const handleOpenForgotModal = () => {
-        setRecoveryEmail(email.trim() || "admin@gucimaspratama.co.id");
+        setRecoveryEmail(email.trim());
         setRecoverySuccess(null);
+        setRecoveryError(null);
         setShowForgotModal(true);
     };
 
-    const handleResetToDefaultPassword = async (e: React.FormEvent) => {
+    const handleSendResetEmail = async (e: React.FormEvent) => {
         e.preventDefault();
         const target = recoveryEmail.trim().toLowerCase();
         if (!target) return;
         setRecoveryLoading(true);
+        setRecoveryError(null);
         try {
-            const defaultPw = await resetAccountPasswordToDefault(target);
-            setEmail(target);
-            setPassword(defaultPw);
-            setError("");
-            setRecoverySuccess(
-                `Kata sandi untuk ${target} telah direset menjadi default: ${defaultPw}. Silakan masuk dan ubah kata sandi Anda melalui menu Profil.`
-            );
+            const msg = await sendPasswordResetEmail(target);
+            setRecoverySuccess(msg);
+        } catch (err: any) {
+            setRecoveryError(err.message || "Gagal mengirim email pemulihan kata sandi.");
         } finally {
             setRecoveryLoading(false);
         }
     };
 
     return (
-        <main className="min-h-screen grid grid-cols-1 lg:grid-cols-[minmax(420px,0.95fr)_minmax(480px,1.05fr)] bg-white">
+        <main className="min-h-screen grid grid-cols-1 lg:grid-cols-[minmax(420px,0.95fr)_minmax(480px,1.05fr)] bg-[var(--bg-card)] text-[var(--text-primary)]">
             {/* Left Aside — Minimalist Brand & Concise Statement */}
-            <section className="hidden lg:flex flex-col justify-between bg-[#245c45] text-white p-12 xl:p-14 relative overflow-hidden">
+            <section className="hidden lg:flex flex-col justify-between bg-[#1A5C38] dark:bg-[#13291E] text-white p-12 xl:p-14 relative overflow-hidden">
                 <div className="flex items-center gap-3 relative z-10">
                     <div className="brand-mark">
                         <span />
@@ -274,7 +192,7 @@ export function LoginPage() {
                         Laporan Kerja Digital.
                     </h1>
                     <p className="text-sm xl:text-base leading-relaxed text-[#dbe8df]">
-                        Kelola penugasan dan dokumentasi pekerjaan lapangan dalam satu tempat.
+                        Kelola penugasan, validasi geolocation Haversine, dan dokumentasi pekerjaan lapangan dalam satu tempat.
                     </p>
                 </div>
 
@@ -289,7 +207,7 @@ export function LoginPage() {
             </section>
 
             {/* Right Login Panel — Direct & On-Point */}
-            <section className="flex items-center justify-center p-6 sm:p-12 bg-[#fbfcfb]">
+            <section className="flex items-center justify-center p-6 sm:p-12 bg-[var(--bg-primary)]">
                 <div className="w-full max-w-[380px]">
                     {/* Mobile Brand Header */}
                     <div className="flex lg:hidden items-center gap-3 mb-8">
@@ -299,20 +217,20 @@ export function LoginPage() {
                             <span />
                         </div>
                         <div>
-                            <strong className="block text-base leading-tight font-bold text-[#17231c]">Fieldwork</strong>
-                            <small className="block text-[11px] text-[#66736b] mt-0.5">PT Guci Emas Pratama</small>
+                            <strong className="block text-base leading-tight font-bold text-[var(--text-primary)]">Fieldwork</strong>
+                            <small className="block text-[11px] text-[var(--text-secondary)] mt-0.5">PT Guci Emas Pratama</small>
                         </div>
                     </div>
 
-                    <h2 className="text-2xl sm:text-[28px] font-bold tracking-[-0.025em] text-[#17231c] mb-1.5">
+                    <h2 className="text-2xl sm:text-[28px] font-bold tracking-[-0.025em] text-[var(--text-primary)] mb-1.5">
                         Masuk
                     </h2>
-                    <p className="text-sm text-[#66736b] mb-6">
-                        Gunakan akun Anda untuk melanjutkan.
+                    <p className="text-sm text-[var(--text-secondary)] mb-6">
+                        Gunakan akun perusahaan Anda untuk melanjutkan.
                     </p>
 
                     <form onSubmit={handleLogin} className="space-y-4">
-                        <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-[#435047]">
+                        <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-[var(--text-secondary)]">
                             <span>Email</span>
                             <input
                                 type="email"
@@ -320,11 +238,11 @@ export function LoginPage() {
                                 onChange={e => setEmail(e.target.value)}
                                 placeholder="nama@gucimaspratama.co.id"
                                 required
-                                className="w-full min-h-[44px] px-3 py-2.5 rounded-[10px] border border-[#d8e0da] bg-white text-[#17231c] text-sm font-normal focus:border-[#245c45] focus:outline-none focus:ring-3 focus:ring-[#245c45]/10 transition-all"
+                                className="w-full min-h-[44px] px-3 py-2.5 rounded-[10px] border border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text-primary)] text-sm font-normal focus:border-[#1A5C38] focus:outline-none focus:ring-3 focus:ring-[#1A5C38]/15 transition-all"
                             />
                         </label>
 
-                        <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-[#435047]">
+                        <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-[var(--text-secondary)]">
                             <span>Kata sandi</span>
                             <div className="relative">
                                 <input
@@ -333,14 +251,14 @@ export function LoginPage() {
                                     onChange={e => setPassword(e.target.value)}
                                     placeholder="Masukkan kata sandi"
                                     required
-                                    className="w-full min-h-[44px] pl-3 pr-11 py-2.5 rounded-[10px] border border-[#d8e0da] bg-white text-[#17231c] text-sm font-normal focus:border-[#245c45] focus:outline-none focus:ring-3 focus:ring-[#245c45]/10 transition-all"
+                                    className="w-full min-h-[44px] pl-3 pr-11 py-2.5 rounded-[10px] border border-[var(--border-subtle)] bg-[var(--bg-card)] text-[var(--text-primary)] text-sm font-normal focus:border-[#1A5C38] focus:outline-none focus:ring-3 focus:ring-[#1A5C38]/15 transition-all"
                                 />
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
                                     aria-label={showPassword ? "Sembunyikan kata sandi" : "Lihat kata sandi"}
                                     title={showPassword ? "Sembunyikan kata sandi" : "Lihat kata sandi"}
-                                    className="absolute right-1 top-1 w-9 h-9 rounded-lg flex items-center justify-center text-[#66736b] hover:text-[#17231c] cursor-pointer"
+                                    className="absolute right-1 top-1 w-9 h-9 rounded-lg flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] cursor-pointer"
                                 >
                                     {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                                 </button>
@@ -354,24 +272,24 @@ export function LoginPage() {
                                     type="checkbox"
                                     checked={rememberMe}
                                     onChange={e => setRememberMe(e.target.checked)}
-                                    className="w-4 h-4 rounded border-[#d8e0da] text-[#245c45] focus:ring-[#245c45]/20 accent-[#245c45] cursor-pointer"
+                                    className="w-4 h-4 rounded border-[var(--border-subtle)] text-[#1A5C38] focus:ring-[#1A5C38]/20 accent-[#1A5C38] cursor-pointer"
                                 />
-                                <span className="text-xs font-medium text-[#435047]">
-                                    Ingat saya
+                                <span className="text-xs font-medium text-[var(--text-secondary)]">
+                                    Ingat email saya
                                 </span>
                             </label>
 
                             <button
                                 type="button"
                                 onClick={handleOpenForgotModal}
-                                className="text-xs font-semibold text-[#245c45] hover:text-[#1a4533] hover:underline cursor-pointer"
+                                className="text-xs font-semibold text-[#1A5C38] dark:text-[#4B9B70] hover:underline cursor-pointer"
                             >
                                 Lupa kata sandi?
                             </button>
                         </div>
 
                         {error && (
-                            <div className="text-[#943838] bg-[#fcecec] border border-[#f5c2c2] rounded-[10px] p-3 text-xs font-medium leading-relaxed">
+                            <div className="text-[#943838] dark:text-rose-200 bg-[#fcecec] dark:bg-rose-950/50 border border-[#f5c2c2] dark:border-rose-800 rounded-[10px] p-3 text-xs font-medium leading-relaxed">
                                 {error}
                             </div>
                         )}
@@ -379,7 +297,7 @@ export function LoginPage() {
                         <button
                             type="submit"
                             disabled={loading}
-                            className="w-full min-h-[46px] px-4 rounded-[10px] bg-[#245c45] hover:bg-[#1d4b38] text-white text-[13px] font-semibold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-60 mt-1"
+                            className="w-full min-h-[46px] px-4 rounded-[10px] bg-[#1A5C38] hover:bg-[#13462A] text-white text-[13px] font-semibold flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer disabled:opacity-60 mt-1"
                         >
                             {loading ? (
                                 <>
@@ -390,37 +308,6 @@ export function LoginPage() {
                             )}
                         </button>
                     </form>
-
-                    {/* 1-Click Demo Staff Accounts (2 Peran Utama) */}
-                    <div className="mt-5 pt-4 border-t border-[#e1e8e2] space-y-2.5">
-                        <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-semibold text-[#66736b]">
-                                Akses Cepat Akun Demo (1-Klik)
-                            </span>
-                            <span className="text-[10px] text-[#87928b]">2 Peran Utama</span>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                            {QUICK_DEMO_ACCOUNTS.map(acc => (
-                                <button
-                                    key={acc.email}
-                                    type="button"
-                                    disabled={loading}
-                                    onClick={() => handleQuickLogin(acc.email)}
-                                    className={`flex flex-col items-start justify-between p-2.5 rounded-[10px] border text-left transition-all cursor-pointer ${
-                                        email === acc.email
-                                            ? "border-[#245c45] bg-[#e8f1eb]/60"
-                                            : "border-[#e1e8e2] bg-white hover:bg-[#f6f8f6]"
-                                    }`}
-                                >
-                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#eff3f0] text-[#245c45] mb-1">
-                                        {acc.roleBadge}
-                                    </span>
-                                    <div className="font-semibold text-xs text-[#17231c] truncate w-full">{acc.label}</div>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
                 </div>
             </section>
 
@@ -434,49 +321,49 @@ export function LoginPage() {
                     aria-label="Lupa Kata Sandi"
                 >
                     <div
-                        className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-[#e1e8e2]"
+                        className="bg-[var(--bg-card)] rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl border border-[var(--border-subtle)]"
                         onClick={e => e.stopPropagation()}
                     >
-                        <div className="px-5 py-4 border-b border-[#e1e8e2] flex items-center justify-between bg-[#f8faf8]">
+                        <div className="px-5 py-4 border-b border-[var(--border-subtle)] flex items-center justify-between bg-[var(--bg-secondary)]">
                             <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-full bg-[#e8f1eb] text-[#245c45] flex items-center justify-center">
+                                <div className="w-8 h-8 rounded-full bg-[#EAF3EE] dark:bg-emerald-950 text-[#1A5C38] dark:text-[#4B9B70] flex items-center justify-center">
                                     <KeyRound size={16} />
                                 </div>
-                                <h3 className="font-bold text-[#17231c] text-sm">
+                                <h3 className="font-bold text-[var(--text-primary)] text-sm">
                                     Pemulihan Kata Sandi
                                 </h3>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => setShowForgotModal(false)}
-                                className="p-1.5 text-[#66736b] hover:text-[#17231c] hover:bg-[#eff3f0] rounded-full transition-colors cursor-pointer"
+                                className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] rounded-full transition-colors cursor-pointer"
                             >
                                 <X size={17} />
                             </button>
                         </div>
 
                         <div className="p-5 space-y-4">
-                            <p className="text-xs text-[#435047] leading-relaxed">
-                                Silakan hubungi <strong>Admin Operasional</strong> untuk pemulihan akun Anda, atau reset kata sandi akun Anda menjadi default <strong className="font-mono text-[#245c45]">{DEFAULT_ACCOUNT_PASSWORD}</strong> di bawah ini.
+                            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                                Masukkan email akun perusahaan Anda untuk menerima tautan pemulihan kata sandi dari Supabase Auth.
                             </p>
 
                             {recoverySuccess ? (
                                 <div className="space-y-4">
-                                    <div className="p-3.5 rounded-xl bg-[#e8f1eb] border border-[#c3d9cb] text-[#173f30] text-xs leading-relaxed flex items-start gap-2.5">
-                                        <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-[#245c45]" />
+                                    <div className="p-3.5 rounded-xl bg-[#EAF3EE] dark:bg-emerald-950/60 border border-[#c3d9cb] dark:border-emerald-800 text-[#173f30] dark:text-emerald-200 text-xs leading-relaxed flex items-start gap-2.5">
+                                        <CheckCircle2 size={16} className="shrink-0 mt-0.5 text-[#1A5C38] dark:text-[#4B9B70]" />
                                         <span>{recoverySuccess}</span>
                                     </div>
                                     <button
                                         type="button"
                                         onClick={() => setShowForgotModal(false)}
-                                        className="w-full min-h-[42px] rounded-[10px] bg-[#245c45] hover:bg-[#1d4b38] text-white text-xs font-semibold transition-colors cursor-pointer"
+                                        className="w-full min-h-[42px] rounded-[10px] bg-[#1A5C38] hover:bg-[#13462A] text-white text-xs font-semibold transition-colors cursor-pointer"
                                     >
-                                        Gunakan Kata Sandi Default Sekarang
+                                        Kembali ke Halaman Masuk
                                     </button>
                                 </div>
                             ) : (
-                                <form onSubmit={handleResetToDefaultPassword} className="space-y-3.5">
-                                    <label className="flex flex-col gap-1.5 text-xs font-semibold text-[#435047]">
+                                <form onSubmit={handleSendResetEmail} className="space-y-3.5">
+                                    <label className="flex flex-col gap-1.5 text-xs font-semibold text-[var(--text-secondary)]">
                                         <span>Email Akun</span>
                                         <input
                                             type="email"
@@ -484,34 +371,33 @@ export function LoginPage() {
                                             value={recoveryEmail}
                                             onChange={e => setRecoveryEmail(e.target.value)}
                                             placeholder="nama@gucimaspratama.co.id"
-                                            className="w-full min-h-[40px] px-3 py-2 rounded-[10px] border border-[#d8e0da] bg-white text-[#17231c] text-xs font-normal focus:border-[#245c45] focus:outline-none"
+                                            className="w-full min-h-[40px] px-3 py-2 rounded-[10px] border border-[var(--border-subtle)] bg-[var(--bg-primary)] text-[var(--text-primary)] text-xs font-normal focus:border-[#1A5C38] focus:outline-none"
                                         />
                                     </label>
 
-                                    <div className="p-3 rounded-[10px] bg-[#f6f8f6] border border-[#e1e8e2] text-[11px] text-[#435047] flex items-center justify-between">
-                                        <span>Kata Sandi Default Reset:</span>
-                                        <code className="font-mono font-bold text-xs text-[#245c45] bg-white px-2 py-0.5 rounded border border-[#d8e0da]">
-                                            {DEFAULT_ACCOUNT_PASSWORD}
-                                        </code>
-                                    </div>
+                                    {recoveryError && (
+                                        <div className="text-[#943838] dark:text-rose-200 bg-[#fcecec] dark:bg-rose-950/50 border border-[#f5c2c2] dark:border-rose-800 rounded-[10px] p-2.5 text-xs">
+                                            {recoveryError}
+                                        </div>
+                                    )}
 
                                     <div className="flex items-center gap-2 pt-1">
                                         <button
                                             type="button"
                                             onClick={() => setShowForgotModal(false)}
-                                            className="flex-1 min-h-[40px] rounded-[10px] border border-[#d8e0da] text-[#435047] text-xs font-semibold hover:bg-[#f6f8f6] transition-colors cursor-pointer"
+                                            className="flex-1 min-h-[40px] rounded-[10px] border border-[var(--border-subtle)] text-[var(--text-secondary)] text-xs font-semibold hover:bg-[var(--bg-secondary)] transition-colors cursor-pointer"
                                         >
                                             Tutup
                                         </button>
                                         <button
                                             type="submit"
                                             disabled={recoveryLoading}
-                                            className="flex-1 min-h-[40px] px-3 rounded-[10px] bg-[#245c45] hover:bg-[#1d4b38] text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
+                                            className="flex-1 min-h-[40px] px-3 rounded-[10px] bg-[#1A5C38] hover:bg-[#13462A] text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
                                         >
                                             {recoveryLoading ? (
                                                 <Loader2 size={14} className="animate-spin" />
                                             ) : (
-                                                <span>Reset ke {DEFAULT_ACCOUNT_PASSWORD}</span>
+                                                <span>Kirim Tautan Reset</span>
                                             )}
                                         </button>
                                     </div>
@@ -524,5 +410,3 @@ export function LoginPage() {
         </main>
     );
 }
-
-

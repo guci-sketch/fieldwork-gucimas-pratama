@@ -1,7 +1,6 @@
 import type { DocumentationPhoto, WorkReport } from '@/entities/types';
 import { fetchAuthedBlobUrl } from '@/shared/api/client';
 import { supabase } from '@/shared/lib/supabase';
-import { getLocalRealisticReports, saveLocalRealisticReports } from '@/shared/data/realisticFieldworkSeed';
 
 export interface ArchivePhotoEntry {
   reportId: string;
@@ -395,31 +394,7 @@ export async function downloadRawPhotosArchiveAndOffload(
       }
     }
 
-    // Sinkronkan juga ke local realistic store
-    const localReports = getLocalRealisticReports();
-    const updatedLocal = localReports.map(rep => {
-      if (!affectedReportIds.has(rep.id)) return rep;
-      return {
-        ...rep,
-        photos: (rep.photos || []).map(p => {
-          const snap = snapshotsByPhotoId.get(p.id);
-          if (!snap) return p;
-          return {
-            ...p,
-            purgedAt: nowIso,
-            rawArchivedAt: nowIso,
-            pdfSnapshotUrl: snap,
-            url: '',
-            metadata: {
-              ...(p.metadata || {}),
-              pdfSnapshotUrl: snap,
-              rawArchivedAt: nowIso,
-            },
-          };
-        }),
-      };
-    });
-    saveLocalRealisticReports(updatedLocal);
+
   }
 
   return {

@@ -447,6 +447,8 @@ export interface WorkReport {
   projectLatitude: number;
   projectLongitude: number;
   projectRadius: number;
+  workDate?: string | null;
+  workNotes?: string | null;
   scheduledStartTime: string;
   serviceType: ServiceType;
   focusTarget?: string | null;
@@ -483,6 +485,8 @@ export interface WorkReport {
   customerPhone?: string | null;
   customerFeedback?: string | null;
   customerSignature?: string | null;
+  technicianSignature?: string | null;
+  technicianSignedAt?: string | null;
   notes?: string | null;
   teamMembers?: { id?: string; name: string; role?: string; isManual?: boolean }[];
   photos: DocumentationPhoto[];

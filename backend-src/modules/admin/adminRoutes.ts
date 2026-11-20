@@ -129,38 +129,6 @@ adminRouter.post('/users/:id/activate', asyncHandler(async (req, res) => {
   res.json({ success: true });
 }));
 
-adminRouter.post('/users/:id/reset-password', asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const companyId = req.user!.companyId!;
-  const newPassword = typeof req.body?.password === 'string' && req.body.password.length >= 6
-    ? req.body.password
-    : '12345678';
-
-  const targetUserRows = await query<{ name: string; email: string; role: string }>(
-    'select name, email, role from users where id = $1 and company_id = $2',
-    [id, companyId]
-  );
-  if (targetUserRows.length === 0) throw new HttpError(404, 'User tidak ditemukan.');
-
-  if (isSupabaseStorageConfigured) {
-    const { error } = await getSupabaseClient().auth.admin.updateUserById(id, {
-      password: newPassword,
-    });
-    if (error && !/not found/i.test(error.message)) {
-      throw new HttpError(400, `Gagal mereset password di Supabase Auth: ${error.message}`);
-    }
-  }
-
-  await logAction(
-    req.user!,
-    'RESET_USER_PASSWORD',
-    'users',
-    id,
-    `Mereset kata sandi akun ${targetUserRows[0].name} (${targetUserRows[0].email}) ke default.`
-  );
-  res.json({ success: true, defaultPassword: newPassword });
-}));
-
 adminRouter.delete('/users/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
   const companyId = req.user!.companyId!;

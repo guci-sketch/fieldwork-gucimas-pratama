@@ -1,9 +1,9 @@
+import { resetAccountPasswordToDefault } from './auth';
 import { supabase, createIsolatedSupabaseClient } from '@/shared/lib/supabase';
 import { useAuthStore } from '@/app/store/authStore';
-import { mapDbProject } from './projects';
+import { mapDbProject, syncCompanyProjectsAndReports } from './projects';
 import { fetchWorkReport } from './workReports';
 import { ApiError } from './client';
-import { setStoredAccountPassword, resetAccountPasswordToDefault } from './auth';
 import {
   aggregateOperationalSummaryFromRows,
   DEFAULT_SUMMARY_WINDOW_DAYS,
@@ -70,12 +70,14 @@ function toHumanReadableApiError(err: { message?: string; code?: string; status?
 }
 
 export async function fetchAdminReports(filters: Partial<ReportFilters>): Promise<{
+  // Sync real DB projects/SPK before listing
   reports: WorkReportListItem[];
   count: number;
   totalCount: number;
   page: number;
   totalPages: number;
 }> {
+  await syncCompanyProjectsAndReports();
   const companyId = getTargetCompanyId();
   const page = Math.max(1, filters.page ?? 1);
   const limit = Math.max(1, filters.limit ?? 20);
@@ -291,6 +293,7 @@ export async function fetchAdminProjects(filters?: ProjectFilters): Promise<{
   page: number;
   totalPages: number;
 }> {
+  await syncCompanyProjectsAndReports();
   const companyId = getTargetCompanyId();
   const page = Math.max(1, filters?.page ?? 1);
   const limit = Math.max(1, filters?.limit ?? 8);
@@ -489,14 +492,10 @@ export async function createUser(input: NewUserInput): Promise<AdminUser> {
       .select('id, name, email, nip, phone, role, is_active, created_at')
       .eq('email', input.email.trim().toLowerCase())
       .maybeSingle();
-    if (existing) {
-      setStoredAccountPassword(input.email, input.password);
-      return existing as AdminUser;
-    }
+    if (existing) return existing as AdminUser;
     throw new Error(rpcErr.message);
   }
 
-  setStoredAccountPassword(input.email, input.password);
   return rpcData as AdminUser;
 }
 
@@ -513,10 +512,6 @@ export async function activateUser(id: string): Promise<void> {
 export async function deleteUser(id: string): Promise<void> {
   const { error } = await supabase.rpc('admin_delete_company_user', { p_user_id: id });
   if (error) throw new Error(error.message);
-}
-
-export async function resetUserPassword(id: string, email: string): Promise<string> {
-  return resetAccountPasswordToDefault(email, id);
 }
 
 export interface PhotoPurgePreview {
@@ -575,4 +570,8 @@ export async function purgeOldPhotos(olderThanMonths = 2): Promise<PhotoPurgeRes
     purgedCount: data?.length ?? 0,
     failedCount: 0,
   };
+}
+
+export async function resetUserPassword(id: string, email: string): Promise<string> {
+  return resetAccountPasswordToDefault(email, id);
 }

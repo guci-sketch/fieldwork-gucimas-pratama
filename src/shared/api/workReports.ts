@@ -1,13 +1,7 @@
 import { supabase } from '@/shared/lib/supabase';
 import { useAuthStore } from '@/app/store/authStore';
 import { calculateDistanceMeters, isWithinRadius } from '@/shared/utils/geo';
-import {
-  getLocalRealisticProjects,
-  getLocalRealisticReports,
-  mergeWithRealisticReports,
-  saveLocalRealisticProjects,
-  saveLocalRealisticReports,
-} from '@/shared/data/realisticFieldworkSeed';
+import { syncCompanyProjectsAndReports } from './projects';
 import {
   ApplicationMethod,
   ContractType,
@@ -35,6 +29,7 @@ export interface EvidencePayload {
   customerPhone?: string;
   customerFeedback?: string;
   customerSignature?: string;
+  technicianSignature?: string;
 }
 
 export interface TeamMemberEntry {
@@ -69,14 +64,6 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-function updateLocalReportItem(updated: WorkReport): WorkReport {
-  const list = getLocalRealisticReports();
-  const exists = list.some(r => r.id === updated.id);
-  const next = exists ? list.map(r => (r.id === updated.id ? updated : r)) : [updated, ...list];
-  saveLocalRealisticReports(next);
-  return updated;
-}
-
 export function mapDbWorkReportFull(row: any): WorkReport {
   const proj = row.projects || {};
   const exec = row.users || {};
@@ -102,7 +89,7 @@ export function mapDbWorkReportFull(row: any): WorkReport {
     : null;
 
   const photos: DocumentationPhoto[] = photosRaw
-    .filter(p => !p.purged_at || Boolean(p.metadata?.pdfSnapshotUrl))
+    .filter(p => !p.purged_at)
     .map(p => ({
       id: p.id,
       photoType: p.photo_type as PhotoType,
@@ -115,12 +102,9 @@ export function mapDbWorkReportFull(row: any): WorkReport {
       capturedAt: p.captured_at || p.created_at,
       metadata: p.metadata || {},
       purgedAt: p.purged_at ?? null,
-      pdfSnapshotUrl: p.metadata?.pdfSnapshotUrl ?? null,
-      rawArchivedAt: p.metadata?.rawArchivedAt ?? p.purged_at ?? null,
-      url:
-        typeof p.storage_path === 'string' && p.storage_path.startsWith('data:')
-          ? p.storage_path
-          : `/api/photos/${p.id}/file`,
+      url: typeof p.storage_path === 'string' && p.storage_path.startsWith('data:')
+        ? p.storage_path
+        : `/api/photos/${p.id}/file`,
     }));
 
   const riskEvents: RiskEvent[] = eventsRaw.map(ev => ({
@@ -144,6 +128,8 @@ export function mapDbWorkReportFull(row: any): WorkReport {
     projectLatitude: Number(proj.latitude ?? 0),
     projectLongitude: Number(proj.longitude ?? 0),
     projectRadius: Number(proj.radius ?? 100),
+    workDate: typeof proj.work_date === 'string' ? proj.work_date.slice(0, 10) : null,
+    workNotes: proj.notes ?? row.notes ?? null,
     scheduledStartTime: typeof proj.scheduled_start_time === 'string' ? proj.scheduled_start_time.slice(0, 5) : '08:00',
     serviceType: (proj.service_type || 'GENERAL_PEST_CONTROL') as ServiceType,
     focusTarget: proj.focus_target ?? null,
@@ -151,10 +137,10 @@ export function mapDbWorkReportFull(row: any): WorkReport {
     buildingAreaSqm: proj.building_area_sqm != null ? Number(proj.building_area_sqm) : null,
     contractType: (proj.contract_type || 'ONE_TIME') as ContractType,
     warrantyMonths: Number(proj.warranty_months ?? 0),
-    nextServiceDate: proj.work_date || proj.next_service_date || null,
+    nextServiceDate: proj.next_service_date ?? null,
     executorId: row.executor_id || '',
-    executorName: exec.name || 'Budi Santoso',
-    executorEmail: exec.email || 'teknisi@gucimaspratama.co.id',
+    executorName: exec.name || 'Teknisi Lapangan',
+    executorEmail: exec.email || '',
     status: (row.status || 'READY') as WorkReportStatus,
     checkInAt: row.check_in_at ?? null,
     checkInLatitude: row.check_in_latitude != null ? Number(row.check_in_latitude) : null,
@@ -180,7 +166,9 @@ export function mapDbWorkReportFull(row: any): WorkReport {
     customerPhone: row.customer_phone ?? null,
     customerFeedback: row.customer_feedback ?? null,
     customerSignature: row.customer_signature ?? null,
-    notes: row.notes ?? null,
+    technicianSignature: row.technician_signature ?? null,
+    technicianSignedAt: row.technician_signed_at ?? null,
+    notes: row.notes ?? proj.notes ?? null,
     teamMembers: Array.isArray(row.team_members) ? row.team_members : [],
     photos,
     createdAt: row.created_at,
@@ -197,56 +185,102 @@ const REPORT_SELECT_FULL = `
   risk_events(*)
 `;
 
+/**
+ * Mengambil seluruh laporan kerja perusahaan dari database Supabase asli.
+ * Mencakup semua laporan yang dibuat oleh Admin/SPK maupun oleh Teknisi Lapangan
+ * sehingga seluruh data asli di database muncul utuh di aplikasi 2-Role Skripsi.
+ */
 export async function fetchMyWorkReports(): Promise<WorkReport[]> {
-  try {
-    const st = useAuthStore.getState();
-    const uid = st.user?.uid;
-    const companyId = st.user?.companyId;
+  await syncCompanyProjectsAndReports();
+  const st = useAuthStore.getState();
+  const uid = st.user?.uid;
+  const companyId = st.user?.companyId;
+  if (!uid) return [];
 
-    let q = supabase
-      .from('work_reports')
-      .select(REPORT_SELECT_FULL)
-      .order('created_at', { ascending: false });
+  let q = supabase
+    .from('work_reports')
+    .select(REPORT_SELECT_FULL)
+    .order('created_at', { ascending: false });
 
-    if (companyId) {
-      q = q.eq('company_id', companyId);
-    }
-    const { data, error } = await q;
-    if (!error && data && data.length > 0) {
-      const all = data.map(mapDbWorkReportFull);
-      const mine = uid ? all.filter(r => r.executorId === uid) : all;
-      const base = mine.length > 0 ? mine : all;
-      return mergeWithRealisticReports(base);
-    }
-  } catch {
-    // Fallback to realistic store
+  if (companyId) {
+    q = q.eq('company_id', companyId);
   }
-  return getLocalRealisticReports();
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  const all = (data || []).map(mapDbWorkReportFull);
+
+  // Urutkan agar tugas milik teknisi yang sedang login diprioritaskan di atas pada tanggal yang sama,
+  // tanpa menyembunyikan penugasan yang diinput oleh Admin / SPK.
+  return all.sort((a, b) => {
+    const aMine = a.executorId === uid ? 1 : 0;
+    const bMine = b.executorId === uid ? 1 : 0;
+    if (aMine !== bMine && a.status === b.status) return bMine - aMine;
+    const dateA = a.workDate || a.createdAt || '';
+    const dateB = b.workDate || b.createdAt || '';
+    return dateB.localeCompare(dateA);
+  });
 }
 
 export async function fetchWorkReport(id: string): Promise<WorkReport> {
-  try {
-    const { data, error } = await supabase
-      .from('work_reports')
-      .select(REPORT_SELECT_FULL)
-      .eq('id', id)
-      .single();
+  const { data, error } = await supabase
+    .from('work_reports')
+    .select(REPORT_SELECT_FULL)
+    .eq('id', id)
+    .single();
 
-    if (!error && data) {
-      const mapped = mapDbWorkReportFull(data);
-      return updateLocalReportItem(mapped);
-    }
-  } catch {
-    // Fallback to local realistic report
+  if (error || !data) throw new Error(error?.message || 'Laporan kerja tidak ditemukan.');
+  return mapDbWorkReportFull(data);
+}
+
+/**
+ * Memastikan proyek memiliki baris `work_reports` di Supabase sebelum memulai Check-in GPS.
+ */
+export async function ensureWorkReportForProject(projectId: string): Promise<WorkReport> {
+  const { data: existing } = await supabase
+    .from('work_reports')
+    .select(REPORT_SELECT_FULL)
+    .eq('project_id', projectId)
+    .maybeSingle();
+
+  if (existing) {
+    return mapDbWorkReportFull(existing);
   }
 
-  const localFound = getLocalRealisticReports().find(r => r.id === id);
-  if (localFound) return localFound;
-  throw new Error('Laporan kerja tidak ditemukan.');
+  const st = useAuthStore.getState();
+  const { data: proj } = await supabase
+    .from('projects')
+    .select('*')
+    .eq('id', projectId)
+    .single();
+
+  if (!proj) {
+    throw new Error('Data proyek tidak ditemukan di database.');
+  }
+
+  const { data: created, error } = await supabase
+    .from('work_reports')
+    .insert({
+      company_id: proj.company_id || st.user?.companyId,
+      project_id: proj.id,
+      executor_id: st.user?.uid || proj.created_by,
+      status: 'READY',
+      customer_name: proj.client_name || proj.project_name,
+      notes: proj.notes ?? null,
+    })
+    .select(REPORT_SELECT_FULL)
+    .single();
+
+  if (error || !created) {
+    throw new Error(error?.message || 'Gagal menyiapkan laporan kerja untuk proyek ini.');
+  }
+
+  return mapDbWorkReportFull(created);
 }
 
 export async function checkIn(reportId: string, evidence: EvidencePayload): Promise<WorkReport> {
   const current = await fetchWorkReport(reportId);
+  const st = useAuthStore.getState();
+  const activeExecutorId = st.user?.role === 'TEKNISI_LAPANGAN' ? st.user.uid : (current.executorId || st.user?.uid);
 
   // Periksa apakah proyek sudah memiliki titik jangkar koordinat valid
   const hasProjectAnchor = Boolean(
@@ -271,130 +305,87 @@ export async function checkIn(reportId: string, evidence: EvidencePayload): Prom
       evidence.accuracy
     );
   } else {
+    // Proyek belum memiliki koordinat (mis. dibuat dari SPK tanpa pin peta):
+    // Titik check-in teknisi pertama otomatis ditetapkan sebagai TITIK JANGKAR RESMI proyek!
     dist = 0;
     valid = true;
     if (current.projectId) {
-      try {
-        await supabase
-          .from('projects')
-          .update({
-            latitude: evidence.latitude,
-            longitude: evidence.longitude,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', current.projectId);
-      } catch {
-        // ignore if offline/demo
-      }
-      const projs = getLocalRealisticProjects();
-      saveLocalRealisticProjects(
-        projs.map(p =>
-          p.id === current.projectId ? { ...p, latitude: evidence.latitude, longitude: evidence.longitude } : p
-        )
-      );
+      await supabase
+        .from('projects')
+        .update({
+          latitude: evidence.latitude,
+          longitude: evidence.longitude,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', current.projectId);
     }
   }
 
   const nowIso = evidence.capturedAt || new Date().toISOString();
   const dataUrl = await blobToDataUrl(evidence.photoBlob);
 
-  try {
-    const { error: upErr } = await supabase
-      .from('work_reports')
-      .update({
-        status: 'WORKING',
-        check_in_at: current.checkInAt || nowIso,
-        check_in_latitude: evidence.latitude,
-        check_in_longitude: evidence.longitude,
-        check_in_accuracy: evidence.accuracy,
-        check_in_distance: dist,
-        check_in_valid: valid,
-        notes: evidence.notes || current.notes,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', reportId);
+  const { error: upErr } = await supabase
+    .from('work_reports')
+    .update({
+      executor_id: activeExecutorId,
+      status: 'WORKING',
+      check_in_at: current.checkInAt || nowIso,
+      check_in_latitude: evidence.latitude,
+      check_in_longitude: evidence.longitude,
+      check_in_accuracy: evidence.accuracy,
+      check_in_distance: dist,
+      check_in_valid: valid,
+      notes: evidence.notes || current.notes,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', reportId);
 
-    if (!upErr) {
-      const existingCheckInPhotos = current.photos.filter(p => p.photoType === 'CHECK_IN');
-      if (existingCheckInPhotos.length > 0) {
-        const primaryCinId = existingCheckInPhotos[0].id;
-        await supabase
-          .from('documentation_photos')
-          .update({
-            storage_path: dataUrl,
-            latitude: evidence.latitude,
-            longitude: evidence.longitude,
-            accuracy: evidence.accuracy,
-            distance_to_project: dist,
-            is_within_radius: valid,
-            captured_at: nowIso,
-            metadata: { projectName: current.projectName, executorName: current.executorName },
-          })
-          .eq('id', primaryCinId);
-      } else {
-        await supabase.from('documentation_photos').insert({
-          work_report_id: reportId,
-          photo_type: 'CHECK_IN',
-          photo_tag: evidence.photoTag ?? null,
-          storage_path: dataUrl,
-          latitude: evidence.latitude,
-          longitude: evidence.longitude,
-          accuracy: evidence.accuracy,
-          distance_to_project: dist,
-          is_within_radius: valid,
-          captured_at: nowIso,
-          metadata: { projectName: current.projectName, executorName: current.executorName },
-        });
-      }
+  if (upErr) throw new Error(upErr.message);
+
+  // Cegah duplikasi foto CHECK_IN (CIN) beruntun pada laporan kerja yang sama
+  const existingCheckInPhotos = current.photos.filter(p => p.photoType === 'CHECK_IN');
+  if (existingCheckInPhotos.length > 0) {
+    const primaryCinId = existingCheckInPhotos[0].id;
+    await supabase
+      .from('documentation_photos')
+      .update({
+        storage_path: dataUrl,
+        latitude: evidence.latitude,
+        longitude: evidence.longitude,
+        accuracy: evidence.accuracy,
+        distance_to_project: dist,
+        is_within_radius: valid,
+        captured_at: nowIso,
+        metadata: { projectName: current.projectName, executorName: st.user?.name || current.executorName },
+      })
+      .eq('id', primaryCinId);
+
+    if (existingCheckInPhotos.length > 1) {
+      const duplicateIds = existingCheckInPhotos.slice(1).map(p => p.id);
+      await supabase.from('documentation_photos').delete().in('id', duplicateIds);
     }
-  } catch {
-    // Fallback to local state update below
+  } else {
+    const { error: photoErr } = await supabase.from('documentation_photos').insert({
+      work_report_id: reportId,
+      photo_type: 'CHECK_IN',
+      photo_tag: evidence.photoTag ?? null,
+      storage_path: dataUrl,
+      latitude: evidence.latitude,
+      longitude: evidence.longitude,
+      accuracy: evidence.accuracy,
+      distance_to_project: dist,
+      is_within_radius: valid,
+      captured_at: nowIso,
+      metadata: { projectName: current.projectName, executorName: st.user?.name || current.executorName },
+    });
+    if (photoErr) throw new Error(photoErr.message);
   }
 
-  const newPhoto: DocumentationPhoto = {
-    id: `ph-cin-${Date.now()}`,
-    photoType: 'CHECK_IN',
-    photoTag: evidence.photoTag ?? null,
-    latitude: evidence.latitude,
-    longitude: evidence.longitude,
-    accuracy: evidence.accuracy,
-    distanceToProject: dist,
-    isWithinRadius: valid,
-    capturedAt: nowIso,
-    metadata: { projectName: current.projectName, executorName: current.executorName },
-    purgedAt: null,
-    url: dataUrl,
-  };
-
-  const updatedLocal: WorkReport = {
-    ...current,
-    status: 'WORKING',
-    projectLatitude: hasProjectAnchor ? current.projectLatitude : evidence.latitude,
-    projectLongitude: hasProjectAnchor ? current.projectLongitude : evidence.longitude,
-    checkInAt: current.checkInAt || nowIso,
-    checkInLatitude: evidence.latitude,
-    checkInLongitude: evidence.longitude,
-    checkInAccuracy: evidence.accuracy,
-    checkInDistance: dist,
-    checkInValid: valid,
-    notes: evidence.notes || current.notes,
-    photos: [...current.photos.filter(p => p.photoType !== 'CHECK_IN'), newPhoto],
-    updatedAt: nowIso,
-  };
-  return updateLocalReportItem(updatedLocal);
+  return fetchWorkReport(reportId);
 }
-
-export const MAX_PHOTOS_PER_REPORT = 6;
-export const MAX_PROGRESS_PHOTOS_PER_REPORT = 4;
 
 export async function addProgressPhoto(reportId: string, evidence: EvidencePayload): Promise<WorkReport> {
   const current = await fetchWorkReport(reportId);
-  const progressCount = current.photos.filter(p => p.photoType === 'PROGRESS').length;
-  if (current.photos.length >= MAX_PHOTOS_PER_REPORT || progressCount >= MAX_PROGRESS_PHOTOS_PER_REPORT) {
-    throw new Error(
-      `Batas maksimal foto tercapai (${MAX_PHOTOS_PER_REPORT} foto per laporan: 1 Check-In, maks ${MAX_PROGRESS_PHOTOS_PER_REPORT} Progres, dan 1 Check-Out) dengan kompresi otomatis 40–60 KB.`
-    );
-  }
   const hasAnchor = Boolean(
     current.projectLatitude &&
     current.projectLongitude &&
@@ -417,44 +408,22 @@ export async function addProgressPhoto(reportId: string, evidence: EvidencePaylo
   const nowIso = evidence.capturedAt || new Date().toISOString();
   const dataUrl = await blobToDataUrl(evidence.photoBlob);
 
-  try {
-    await supabase.from('documentation_photos').insert({
-      work_report_id: reportId,
-      photo_type: 'PROGRESS',
-      photo_tag: evidence.photoTag ?? 'BEFORE',
-      storage_path: dataUrl,
-      latitude: evidence.latitude,
-      longitude: evidence.longitude,
-      accuracy: evidence.accuracy,
-      distance_to_project: dist,
-      is_within_radius: valid,
-      captured_at: nowIso,
-      metadata: { projectName: current.projectName, executorName: current.executorName, caption: evidence.notes ?? null },
-    });
-  } catch {
-    // Fallback to local state update below
-  }
-
-  const newPhoto: DocumentationPhoto = {
-    id: `ph-prog-${Date.now()}`,
-    photoType: 'PROGRESS',
-    photoTag: evidence.photoTag ?? 'BEFORE',
+  const { error } = await supabase.from('documentation_photos').insert({
+    work_report_id: reportId,
+    photo_type: 'PROGRESS',
+    photo_tag: evidence.photoTag ?? 'BEFORE',
+    storage_path: dataUrl,
     latitude: evidence.latitude,
     longitude: evidence.longitude,
     accuracy: evidence.accuracy,
-    distanceToProject: dist,
-    isWithinRadius: valid,
-    capturedAt: nowIso,
+    distance_to_project: dist,
+    is_within_radius: valid,
+    captured_at: nowIso,
     metadata: { projectName: current.projectName, executorName: current.executorName, caption: evidence.notes ?? null },
-    purgedAt: null,
-    url: dataUrl,
-  };
-
-  return updateLocalReportItem({
-    ...current,
-    photos: [...current.photos, newPhoto],
-    updatedAt: nowIso,
   });
+
+  if (error) throw new Error(error.message);
+  return fetchWorkReport(reportId);
 }
 
 export async function checkOut(reportId: string, evidence: EvidencePayload): Promise<WorkReport> {
@@ -483,93 +452,72 @@ export async function checkOut(reportId: string, evidence: EvidencePayload): Pro
   const durationSeconds = Math.max(60, Math.round((new Date(nowIso).getTime() - checkInMs) / 1000));
   const dataUrl = await blobToDataUrl(evidence.photoBlob);
 
-  let riskScore = current.riskScore || 0;
-  if (current.checkInValid === false) riskScore = Math.max(riskScore, 30);
+  let riskScore = 0;
+  if (!current.checkInValid) riskScore += 30;
   if (!valid) riskScore += 30;
   if (!current.treatmentRecord) riskScore += 20;
   const riskLevel: RiskLevel =
     riskScore >= 60 ? 'HIGH_RISK' : riskScore >= 40 ? 'REVIEW' : riskScore >= 20 ? 'LOW_RISK' : 'NORMAL';
   const nextStatus: WorkReportStatus = riskScore >= 40 ? 'FLAGGED' : 'COMPLETED';
 
-  try {
-    await supabase.from('documentation_photos').insert({
-      work_report_id: reportId,
-      photo_type: 'CHECK_OUT',
-      photo_tag: evidence.photoTag ?? 'AFTER',
-      storage_path: dataUrl,
-      latitude: evidence.latitude,
-      longitude: evidence.longitude,
-      accuracy: evidence.accuracy,
-      distance_to_project: dist,
-      is_within_radius: valid,
-      captured_at: nowIso,
-      metadata: { projectName: current.projectName, executorName: current.executorName },
-    });
-
-    await supabase
-      .from('work_reports')
-      .update({
-        status: nextStatus,
-        check_out_at: nowIso,
-        check_out_latitude: evidence.latitude,
-        check_out_longitude: evidence.longitude,
-        check_out_accuracy: evidence.accuracy,
-        check_out_distance: dist,
-        check_out_valid: valid,
-        duration_seconds: durationSeconds,
-        risk_score: riskScore,
-        risk_level: riskLevel,
-        customer_name: evidence.customerName ?? current.customerName,
-        customer_phone: evidence.customerPhone ?? current.customerPhone,
-        customer_feedback: evidence.customerFeedback ?? current.customerFeedback,
-        customer_signature: evidence.customerSignature ?? current.customerSignature,
-        notes: evidence.notes ?? current.notes,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', reportId);
-  } catch {
-    // Fallback to local state update below
-  }
-
-  const outPhoto: DocumentationPhoto = {
-    id: `ph-cout-${Date.now()}`,
-    photoType: 'CHECK_OUT',
-    photoTag: evidence.photoTag ?? 'AFTER',
+  await supabase.from('documentation_photos').insert({
+    work_report_id: reportId,
+    photo_type: 'CHECK_OUT',
+    photo_tag: evidence.photoTag ?? 'AFTER',
+    storage_path: dataUrl,
     latitude: evidence.latitude,
     longitude: evidence.longitude,
     accuracy: evidence.accuracy,
-    distanceToProject: dist,
-    isWithinRadius: valid,
-    capturedAt: nowIso,
+    distance_to_project: dist,
+    is_within_radius: valid,
+    captured_at: nowIso,
     metadata: { projectName: current.projectName, executorName: current.executorName },
-    purgedAt: null,
-    url: dataUrl,
+  });
+
+  const updatePayload: Record<string, any> = {
+    status: nextStatus,
+    check_out_at: nowIso,
+    check_out_latitude: evidence.latitude,
+    check_out_longitude: evidence.longitude,
+    check_out_accuracy: evidence.accuracy,
+    check_out_distance: dist,
+    check_out_valid: valid,
+    duration_seconds: durationSeconds,
+    risk_score: riskScore,
+    risk_level: riskLevel,
+    customer_name: evidence.customerName ?? current.customerName,
+    customer_phone: evidence.customerPhone ?? current.customerPhone,
+    customer_feedback: evidence.customerFeedback ?? current.customerFeedback,
+    customer_signature: evidence.customerSignature ?? current.customerSignature,
+    notes: evidence.notes ?? current.notes,
+    updated_at: new Date().toISOString(),
   };
 
-  return updateLocalReportItem({
-    ...current,
-    status: nextStatus,
-    checkOutAt: nowIso,
-    checkOutLatitude: evidence.latitude,
-    checkOutLongitude: evidence.longitude,
-    checkOutAccuracy: evidence.accuracy,
-    checkOutDistance: dist,
-    checkOutValid: valid,
-    durationSeconds,
-    riskScore,
-    riskLevel,
-    customerName: evidence.customerName ?? current.customerName,
-    customerPhone: evidence.customerPhone ?? current.customerPhone,
-    customerFeedback: evidence.customerFeedback ?? current.customerFeedback,
-    customerSignature: evidence.customerSignature ?? current.customerSignature,
-    notes: evidence.notes ?? current.notes,
-    photos: [...current.photos, outPhoto],
-    updatedAt: nowIso,
-  });
+  if (evidence.technicianSignature || current.technicianSignature) {
+    updatePayload.technician_signature = evidence.technicianSignature ?? current.technicianSignature;
+    updatePayload.technician_signed_at = evidence.technicianSignature
+      ? new Date().toISOString()
+      : current.technicianSignedAt;
+  }
+
+  let { error: upErr } = await supabase
+    .from('work_reports')
+    .update(updatePayload)
+    .eq('id', reportId);
+
+  // Fallback aman apabila kolom migrasi 07 (technician_signature) belum dijalankan pada instance lama
+  if (upErr && String(upErr.message || '').includes('technician_sign')) {
+    delete updatePayload.technician_signature;
+    delete updatePayload.technician_signed_at;
+    const retry = await supabase.from('work_reports').update(updatePayload).eq('id', reportId);
+    upErr = retry.error;
+  }
+
+  if (upErr) throw new Error(upErr.message);
+  return fetchWorkReport(reportId);
 }
 
 export async function submitTreatment(reportId: string, input: TreatmentInput): Promise<WorkReport> {
-  const current = await fetchWorkReport(reportId);
   const payload = {
     work_report_id: reportId,
     application_method: input.applicationMethod,
@@ -587,121 +535,54 @@ export async function submitTreatment(reportId: string, input: TreatmentInput): 
     updated_at: new Date().toISOString(),
   };
 
-  try {
-    await supabase.from('treatment_records').upsert(payload, { onConflict: 'work_report_id' });
-    if (input.teamMembers) {
-      await supabase
-        .from('work_reports')
-        .update({ team_members: input.teamMembers, updated_at: new Date().toISOString() })
-        .eq('id', reportId);
-    }
-  } catch {
-    // Fallback to local state update below
+  const { error } = await supabase
+    .from('treatment_records')
+    .upsert(payload, { onConflict: 'work_report_id' });
+
+  if (error) throw new Error(error.message);
+
+  if (input.teamMembers) {
+    await supabase
+      .from('work_reports')
+      .update({ team_members: input.teamMembers, updated_at: new Date().toISOString() })
+      .eq('id', reportId);
   }
 
-  const trRecord: TreatmentRecord = {
-    applicationMethod: input.applicationMethod,
-    chemicalName: input.chemicalName,
-    activeIngredient: input.activeIngredient ?? null,
-    dosage: input.dosage,
-    treatmentAreaSqm: input.treatmentAreaSqm ?? null,
-    drillingPointsCount: input.drillingPointsCount ?? null,
-    fumigantType: input.fumigantType ?? null,
-    gasConcentrationPpm: input.gasConcentrationPpm ?? null,
-    sealingStartedAt: input.sealingStartedAt ?? null,
-    aerationCompletedAt: input.aerationCompletedAt ?? null,
-    safetyNotes: input.safetyNotes ?? null,
-    technicianNotes: input.technicianNotes ?? null,
-  };
-
-  return updateLocalReportItem({
-    ...current,
-    treatmentRecord: trRecord,
-    teamMembers: input.teamMembers ?? current.teamMembers,
-    updatedAt: new Date().toISOString(),
-  });
+  return fetchWorkReport(reportId);
 }
 
 export async function updateWorkReportTeam(reportId: string, teamMembers: TeamMemberEntry[]): Promise<WorkReport> {
-  const current = await fetchWorkReport(reportId);
-  try {
-    await supabase
-      .from('work_reports')
-      .update({ team_members: teamMembers, updated_at: new Date().toISOString() })
-      .eq('id', reportId);
-  } catch {
-    // ignore if offline
-  }
-  return updateLocalReportItem({
-    ...current,
-    teamMembers,
-    updatedAt: new Date().toISOString(),
-  });
-}
-
-/**
- * Menyimpan laporan kendala lapangan teknisi langsung ke database (risk_events + work_reports)
- * sehingga terikat penuh dengan database dan otomatis muncul di antrean "Perlu tindakan" & "Hasil & Verifikasi" Admin.
- */
-export async function reportFieldIssueToDb(
-  reportId: string,
-  issueType: string,
-  note: string
-): Promise<WorkReport> {
-  const current = await fetchWorkReport(reportId);
-  const nowIso = new Date().toISOString();
-  const nextScore = Math.max(45, (current.riskScore || 0) + 25);
-  const issueNoteLine = `[KENDALA LAPANGAN: ${issueType} — ${note.trim() || 'Membutuhkan tindak lanjut Admin'}]`;
-  const mergedNotes = current.notes ? `${issueNoteLine} ${current.notes}` : issueNoteLine;
-
-  const newEvent: RiskEvent = {
-    id: `re-issue-${Date.now()}`,
-    eventType: 'FIELD_ISSUE',
-    points: 25,
-    severity: 'HIGH',
-    title: `Kendala Lapangan: ${issueType}`,
-    description: note.trim() || 'Dilaporkan langsung oleh teknisi dari lokasi proyek.',
-    expectedValue: 'Operasional Normal',
-    actualValue: issueType,
-    createdAt: nowIso,
-  };
-
-  try {
-    await supabase.from('risk_events').insert({
-      work_report_id: reportId,
-      event_type: 'FIELD_ISSUE',
-      points: 25,
-      severity: 'HIGH',
-      title: newEvent.title,
-      description: newEvent.description,
-      expected_value: newEvent.expectedValue,
-      actual_value: newEvent.actualValue,
-      created_at: nowIso,
-    });
-
-    await supabase
-      .from('work_reports')
-      .update({
-        status: 'FLAGGED',
-        risk_score: nextScore,
-        risk_level: 'MEDIUM',
-        notes: mergedNotes,
-        updated_at: nowIso,
-      })
-      .eq('id', reportId);
-  } catch {
-    // Fallback to local state update below
-  }
-
-  return updateLocalReportItem({
-    ...current,
-    status: 'FLAGGED',
-    riskScore: nextScore,
-    riskLevel: 'REVIEW',
-    notes: mergedNotes,
-    riskEvents: [newEvent, ...(current.riskEvents || [])],
-    updatedAt: nowIso,
-  });
+  const { error } = await supabase
+    .from('work_reports')
+    .update({ team_members: teamMembers, updated_at: new Date().toISOString() })
+    .eq('id', reportId);
+  if (error) throw new Error(error.message);
+  return fetchWorkReport(reportId);
 }
 
 export type { TreatmentRecord };
+
+export async function reportFieldIssueToDb(reportId: string, issueType: string, note: string): Promise<void> {
+  if (!reportId) return;
+  const cleanNote = note.trim() || 'Membutuhkan tindak lanjut koordinasi Admin/Supervisor.';
+  await supabase.from('risk_events').insert({
+    work_report_id: reportId,
+    event_type: 'FIELD_ISSUE_ESCALATION',
+    points: 40,
+    severity: 'HIGH',
+    title: `Kendala Lapangan: ${issueType}`,
+    description: cleanNote,
+    expected_value: 'Operasional Normal',
+    actual_value: issueType,
+  });
+  await supabase
+    .from('work_reports')
+    .update({
+      status: 'FLAGGED',
+      risk_score: 40,
+      risk_level: 'REVIEW',
+      notes: `[KENDALA LAPANGAN: ${issueType}] ${cleanNote}`,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', reportId);
+}
