@@ -10,6 +10,8 @@ import {
   ChevronUp,
   Clock,
   Eraser,
+  Loader2,
+  LocateFixed,
   Lock,
   MapPin,
   Minus,
@@ -32,6 +34,7 @@ import { TreatmentInput, MAX_PHOTOS_PER_REPORT } from '@/shared/api/workReports'
 import { serializePestFindingsToNotes, parsePestFindingsFromNotes } from '@/shared/lib/permenkesRecapEngine';
 import { AuthedImage } from '../common/AuthedImage';
 import {
+  formatTimeWib,
   formatWoCode,
   getInitials,
   getTechSigStorageKey,
@@ -41,6 +44,14 @@ import {
 } from './techLiteUtils';
 import { ConfirmActionModal, useConfirmAction } from './ConfirmActionModal';
 import { VoiceDictationButton } from './VoiceDictationButton';
+import {
+  formatAccuracyLabel,
+  formatWorkPointCoordinates,
+  loadWorkPointLocation,
+  mapGeolocationErrorToIndonesian,
+  saveWorkPointLocation,
+  WorkPointLocation,
+} from './workPointLocationUtils';
 
 export interface WorksheetClientPrefill {
   customerName: string;
@@ -105,6 +116,8 @@ interface WorksheetDraft {
   clientName: string;
   clientRole: string;
   clientPhone: string;
+  // Koordinat titik pengerjaan (GPS)
+  workPointLocation?: WorkPointLocation | null;
 }
 
 const DEFAULT_TERMITE_ENTRIES: TermiteSpeciesEntry[] = [
@@ -287,6 +300,7 @@ function buildDefaultDraft(report: WorkReport): WorksheetDraft {
     clientName: report.customerName || '',
     clientRole: 'PIC Utama',
     clientPhone: report.customerPhone || '',
+    workPointLocation: loadWorkPointLocation(report.id),
   };
 }
 
@@ -331,6 +345,8 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
   const [newAreaInput, setNewAreaInput] = useState('');
   const [showTechDetails, setShowTechDetails] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCapturingLocation, setIsCapturingLocation] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [validationMsg, setValidationMsg] = useState<string | null>(null);
   const { confirmRequest, confirmAction, closeConfirm } = useConfirmAction();
 
@@ -580,6 +596,9 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
     try {
       localStorage.setItem(getTechSigStorageKey(report.id), draft.technicianSignature);
       localStorage.setItem(getTechSigTimeStorageKey(report.id), new Date().toISOString());
+      if (draft.workPointLocation) {
+        saveWorkPointLocation(report.id, draft.workPointLocation);
+      }
     } catch {
       // ignore
     }
@@ -590,6 +609,39 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
       customerPhone: draft.clientPhone.trim(),
       technicianSignature: draft.technicianSignature,
     });
+  };
+
+  const handleSaveCurrentLocation = () => {
+    setLocationError(null);
+    if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      setLocationError('Browser ini tidak mendukung fitur GPS lokasi.');
+      return;
+    }
+
+    setIsCapturingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const captured: WorkPointLocation = {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy: Number.isFinite(pos.coords.accuracy) ? Math.round(pos.coords.accuracy) : null,
+          capturedAt: new Date().toISOString(),
+          source: 'MANUAL_GPS',
+        };
+        saveWorkPointLocation(report.id, captured);
+        updateDraft('workPointLocation', captured);
+        setIsCapturingLocation(false);
+      },
+      err => {
+        setLocationError(mapGeolocationErrorToIndonesian(err?.code));
+        setIsCapturingLocation(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 12000,
+        maximumAge: 0,
+      }
+    );
   };
 
   const handleProceed = () => {
@@ -745,6 +797,79 @@ export const TechnicianWorksheet: React.FC<TechnicianWorksheetProps> = ({
                 {report.projectAddress}
               </p>
             </div>
+          </div>
+
+          {/* GPS Work-Point Tagging Control */}
+          <div className="rounded-xl bg-[var(--tl-low)] p-3 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11.5px] font-semibold text-[var(--tl-text)]">
+                Koordinat Titik Pengerjaan
+              </span>
+              {draft.workPointLocation ? (
+                <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-[var(--tl-secondary)]">
+                  <CheckCircle2 size={12} />
+                  <span>Tersimpan</span>
+                </span>
+              ) : (
+                <span className="text-[10.5px] text-[var(--tl-text-variant)]">
+                  Belum ditandai
+                </span>
+              )}
+            </div>
+
+            {draft.workPointLocation && (
+              <div
+                data-testid="saved-workpoint-coords"
+                className="rounded-lg bg-[var(--tl-card)] px-2.5 py-2 flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <span className="block font-mono text-[11.5px] font-semibold text-[var(--tl-text)] truncate">
+                    {formatWorkPointCoordinates(
+                      draft.workPointLocation.latitude,
+                      draft.workPointLocation.longitude
+                    )}
+                  </span>
+                  <span className="block text-[10.5px] text-[var(--tl-text-variant)] mt-0.5">
+                    {formatAccuracyLabel(draft.workPointLocation.accuracy)
+                      ? `Akurasi ${formatAccuracyLabel(draft.workPointLocation.accuracy)}`
+                      : 'GPS aktif'}
+                    {draft.workPointLocation.capturedAt
+                      ? ` · ${formatTimeWib(draft.workPointLocation.capturedAt)}`
+                      : ''}
+                  </span>
+                </div>
+                <MapPin size={14} className="text-[var(--tl-secondary)] shrink-0" />
+              </div>
+            )}
+
+            {locationError && (
+              <p
+                role="alert"
+                className="text-[11px] font-medium text-[var(--tl-on-error-container)] bg-[var(--tl-error-container)] rounded-lg px-2.5 py-1.5"
+              >
+                {locationError}
+              </p>
+            )}
+
+            <button
+              type="button"
+              data-testid="save-current-location-btn"
+              onClick={handleSaveCurrentLocation}
+              disabled={isCapturingLocation}
+              className="w-full min-h-[40px] px-3 rounded-xl bg-[var(--tl-card)] hover:bg-[var(--tl-container)] text-[var(--tl-primary)] border border-[var(--tl-primary)]/15 text-[12px] font-semibold inline-flex items-center justify-center gap-2 transition-colors active:scale-[0.99] disabled:opacity-60 cursor-pointer"
+            >
+              {isCapturingLocation ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>Mengambil Koordinat GPS...</span>
+                </>
+              ) : (
+                <>
+                  <LocateFixed size={14} />
+                  <span>Simpan Lokasi Saat Ini</span>
+                </>
+              )}
+            </button>
           </div>
         </section>
 

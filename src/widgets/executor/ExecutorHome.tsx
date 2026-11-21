@@ -37,7 +37,11 @@ import { CompletionPdfWaSheet } from './CompletionPdfWaSheet';
 import { NotificationsSheet, TechNotificationItem } from './NotificationsSheet';
 import { ConfirmActionModal, useConfirmAction } from './ConfirmActionModal';
 import { TechnicianSpotlightGuide, TECH_GUIDE_STORAGE_KEY } from './TechnicianSpotlightGuide';
+import { WorkHistoryPanel } from './WorkHistoryPanel';
+import { groupHistoryReportsByDate } from './workHistoryUtils';
 import { formatDistance, calculateDistanceMeters } from '@/shared/utils/geo';
+import { exportReportToPdf } from '@/shared/utils/pdfExport';
+import { formatFileSizeKb } from '@/shared/utils/pdfReportHelpers';
 import { postLocation } from '@/shared/api/location';
 import {
   AlertCircle,
@@ -54,6 +58,7 @@ import {
   ClipboardList,
   Clock,
   CloudOff,
+  Download,
   ExternalLink,
   HelpCircle,
   History,
@@ -209,13 +214,6 @@ export const ExecutorHome: React.FC = () => {
   const [taskDayTab, setTaskDayTab] = useState<'yesterday' | 'today' | 'tomorrow' | 'all'>('today');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Riwayat Pekerjaan filters (Search + Date Range + Category Pills)
-  const [historySearch, setHistorySearch] = useState('');
-  const [historyCategory, setHistoryCategory] = useState<'ALL' | 'AR' | 'PCO'>('ALL');
-  const [showDateFilter, setShowDateFilter] = useState(false);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-
   // Data state
   const [reports, setReports] = useState<WorkReport[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -254,6 +252,7 @@ export const ExecutorHome: React.FC = () => {
   const [viewingPhoto, setViewingPhoto] = useState<DocumentationPhoto | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [companyTechs, setCompanyTechs] = useState<{ id: string; name: string }[]>([]);
   const [quickManualName, setQuickManualName] = useState('');
@@ -590,35 +589,21 @@ export const ExecutorHome: React.FC = () => {
     });
   }, [categorizedProjects, taskDayTab, searchQuery]);
 
-  // Filtered History with Search + Date Range + Category Pills
-  const filteredHistoryJobs = useMemo(() => {
-    return completedJobs.filter(rep => {
-      if (historyCategory === 'AR' && !isTermiteService(rep.serviceType)) return false;
-      if (historyCategory === 'PCO' && isTermiteService(rep.serviceType)) return false;
-
-      const q = historySearch.trim().toLowerCase();
-      if (q) {
-        const wo = formatWoCode(rep.id).toLowerCase();
-        const match =
-          rep.projectName.toLowerCase().includes(q) ||
-          (rep.clientName || '').toLowerCase().includes(q) ||
-          rep.projectAddress.toLowerCase().includes(q) ||
-          wo.includes(q);
-        if (!match) return false;
+  // Recent completed reports categorized by date for Beranda quick tracking
+  const recentHistoryGroups = useMemo(() => {
+    const groups = groupHistoryReportsByDate(completedJobs);
+    const preview: typeof groups = [];
+    let count = 0;
+    for (const g of groups) {
+      if (count >= 3) break;
+      const take = g.reports.slice(0, 3 - count);
+      if (take.length > 0) {
+        preview.push({ ...g, reports: take, count: g.count });
+        count += take.length;
       }
-
-      const repDate = new Date(rep.checkOutAt || rep.createdAt);
-      if (dateFrom) {
-        const from = new Date(`${dateFrom}T00:00:00`);
-        if (repDate < from) return false;
-      }
-      if (dateTo) {
-        const to = new Date(`${dateTo}T23:59:59`);
-        if (repDate > to) return false;
-      }
-      return true;
-    });
-  }, [completedJobs, historyCategory, historySearch, dateFrom, dateTo]);
+    }
+    return preview;
+  }, [completedJobs]);
 
   // Monthly Performance Metrics (clean & privacy-safe)
   const monthlyStats = useMemo(() => {
@@ -1574,6 +1559,75 @@ export const ExecutorHome: React.FC = () => {
                   </div>
                 )}
               </section>
+
+              {/* Riwayat Pekerjaan Terbaru — Date-Categorized Quick Tracking Panel */}
+              <section data-testid="home-history-preview" className="space-y-2">
+                <div className="flex items-center justify-between px-0.5">
+                  <h2 className="text-[13.5px] font-bold text-[var(--tl-text)]">
+                    Riwayat Pekerjaan ({completedJobs.length})
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => navigateTo('history', { reset: true })}
+                    className="text-[11.5px] font-semibold text-[var(--tl-secondary)] hover:underline cursor-pointer"
+                  >
+                    Lihat Semua
+                  </button>
+                </div>
+
+                {recentHistoryGroups.length > 0 ? (
+                  <div className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] overflow-hidden divide-y divide-[var(--tl-container)]">
+                    {recentHistoryGroups.map(group => (
+                      <div key={group.dateKey}>
+                        <div className="px-3.5 py-1.5 bg-[var(--tl-low)] flex items-center justify-between text-[10.5px]">
+                          <span className="font-bold text-[var(--tl-text)]">{group.title}</span>
+                          <span className="text-[var(--tl-text-variant)]">{group.subtitle}</span>
+                        </div>
+                        <div className="divide-y divide-[var(--tl-container)]">
+                          {group.reports.map(rep => (
+                            <button
+                              key={rep.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedReportId(rep.id);
+                                setIsViewingHistoryDetail(true);
+                                navigateTo('completion');
+                              }}
+                              className="w-full px-3.5 py-3 flex items-center justify-between gap-3 text-left hover:bg-[var(--tl-low)]/50 active:scale-[0.99] transition-all cursor-pointer"
+                            >
+                              <div className="min-w-0 flex-1 space-y-0.5">
+                                <div className="flex items-center gap-1.5 text-[10.5px]">
+                                  <span className="font-mono font-semibold text-[var(--tl-text-variant)]">
+                                    {formatWoCode(rep.id)}
+                                  </span>
+                                  <span className="text-[var(--tl-outline)]">·</span>
+                                  <ServiceLabel serviceType={rep.serviceType} />
+                                </div>
+                                <strong className="block text-[12.5px] font-semibold text-[var(--tl-text)] truncate">
+                                  {rep.projectName}
+                                </strong>
+                                <p className="text-[10.5px] text-[var(--tl-text-variant)] truncate">
+                                  {rep.clientName || rep.projectAddress}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="text-[10.5px] font-mono text-[var(--tl-text-variant)] tabular-nums">
+                                  {formatTimeWib(rep.checkOutAt || rep.createdAt)}
+                                </span>
+                                <ChevronRight size={14} className="text-[var(--tl-outline)]" />
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] p-4 text-center text-xs text-[var(--tl-text-variant)]">
+                    Laporan pekerjaan yang telah selesai akan tercatat di sini berdasarkan tanggal.
+                  </div>
+                )}
+              </section>
             </main>
           </>
         )}
@@ -2108,228 +2162,43 @@ export const ExecutorHome: React.FC = () => {
           <>
             {renderLiteHeader()}
 
-            <main className="flex-1 px-4 pt-3.5 pb-24 space-y-3.5">
-              {/* Header + Quiet Archive Label */}
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h1 className="text-[17px] font-bold tracking-tight text-[var(--tl-text)]">
-                    Riwayat Pekerjaan
-                  </h1>
-                  <p className="text-[11.5px] text-[var(--tl-text-variant)] mt-0.5">
-                    {filteredHistoryJobs.length} laporan selesai tersimpan
-                  </p>
-                </div>
-                <span className="text-[11px] font-semibold text-[var(--tl-secondary)] pt-1 shrink-0">
-                  Arsip Resmi
-                </span>
-              </div>
-
-              {/* Search + Date Range Toggle */}
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1 flex items-center">
-                  <Search size={16} className="absolute left-3.5 text-[var(--tl-outline)]" />
-                  <input
-                    type="text"
-                    value={historySearch}
-                    onChange={e => setHistorySearch(e.target.value)}
-                    placeholder="Cari WO atau lokasi..."
-                    className="w-full h-11 pl-10 pr-8 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] text-xs text-[var(--tl-text)] focus:outline-none focus:ring-2 focus:ring-[var(--tl-primary)]"
-                  />
-                  {historySearch && (
-                    <button
-                      type="button"
-                      aria-label="Hapus pencarian riwayat"
-                      onClick={() => setHistorySearch('')}
-                      className="absolute right-2.5 p-1 text-[var(--tl-outline)] hover:text-[var(--tl-text)] cursor-pointer"
-                    >
-                      <X size={15} />
-                    </button>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowDateFilter(v => !v)}
-                  aria-label="Filter Rentang Tanggal"
-                  className={`h-11 px-3.5 rounded-2xl text-xs font-bold flex items-center gap-1.5 shrink-0 cursor-pointer shadow-[var(--tl-shadow-card)] ${
-                    showDateFilter || dateFrom || dateTo
-                      ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)]'
-                      : 'bg-[var(--tl-card)] text-[var(--tl-text)]'
-                  }`}
-                >
-                  <Calendar size={15} />
-                  <span>Tanggal</span>
-                </button>
-              </div>
-
-              {/* Collapsible Filter Rentang Tanggal Card */}
-              {showDateFilter && (
-                <div className="p-4 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] space-y-3">
-                  <div className="flex items-center justify-between">
-                    <strong className="text-xs font-bold text-[var(--tl-text)]">Filter Rentang Tanggal</strong>
-                    {(dateFrom || dateTo) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDateFrom('');
-                          setDateTo('');
-                        }}
-                        className="text-[11px] font-bold text-[var(--tl-error)] cursor-pointer"
-                      >
-                        Reset Rentang
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="block text-[10.5px] font-semibold text-[var(--tl-text-variant)] mb-1">
-                        Dari Tanggal
-                      </label>
-                      <input
-                        type="date"
-                        value={dateFrom}
-                        onChange={e => setDateFrom(e.target.value)}
-                        className="w-full h-10 px-2.5 rounded-xl bg-[var(--tl-low)] text-xs text-[var(--tl-text)]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10.5px] font-semibold text-[var(--tl-text-variant)] mb-1">
-                        Sampai Tanggal
-                      </label>
-                      <input
-                        type="date"
-                        value={dateTo}
-                        onChange={e => setDateTo(e.target.value)}
-                        className="w-full h-10 px-2.5 rounded-xl bg-[var(--tl-low)] text-xs text-[var(--tl-text)]"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Active Range Indicator Pill */}
-              {(dateFrom || dateTo) && !showDateFilter && (
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--tl-low)] text-[11px] font-semibold text-[var(--tl-primary)]">
-                  <Calendar size={12} />
-                  <span>
-                    {dateFrom ? formatShortDateId(dateFrom) : 'Awal'} – {dateTo ? formatShortDateId(dateTo) : 'Sekarang'}
-                  </span>
-                  <button
-                    type="button"
-                    aria-label="Hapus filter tanggal"
-                    onClick={() => {
-                      setDateFrom('');
-                      setDateTo('');
-                    }}
-                    className="p-0.5 cursor-pointer"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              )}
-
-              {/* Category Filter Pills (Semua | Anti Rayap | Pest Control) */}
-              <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-                {(
-                  [
-                    { id: 'ALL', label: `Semua (${completedJobs.length})` },
-                    { id: 'AR', label: 'Anti Rayap' },
-                    { id: 'PCO', label: 'Pest Control' },
-                  ] as const
-                ).map(cat => {
-                  const active = historyCategory === cat.id;
-                  return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => setHistoryCategory(cat.id)}
-                      className={`min-h-[36px] px-3.5 rounded-full text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
-                        active
-                          ? 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)]'
-                          : 'bg-[var(--tl-card)] text-[var(--tl-text-variant)] shadow-[var(--tl-shadow-card)]'
-                      }`}
-                    >
-                      {cat.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* History Work Order Cards (Strictly NO confidential client ratings!) */}
-              <div className="space-y-3">
-                {filteredHistoryJobs.map(rep => {
-                  const durationText = formatDurationId(rep.durationSeconds, rep.checkInAt, rep.checkOutAt);
-                  const isSample = isSampleCompleteReport(rep.id);
-                  return (
-                    <article
-                      key={rep.id}
-                      className="p-3.5 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] space-y-2.5"
-                    >
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-1.5 text-[10.5px]">
-                          <span className="font-mono font-semibold text-[var(--tl-text)]">
-                            {formatWoCode(rep.id)}
-                          </span>
-                          <span className="text-[var(--tl-outline)]">·</span>
-                          <ServiceLabel serviceType={rep.serviceType} />
-                          {isSample && (
-                            <>
-                              <span className="text-[var(--tl-outline)]">·</span>
-                              <span className="font-semibold text-[var(--tl-primary)]">Contoh Lengkap</span>
-                            </>
-                          )}
-                        </div>
-                        <span className="text-[10.5px] font-mono font-medium text-[var(--tl-text-variant)] tabular-nums">
-                          {formatShortDateId(rep.checkOutAt || rep.createdAt)}
-                        </span>
-                      </div>
-
-                      <div>
-                        <strong className="block text-[14px] font-semibold text-[var(--tl-text)] leading-snug truncate">
-                          {rep.projectName}
-                        </strong>
-                        <p className="text-[11.5px] text-[var(--tl-text-variant)] mt-0.5 truncate">
-                          {rep.clientName || rep.projectAddress}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-3 text-[11px] text-[var(--tl-text-variant)] bg-[var(--tl-low)] rounded-xl px-3 py-2">
-                        <span className="inline-flex items-center gap-1 font-medium">
-                          <Camera size={12} className="text-[var(--tl-secondary)]" />
-                          <span>{rep.photos.length} Foto</span>
-                        </span>
-                        {durationText !== '-' && (
-                          <span className="inline-flex items-center gap-1 font-medium">
-                            <Clock size={12} className="text-[var(--tl-secondary)]" />
-                            <span>{durationText}</span>
-                          </span>
-                        )}
-                        <span className="ml-auto font-semibold text-[var(--tl-secondary)]">Selesai</span>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedReportId(rep.id);
-                          setIsViewingHistoryDetail(true);
-                          navigateTo('completion');
-                        }}
-                        className="w-full min-h-[40px] rounded-xl bg-[var(--tl-low)] hover:bg-[var(--tl-container)] text-[var(--tl-primary)] text-[12px] font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <span>Lihat Detail</span>
-                        <ChevronRight size={14} />
-                      </button>
-                    </article>
-                  );
-                })}
-
-                {filteredHistoryJobs.length === 0 && (
-                  <div className="p-8 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] text-center text-xs text-[var(--tl-text-variant)]">
-                    Belum ada riwayat pekerjaan pada rentang atau filter ini.
-                  </div>
-                )}
-              </div>
-            </main>
+            <WorkHistoryPanel
+              completedJobs={completedJobs}
+              downloadingPdfId={downloadingPdfId}
+              onOpenDetail={rep => {
+                setSelectedReportId(rep.id);
+                setIsViewingHistoryDetail(true);
+                navigateTo('completion');
+              }}
+              onRequestDownloadPdf={rep =>
+                confirmAction({
+                  tone: 'primary',
+                  title: 'Unduh Salinan PDF (Offline)?',
+                  description:
+                    'Simpan laporan pekerjaan selesai ini dalam format PDF agar bisa dibuka kapan saja tanpa koneksi internet.',
+                  details: [
+                    { label: 'Nomor WO', value: formatWoCode(rep.id) },
+                    { label: 'Lokasi', value: rep.projectName },
+                    { label: 'Dokumentasi', value: `${rep.photos.length} Foto & Pengesahan` },
+                  ],
+                  confirmLabel: 'Ya, Unduh PDF',
+                  onConfirm: async () => {
+                    setDownloadingPdfId(rep.id);
+                    try {
+                      const res = await exportReportToPdf(rep, undefined, {
+                        companyId: user?.companyId,
+                        createdBy: rep.executorName || user?.name || 'Teknisi Lapangan',
+                      });
+                      setToastMsg(`PDF tersimpan (${formatFileSizeKb(res.sizeBytes)}): ${res.filename}`);
+                    } catch {
+                      setActionError('Gagal mengunduh file PDF. Silakan coba lagi.');
+                    } finally {
+                      setDownloadingPdfId(null);
+                    }
+                  },
+                })
+              }
+            />
           </>
         )}
 

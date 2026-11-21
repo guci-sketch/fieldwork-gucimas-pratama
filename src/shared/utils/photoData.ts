@@ -29,18 +29,98 @@ async function downscaleToJpeg(blob: Blob): Promise<string> {
 }
 
 /**
- * Mengambil foto bukti dari endpoint terautentikasi dan mengembalikannya sebagai data URL (untuk disematkan
- * ke PDF). Mengembalikan undefined bila gagal/dihapus — satu foto bermasalah tidak boleh menggagalkan seluruh PDF.
+ * Merasterisasi sumber gambar (termasuk data:image/svg+xml atau PNG/JPEG) melalui HTMLCanvas
+ * menjadi data URL JPEG/PNG yang pasti kompatibel dengan jsPDF.addImage — bekerja 100% offline.
+ */
+export async function rasterizeImageUrlToDataUrl(
+  sourceUrl: string,
+  mimeType: 'image/jpeg' | 'image/png' = 'image/jpeg',
+  maxDim = MAX_DIM
+): Promise<string | undefined> {
+  if (!sourceUrl || typeof document === 'undefined' || typeof Image === 'undefined') {
+    return undefined;
+  }
+  if (mimeType === 'image/jpeg' && /^data:image\/(jpeg|jpg);base64,/i.test(sourceUrl)) {
+    return sourceUrl;
+  }
+  if (mimeType === 'image/png' && /^data:image\/png;base64,/i.test(sourceUrl)) {
+    return sourceUrl;
+  }
+
+  return new Promise<string | undefined>(resolve => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    const timeoutId = window.setTimeout(() => resolve(undefined), 6000);
+
+    img.onload = () => {
+      window.clearTimeout(timeoutId);
+      try {
+        const naturalW = img.naturalWidth || img.width || 640;
+        const naturalH = img.naturalHeight || img.height || 420;
+        const ratio = Math.min(1, maxDim / Math.max(naturalW, naturalH));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(naturalW * ratio));
+        canvas.height = Math.max(1, Math.round(naturalH * ratio));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(undefined);
+          return;
+        }
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(
+          mimeType === 'image/png'
+            ? canvas.toDataURL('image/png')
+            : canvas.toDataURL('image/jpeg', JPEG_QUALITY)
+        );
+      } catch {
+        resolve(undefined);
+      }
+    };
+
+    img.onerror = () => {
+      window.clearTimeout(timeoutId);
+      resolve(undefined);
+    };
+
+    img.src = sourceUrl;
+  });
+}
+
+/**
+ * Mengambil foto bukti (baik data URL lokal/offline maupun endpoint terautentikasi) dan mengembalikannya
+ * sebagai data URL JPEG/PNG siap semat ke PDF. Satu foto bermasalah tidak menggagalkan seluruh PDF.
  */
 export async function fetchPhotoDataUrl(path: string): Promise<string | undefined> {
+  if (!path) return undefined;
+
+  // Fast offline path for already-embedded data URLs (including SVG watermarks & JPEG/PNG captures)
+  if (path.startsWith('data:')) {
+    if (/^data:image\/(jpeg|jpg|png);base64,/i.test(path)) {
+      return path;
+    }
+    return rasterizeImageUrlToDataUrl(path, 'image/jpeg', MAX_DIM);
+  }
+
+  // Skip network fetch immediately when browser is offline
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return undefined;
+  }
+
   let objectUrl: string | undefined;
   try {
     objectUrl = await fetchAuthedBlobUrl(path);
     const blob = await (await fetch(objectUrl)).blob();
+    if (blob.type === 'image/svg+xml') {
+      const svgDataUrl = await blobToDataUrl(blob);
+      return await rasterizeImageUrlToDataUrl(svgDataUrl, 'image/jpeg', MAX_DIM);
+    }
     try {
       return await downscaleToJpeg(blob);
     } catch {
-      return await blobToDataUrl(blob); // fallback: apa adanya
+      const fallbackUrl = await blobToDataUrl(blob);
+      return (await rasterizeImageUrlToDataUrl(fallbackUrl, 'image/jpeg', MAX_DIM)) ?? fallbackUrl;
     }
   } catch {
     return undefined;

@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { DocumentationPhoto, WorkReport } from '@/entities/types';
 import { exportReportToPdf } from '@/shared/utils/pdfExport';
+import { formatFileSizeKb } from '@/shared/utils/pdfReportHelpers';
 import { parsePestFindingsFromNotes } from '@/shared/lib/permenkesRecapEngine';
 import { AuthedImage } from '../common/AuthedImage';
 import {
@@ -41,6 +42,11 @@ import {
   isTermiteService,
 } from './techLiteUtils';
 import { ConfirmActionModal, useConfirmAction } from './ConfirmActionModal';
+import { WorkPointMiniMap } from './WorkPointMiniMap';
+import {
+  loadWorkPointLocation,
+  resolveReportDisplayLocation,
+} from './workPointLocationUtils';
 
 interface CompletionPdfWaSheetProps {
   report: WorkReport;
@@ -166,6 +172,11 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
     }
   }, [report.id]);
 
+  const displayLocation = useMemo(
+    () => resolveReportDisplayLocation(report, loadWorkPointLocation(report.id)),
+    [report]
+  );
+
   const waText = buildFormalWaMessage(report);
   const waPhone = normalizeWaPhone(report.customerPhone);
   const waHref = waPhone
@@ -192,14 +203,15 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
     setDownloadingPdf(true);
     setPdfNotice(null);
     try {
-      await exportReportToPdf(report, undefined, {
+      const result = await exportReportToPdf(report, undefined, {
         companyId,
         createdBy: displayTechName,
+        petugasSignature: resolvedTechSig || undefined,
       });
-      setPdfNotice('PDF Laporan Kerja Lengkap berhasil diunduh.');
-      setTimeout(() => setPdfNotice(null), 3500);
+      setPdfNotice(`Salinan PDF tersimpan (${formatFileSizeKb(result.sizeBytes)}): ${result.filename}`);
+      setTimeout(() => setPdfNotice(null), 5000);
     } catch {
-      setPdfNotice('PDF disimpan sementara. Coba lagi saat koneksi stabil.');
+      setPdfNotice('Gagal membuat file PDF. Ketuk tombol unduh untuk mencoba kembali.');
     } finally {
       setDownloadingPdf(false);
     }
@@ -362,6 +374,14 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Mini-Map Titik Koordinat Pengerjaan */}
+          {displayLocation && (
+            <WorkPointMiniMap
+              location={displayLocation}
+              projectName={report.projectName}
+            />
+          )}
 
           {/* PIC Contact Bar */}
           <div className="flex items-center justify-between gap-2 pt-1">
@@ -694,8 +714,13 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
         )}
 
         {pdfNotice && (
-          <div className="px-4 py-3 rounded-xl bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-xs font-semibold flex items-center gap-2">
-            <Check size={15} /> {pdfNotice}
+          <div
+            role="status"
+            data-testid="pdf-download-notice"
+            className="px-4 py-3 rounded-xl bg-[var(--tl-secondary-container)] text-[var(--tl-on-secondary-container)] text-xs font-semibold flex items-start gap-2"
+          >
+            <Check size={15} className="shrink-0 mt-0.5" />
+            <span className="break-all leading-snug">{pdfNotice}</span>
           </div>
         )}
 
@@ -713,16 +738,17 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
       <div className="tech-sticky-tray space-y-2">
         <button
           type="button"
+          data-testid="detail-download-pdf-btn"
           disabled={downloadingPdf}
           onClick={() =>
             confirmAction({
               tone: 'primary',
-              title: 'Unduh Laporan Kerja (PDF)?',
-              description: 'Dokumen PDF Berita Acara resmi beserta bukti foto akan diunduh ke perangkat Anda.',
+              title: 'Unduh Salinan PDF (Offline)?',
+              description: 'Laporan kerja lengkap beserta bukti foto dan tanda tangan akan disimpan langsung ke perangkat Anda sebagai file PDF offline.',
               details: [
                 { label: 'Nomor WO', value: woCode },
                 { label: 'Lokasi', value: report.projectName },
-                { label: 'Dokumentasi', value: `${report.photos.length} Foto Terverifikasi` },
+                { label: 'Dokumentasi', value: `${report.photos.length} Foto & Pengesahan` },
               ],
               confirmLabel: 'Ya, Unduh PDF',
               onConfirm: handleDownloadPdf,
@@ -731,7 +757,7 @@ export const CompletionPdfWaSheet: React.FC<CompletionPdfWaSheetProps> = ({
           className="w-full min-h-[46px] px-4 rounded-xl bg-[var(--tl-primary)] hover:bg-[var(--tl-primary-container)] text-[var(--tl-on-primary)] text-xs font-bold flex items-center justify-center gap-2 shadow-sm active:scale-[0.98] transition-all cursor-pointer disabled:opacity-60"
         >
           <Download size={16} />
-          <span>{downloadingPdf ? 'Menyiapkan PDF...' : 'Unduh Laporan Kerja Lengkap (PDF)'}</span>
+          <span>{downloadingPdf ? 'Menyiapkan PDF Offline...' : 'Unduh Salinan PDF (Offline)'}</span>
         </button>
 
         <div className="grid grid-cols-2 gap-2">

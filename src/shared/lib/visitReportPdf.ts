@@ -337,7 +337,19 @@ export function findingsFromReport(report: WorkReport): VisitFinding[] {
 
 export function visitReportFromWorkReport(
     report: WorkReport,
-    o: { letterhead?: Letterhead; createdBy: string; photos?: VisitReportData['photos']; findings?: VisitFinding[]; saran?: string; idCustomer?: string; judul?: string; jenisPekerjaan?: string; tampilkanFooter?: boolean },
+    o: {
+        letterhead?: Letterhead;
+        createdBy: string;
+        photos?: VisitReportData['photos'];
+        findings?: VisitFinding[];
+        saran?: string;
+        idCustomer?: string;
+        judul?: string;
+        jenisPekerjaan?: string;
+        tampilkanFooter?: boolean;
+        petugasSignature?: string;
+        customerSignature?: string;
+    },
 ): VisitReportData {
     const t = report.treatmentRecord;
     const reportMode = resolveReportCategoryMode(report.serviceType);
@@ -364,6 +376,11 @@ export function visitReportFromWorkReport(
             : 'Perlakuan Anti Rayap Terjadwal'
         : undefined;
 
+    const teamNames = Array.isArray(report.teamMembers) && report.teamMembers.length > 0
+        ? Array.from(new Set(report.teamMembers.map(m => m.name?.trim()).filter(Boolean)))
+        : [];
+    const petugasLabel = teamNames.length > 0 ? teamNames.join(', ') : report.executorName;
+
     return {
         letterhead: o.letterhead,
         reportMode,
@@ -375,7 +392,7 @@ export function visitReportFromWorkReport(
         alamat: report.projectAddress,
         tanggal: new Date(report.checkInAt ?? report.createdAt),
         waktuKerja,
-        petugas: report.executorName,
+        petugas: petugasLabel,
         jenisPekerjaan: o.jenisPekerjaan ?? (isTermite ? 'Injeksi / Monitoring Anti Rayap' : humanize(report.serviceType) === 'General Pest Control' ? 'Treatment Pest Control' : humanize(report.serviceType)),
         chemicalSummary,
         termiteTechnicalSummary,
@@ -383,8 +400,9 @@ export function visitReportFromWorkReport(
         findings: o.findings ?? findingsFromReport(report),
         catatan: [parsed.cleanNotes || report.notes, t?.safetyNotes && `Catatan keselamatan: ${t.safetyNotes}`].filter(Boolean).join('\n'),
         saran: o.saran,
+        petugasSignature: o.petugasSignature ?? report.technicianSignature ?? undefined,
         customerNama: report.customerName ?? undefined,
-        customerSignature: report.customerSignature ?? undefined,
+        customerSignature: o.customerSignature ?? report.customerSignature ?? undefined,
         photos: o.photos ?? [],
         createdBy: o.createdBy,
     };
