@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import { WorkReport } from '@/entities/types';
 import {
   buildHistorySummaryStats,
+  countHistoryByStatus,
   filterHistoryReports,
   formatHistoryDateHeader,
+  getHistoryStatusMeta,
   groupHistoryReportsByDate,
 } from './workHistoryUtils';
 
@@ -16,14 +18,24 @@ function makeCompletedReport(overrides: Partial<WorkReport> & { id: string }): W
     projectAddress: overrides.projectAddress || 'Jl. Sudirman No. 1',
     clientName: overrides.clientName || 'PT Klien Utama',
     serviceType: overrides.serviceType || 'GENERAL_PEST_CONTROL',
+    scheduledStartTime: '09:00',
+    targetFocus: [],
+    contractType: 'ONE_TIME',
+    warrantyMonths: 0,
     executorId: 'exec-1',
     executorName: 'Budi Santoso',
+    executorEmail: 'teknisi@gucimas.id',
     status: 'COMPLETED',
     projectLatitude: -6.2415,
     projectLongitude: 106.798,
     projectRadius: 100,
+    riskScore: 0,
+    riskLevel: 'NORMAL',
+    riskEvents: [],
+    treatmentRecord: null,
     photos: [],
     createdAt: overrides.createdAt || '2026-11-20T02:00:00.000Z',
+    updatedAt: overrides.updatedAt || '2026-11-20T02:00:00.000Z',
     checkOutAt: overrides.checkOutAt,
     customerName: overrides.customerName,
     ...overrides,
@@ -163,5 +175,72 @@ describe('workHistoryUtils', () => {
       referenceDate: refDate,
     });
     assert.deepEqual(customRange.map(r => r.id), ['wr-1002', 'wr-1003']);
+  });
+
+  it('filters reports by project status (COMPLETED, REVIEWED, FLAGGED) and computes status counts/meta', () => {
+    const reports = [
+      makeCompletedReport({
+        id: 'wr-s1',
+        status: 'COMPLETED',
+        serviceType: 'TERMITE_CONTROL',
+        checkOutAt: '2026-11-20T10:00:00',
+      }),
+      makeCompletedReport({
+        id: 'wr-s2',
+        status: 'FLAGGED',
+        serviceType: 'GENERAL_PEST_CONTROL',
+        checkOutAt: '2026-11-20T09:00:00',
+      }),
+      makeCompletedReport({
+        id: 'wr-s3',
+        status: 'REVIEWED',
+        serviceType: 'TERMITE_CONTROL',
+        checkOutAt: '2026-11-19T14:00:00',
+      }),
+      makeCompletedReport({
+        id: 'wr-s4',
+        status: 'COMPLETED',
+        serviceType: 'GENERAL_PEST_CONTROL',
+        checkOutAt: '2026-11-18T11:00:00',
+      }),
+    ];
+
+    assert.deepEqual(countHistoryByStatus(reports), {
+      all: 4,
+      completed: 2,
+      reviewed: 1,
+      flagged: 1,
+    });
+
+    const onlyFlagged = filterHistoryReports(reports, {
+      category: 'ALL',
+      status: 'FLAGGED',
+      search: '',
+      preset: 'ALL',
+      referenceDate: refDate,
+    });
+    assert.deepEqual(onlyFlagged.map(r => r.id), ['wr-s2']);
+
+    const onlyReviewed = filterHistoryReports(reports, {
+      category: 'ALL',
+      status: 'REVIEWED',
+      search: '',
+      preset: 'ALL',
+      referenceDate: refDate,
+    });
+    assert.deepEqual(onlyReviewed.map(r => r.id), ['wr-s3']);
+
+    const completedTermite = filterHistoryReports(reports, {
+      category: 'AR',
+      status: 'COMPLETED',
+      search: '',
+      preset: 'ALL',
+      referenceDate: refDate,
+    });
+    assert.deepEqual(completedTermite.map(r => r.id), ['wr-s1']);
+
+    assert.deepEqual(getHistoryStatusMeta('COMPLETED'), { label: 'Selesai', tone: 'completed' });
+    assert.deepEqual(getHistoryStatusMeta('REVIEWED'), { label: 'Ditinjau', tone: 'reviewed' });
+    assert.deepEqual(getHistoryStatusMeta('FLAGGED'), { label: 'Ditandai', tone: 'flagged' });
   });
 });

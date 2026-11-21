@@ -74,7 +74,6 @@ import {
   PlusCircle,
   RefreshCw,
   Search,
-  ShieldCheck,
   Sun,
   Trash2,
   User as UserIcon,
@@ -146,21 +145,20 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-function GuciMasBrandLockup() {
+function FieldworkBrandLockup() {
   return (
-    <div className="flex items-center gap-2 min-w-0">
-      <div
-        aria-hidden="true"
-        className="w-8 h-8 rounded-xl bg-[var(--tl-primary)] text-[var(--tl-on-primary)] flex items-center justify-center shadow-xs shrink-0"
-      >
-        <ShieldCheck size={17} />
+    <div className="flex items-center gap-2.5 min-w-0">
+      <div aria-hidden="true" className="brand-mark emerald-bg">
+        <span />
+        <span />
+        <span />
       </div>
       <div className="min-w-0 leading-tight">
-        <strong className="block text-[13.5px] font-bold tracking-tight text-[var(--tl-text)] truncate">
-          GuciMas
+        <strong className="block text-[14px] font-bold tracking-tight text-[var(--tl-text)] truncate">
+          Fieldwork
         </strong>
-        <span className="block text-[10px] font-medium text-[var(--tl-secondary)] truncate">
-          Field Lite
+        <span className="block text-[10.5px] font-medium text-[var(--tl-text-variant)] truncate">
+          PT Guci Emas Pratama
         </span>
       </div>
     </div>
@@ -987,7 +985,7 @@ export const ExecutorHome: React.FC = () => {
       (showGpsPrompt && gpsPermissionStatus !== 'granted')
   );
 
-  // Reusable Frosted GuciMas Field Lite Top Header
+  // Reusable Frosted Fieldwork Top Header
   const renderLiteHeader = () => (
     <header
       className="sticky top-0 z-30 px-4 h-14 flex items-center justify-between gap-2 backdrop-blur-md shrink-0"
@@ -996,7 +994,7 @@ export const ExecutorHome: React.FC = () => {
         boxShadow: 'var(--tl-shadow-head)',
       }}
     >
-      <GuciMasBrandLockup />
+      <FieldworkBrandLockup />
 
       <div className="flex items-center gap-1.5 shrink-0">
         <button

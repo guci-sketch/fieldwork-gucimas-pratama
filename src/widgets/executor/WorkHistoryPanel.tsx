@@ -1,12 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   Calendar,
   Camera,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
   ChevronUp,
   Clock,
   Download,
+  Eye,
   History,
   MapPin,
   RotateCcw,
@@ -24,11 +27,18 @@ import {
 } from './techLiteUtils';
 import {
   buildHistorySummaryStats,
+  countHistoryByStatus,
   filterHistoryReports,
+  getHistoryStatusMeta,
+  getReportCompletionDate,
   groupHistoryReportsByDate,
   HistoryCategoryFilter,
   HistoryDatePreset,
+  HistoryStatusFilter,
+  toHistoryDateKey,
 } from './workHistoryUtils';
+import { HistoryDateRangePicker } from './HistoryDateRangePicker';
+import { formatDateRangeSummary } from './dateRangePickerUtils';
 import { isValidCoordinate, loadWorkPointLocation } from './workPointLocationUtils';
 
 interface WorkHistoryPanelProps {
@@ -36,19 +46,6 @@ interface WorkHistoryPanelProps {
   downloadingPdfId: string | null;
   onOpenDetail: (report: WorkReport) => void;
   onRequestDownloadPdf: (report: WorkReport) => void;
-}
-
-function formatShortDateLabel(isoOrYmd: string): string {
-  const parts = isoOrYmd.split('-').map(Number);
-  if (parts.length === 3) {
-    const d = new Date(parts[0], parts[1] - 1, parts[2]);
-    if (!Number.isNaN(d.getTime())) {
-      return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-    }
-  }
-  const parsed = new Date(isoOrYmd);
-  if (Number.isNaN(parsed.getTime())) return isoOrYmd;
-  return parsed.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 export const WorkHistoryPanel: React.FC<WorkHistoryPanelProps> = ({
@@ -59,22 +56,34 @@ export const WorkHistoryPanel: React.FC<WorkHistoryPanelProps> = ({
 }) => {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<HistoryCategoryFilter>('ALL');
+  const [statusFilter, setStatusFilter] = useState<HistoryStatusFilter>('ALL');
   const [datePreset, setDatePreset] = useState<HistoryDatePreset>('ALL');
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [collapsedDates, setCollapsedDates] = useState<Record<string, boolean>>({});
 
+  const statusCounts = useMemo(() => countHistoryByStatus(completedJobs), [completedJobs]);
+
+  const availableReportDateKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const rep of completedJobs) {
+      keys.add(toHistoryDateKey(getReportCompletionDate(rep)));
+    }
+    return keys;
+  }, [completedJobs]);
+
   const filteredReports = useMemo(
     () =>
       filterHistoryReports(completedJobs, {
         category,
+        status: statusFilter,
         search,
         preset: datePreset,
         dateFrom: dateFrom || undefined,
         dateTo: dateTo || undefined,
       }),
-    [completedJobs, category, search, datePreset, dateFrom, dateTo]
+    [completedJobs, category, statusFilter, search, datePreset, dateFrom, dateTo]
   );
 
   const dateGroups = useMemo(
@@ -87,6 +96,7 @@ export const WorkHistoryPanel: React.FC<WorkHistoryPanelProps> = ({
   const hasActiveFilter =
     Boolean(search.trim()) ||
     category !== 'ALL' ||
+    statusFilter !== 'ALL' ||
     datePreset !== 'ALL' ||
     Boolean(dateFrom) ||
     Boolean(dateTo);
@@ -94,6 +104,7 @@ export const WorkHistoryPanel: React.FC<WorkHistoryPanelProps> = ({
   const handleResetFilters = () => {
     setSearch('');
     setCategory('ALL');
+    setStatusFilter('ALL');
     setDatePreset('ALL');
     setDateFrom('');
     setDateTo('');
@@ -164,63 +175,39 @@ export const WorkHistoryPanel: React.FC<WorkHistoryPanelProps> = ({
         </button>
       </div>
 
-      {/* Collapsible Custom Date Range Card */}
+      {/* Interactive Date Range Picker Component */}
       {showDateFilter && (
-        <div className="p-3.5 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] space-y-2.5">
-          <div className="flex items-center justify-between">
-            <strong className="text-xs font-bold text-[var(--tl-text)]">
-              Filter Rentang Tanggal
-            </strong>
-            {(dateFrom || dateTo) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setDateFrom('');
-                  setDateTo('');
-                }}
-                className="text-[11px] font-semibold text-[var(--tl-error)] cursor-pointer"
-              >
-                Reset Rentang
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            <div>
-              <label className="block text-[10.5px] font-medium text-[var(--tl-text-variant)] mb-1">
-                Dari Tanggal
-              </label>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={e => setDateFrom(e.target.value)}
-                className="w-full h-9 px-2.5 rounded-xl bg-[var(--tl-low)] text-xs text-[var(--tl-text)]"
-              />
-            </div>
-            <div>
-              <label className="block text-[10.5px] font-medium text-[var(--tl-text-variant)] mb-1">
-                Sampai Tanggal
-              </label>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={e => setDateTo(e.target.value)}
-                className="w-full h-9 px-2.5 rounded-xl bg-[var(--tl-low)] text-xs text-[var(--tl-text)]"
-              />
-            </div>
-          </div>
-        </div>
+        <HistoryDateRangePicker
+          startDate={dateFrom}
+          endDate={dateTo}
+          reportDateKeys={availableReportDateKeys}
+          onChange={({ startDate, endDate }) => {
+            setDateFrom(startDate);
+            setDateTo(endDate);
+            if (startDate || endDate) {
+              setDatePreset('ALL');
+            }
+          }}
+          onClose={() => setShowDateFilter(false)}
+        />
       )}
 
       {/* Active Custom Range Readout */}
       {(dateFrom || dateTo) && !showDateFilter && (
-        <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[var(--tl-low)] text-[11px] font-semibold text-[var(--tl-primary)]">
-          <span className="inline-flex items-center gap-1.5">
-            <Calendar size={12} />
-            <span>
-              {dateFrom ? formatShortDateLabel(dateFrom) : 'Awal'} –{' '}
-              {dateTo ? formatShortDateLabel(dateTo) : 'Sekarang'}
+        <div
+          data-testid="active-date-range-bar"
+          className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[var(--tl-low)] text-[11px] font-semibold text-[var(--tl-primary)]"
+        >
+          <button
+            type="button"
+            onClick={() => setShowDateFilter(true)}
+            className="inline-flex items-center gap-1.5 min-w-0 cursor-pointer hover:underline text-left"
+          >
+            <Calendar size={12} className="shrink-0" />
+            <span className="truncate">
+              {formatDateRangeSummary({ startDate: dateFrom, endDate: dateTo })}
             </span>
-          </span>
+          </button>
           <button
             type="button"
             aria-label="Hapus filter tanggal"
@@ -228,7 +215,7 @@ export const WorkHistoryPanel: React.FC<WorkHistoryPanelProps> = ({
               setDateFrom('');
               setDateTo('');
             }}
-            className="p-0.5 cursor-pointer hover:opacity-75"
+            className="p-0.5 cursor-pointer hover:opacity-75 shrink-0"
           >
             <X size={13} />
           </button>
@@ -306,6 +293,7 @@ export const WorkHistoryPanel: React.FC<WorkHistoryPanelProps> = ({
         {hasActiveFilter && (
           <button
             type="button"
+            data-testid="history-reset-filters-btn"
             onClick={handleResetFilters}
             className="text-[11px] font-semibold text-[var(--tl-secondary)] inline-flex items-center gap-1 cursor-pointer shrink-0"
           >
@@ -313,6 +301,54 @@ export const WorkHistoryPanel: React.FC<WorkHistoryPanelProps> = ({
             <span>Reset</span>
           </button>
         )}
+      </div>
+
+      {/* Project Status Filter Bar (Semua | Selesai | Ditinjau | Ditandai) */}
+      <div
+        role="group"
+        aria-label="Filter Status Laporan"
+        data-testid="history-status-filter-bar"
+        className="grid grid-cols-4 gap-1.5"
+      >
+        {(
+          [
+            { id: 'ALL', label: 'Semua', count: statusCounts.all },
+            { id: 'COMPLETED', label: 'Selesai', count: statusCounts.completed },
+            { id: 'REVIEWED', label: 'Ditinjau', count: statusCounts.reviewed },
+            { id: 'FLAGGED', label: 'Ditandai', count: statusCounts.flagged },
+          ] as const
+        ).map(st => {
+          const active = statusFilter === st.id;
+          const activeClasses =
+            st.id === 'FLAGGED'
+              ? 'bg-amber-600 text-white'
+              : st.id === 'REVIEWED'
+              ? 'bg-sky-700 text-white'
+              : 'bg-[var(--tl-primary)] text-[var(--tl-on-primary)]';
+          return (
+            <button
+              key={st.id}
+              type="button"
+              aria-pressed={active}
+              data-testid={`history-status-${st.id.toLowerCase()}`}
+              onClick={() => setStatusFilter(st.id)}
+              className={`min-h-[32px] px-2 rounded-lg text-[10.5px] font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer ${
+                active
+                  ? activeClasses
+                  : 'bg-[var(--tl-card)] text-[var(--tl-text-variant)] shadow-[var(--tl-shadow-card)] hover:text-[var(--tl-text)]'
+              }`}
+            >
+              <span className="truncate">{st.label}</span>
+              <span
+                className={`font-mono text-[10px] tabular-nums ${
+                  active ? 'opacity-90' : 'text-[var(--tl-outline)]'
+                }`}
+              >
+                {st.count}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Date-Categorized History Sections */}
@@ -372,11 +408,13 @@ export const WorkHistoryPanel: React.FC<WorkHistoryPanelProps> = ({
                       const hasGpsTag =
                         Boolean(loadWorkPointLocation(rep.id)) ||
                         isValidCoordinate(rep.checkInLatitude, rep.checkInLongitude);
+                      const statusMeta = getHistoryStatusMeta(rep.status);
 
                       return (
                         <article
                           key={rep.id}
                           data-testid="history-report-card"
+                          data-report-status={rep.status}
                           className="p-3.5 rounded-2xl bg-[var(--tl-card)] shadow-[var(--tl-shadow-card)] space-y-2.5"
                         >
                           <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -435,8 +473,24 @@ export const WorkHistoryPanel: React.FC<WorkHistoryPanelProps> = ({
                                 <span>GPS</span>
                               </span>
                             )}
-                            <span className="ml-auto font-semibold text-[var(--tl-secondary)]">
-                              Selesai
+                            <span
+                              data-testid="history-card-status"
+                              className={`ml-auto inline-flex items-center gap-1 font-semibold ${
+                                statusMeta.tone === 'flagged'
+                                  ? 'text-amber-700 dark:text-amber-400'
+                                  : statusMeta.tone === 'reviewed'
+                                  ? 'text-sky-700 dark:text-sky-400'
+                                  : 'text-[var(--tl-secondary)]'
+                              }`}
+                            >
+                              {statusMeta.tone === 'flagged' ? (
+                                <AlertTriangle size={11} />
+                              ) : statusMeta.tone === 'reviewed' ? (
+                                <Eye size={11} />
+                              ) : (
+                                <CheckCircle2 size={11} />
+                              )}
+                              <span>{statusMeta.label}</span>
                             </span>
                           </div>
 

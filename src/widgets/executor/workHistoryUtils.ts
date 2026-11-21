@@ -3,14 +3,28 @@ import { formatWoCode, isTermiteService } from './techLiteUtils';
 
 export type HistoryCategoryFilter = 'ALL' | 'AR' | 'PCO';
 export type HistoryDatePreset = 'ALL' | 'TODAY' | 'WEEK' | 'MONTH';
+export type HistoryStatusFilter = 'ALL' | 'COMPLETED' | 'REVIEWED' | 'FLAGGED';
 
 export interface HistoryFilterOptions {
   category: HistoryCategoryFilter;
+  status?: HistoryStatusFilter;
   search: string;
   preset: HistoryDatePreset;
   dateFrom?: string;
   dateTo?: string;
   referenceDate?: Date;
+}
+
+export interface HistoryStatusCounts {
+  all: number;
+  completed: number;
+  reviewed: number;
+  flagged: number;
+}
+
+export interface HistoryStatusMeta {
+  label: string;
+  tone: 'completed' | 'reviewed' | 'flagged';
 }
 
 export interface HistoryDateGroup<T extends WorkReport = WorkReport> {
@@ -135,6 +149,7 @@ export function filterHistoryReports<T extends WorkReport>(
   const filtered = reports.filter(rep => {
     if (options.category === 'AR' && !isTermiteService(rep.serviceType)) return false;
     if (options.category === 'PCO' && isTermiteService(rep.serviceType)) return false;
+    if (options.status && options.status !== 'ALL' && rep.status !== options.status) return false;
 
     if (q) {
       const wo = formatWoCode(rep.id).toLowerCase();
@@ -230,4 +245,37 @@ export function buildHistorySummaryStats(
     termiteCount,
     pestCount,
   };
+}
+
+export function countHistoryByStatus(
+  reports: ReadonlyArray<Pick<WorkReport, 'status'>>
+): HistoryStatusCounts {
+  let completed = 0;
+  let reviewed = 0;
+  let flagged = 0;
+
+  for (const rep of reports) {
+    if (rep.status === 'COMPLETED') completed += 1;
+    else if (rep.status === 'REVIEWED') reviewed += 1;
+    else if (rep.status === 'FLAGGED') flagged += 1;
+  }
+
+  return {
+    all: reports.length,
+    completed,
+    reviewed,
+    flagged,
+  };
+}
+
+export function getHistoryStatusMeta(status?: string | null): HistoryStatusMeta {
+  switch (status) {
+    case 'REVIEWED':
+      return { label: 'Ditinjau', tone: 'reviewed' };
+    case 'FLAGGED':
+      return { label: 'Ditandai', tone: 'flagged' };
+    case 'COMPLETED':
+    default:
+      return { label: 'Selesai', tone: 'completed' };
+  }
 }
